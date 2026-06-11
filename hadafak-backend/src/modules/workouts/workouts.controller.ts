@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { WorkoutsService } from './workouts.service';
 import { LogWorkoutDto } from './dto/log-workout.dto';
@@ -92,5 +92,17 @@ export class WorkoutsController {
     @Param('id') id: string,
   ) {
     return this.workoutsService.findSessionById(id, userId);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a workout session by ID' })
+  @ApiResponse({ status: 200, description: 'Session deleted successfully.' })
+  @ApiResponse({ status: 404, description: 'Session not found.' })
+  async delete(
+    @CurrentUser('sub') userId: string,
+    @Param('id') id: string,
+  ) {
+    await this.workoutsService.deleteSession(id, userId);
+    return { success: true };
   }
 }

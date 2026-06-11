@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { ProgramsService } from './programs.service';
 import { ProgramLevel } from './entities/program.entity';
@@ -44,5 +44,32 @@ export class ProgramsController {
     @Body('days') days?: { dayNumber: number; title: string }[],
   ) {
     return this.programsService.create(name, description, level, days);
+  }
+
+  @Put('exercises/:id')
+  @ApiOperation({ summary: 'Update parameters for a program day exercise' })
+  async updateDayExercise(
+    @Param('id') id: string,
+    @Body('targetSets') targetSets: number,
+    @Body('targetRepsRange') targetRepsRange: string,
+  ) {
+    return this.programsService.updateDayExercise(id, targetSets, targetRepsRange);
+  }
+
+  @Delete('exercises/:id')
+  @ApiOperation({ summary: 'Remove an exercise from a program day' })
+  async removeDayExercise(@Param('id') id: string) {
+    return this.programsService.removeDayExercise(id);
+  }
+
+  @Post('days/:dayId/exercises')
+  @ApiOperation({ summary: 'Add an exercise to a program day' })
+  async addDayExercise(
+    @Param('dayId') dayId: string,
+    @Body('exerciseId') exerciseId: string,
+    @Body('targetSets') targetSets: number,
+    @Body('targetRepsRange') targetRepsRange: string,
+  ) {
+    return this.programsService.addDayExercise(dayId, exerciseId, targetSets, targetRepsRange);
   }
 }

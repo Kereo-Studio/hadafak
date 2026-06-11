@@ -56,8 +56,8 @@ export class ProfilesService {
 
   async assignProgram(userId: string, programId: string): Promise<Profile> {
     const profile = await this.findByUserId(userId);
-    profile.currentProgramId = programId;
-    return this.profileRepository.save(profile);
+    await this.profileRepository.update(profile.id, { currentProgramId: programId });
+    return this.findByUserId(userId);
   }
 
   private calculateCalories(dto: CreateProfileDto): number {

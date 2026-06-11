@@ -1,60 +1,105 @@
-# compiled output
-/dist
-/node_modules
-/build
-
-# Logs
-logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-
-# OS
+# ==============================================================================
+# General / OS
+# ==============================================================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Tests
-/coverage
-/.nyc_output
-
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
+# ==============================================================================
+# IDEs & Editor Configuration
+# ==============================================================================
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+*.sublime-project
 *.sublime-workspace
 
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+# ==============================================================================
+# Package Managers & Dependencies
+# ==============================================================================
+**/node_modules/
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+.pnp
+.pnp.js
 
-# dotenv environment variable files
+# ==============================================================================
+# Build & Output Directories
+# ==============================================================================
+**/dist/
+dist/
+**/build/
+build/
+out/
+web-build/
+**/coverage/
+.nyc_output/
+
+# ==============================================================================
+# Environment Variables & Secrets (CRITICAL)
+# ==============================================================================
 .env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.env.*
+!.env.example
+!.env.template
+nuke-config.yml
 
-# temp directory
-.temp
-.tmp
-
-# Runtime data
-pids
+# ==============================================================================
+# Logs & Pids
+# ==============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 *.pid
 *.seed
 *.pid.lock
 
-# Diagnostic reports (https://nodejs.org/api/report.html)
+# ==============================================================================
+# NestJS Backend Specifics
+# ==============================================================================
+/hadafak-backend/uploads/*
+!/hadafak-backend/uploads/.gitkeep
+
+# ==============================================================================
+# React Native / Expo Mobile Specifics
+# ==============================================================================
+.expo/
+.expo-shared/
+.metro/
+*.jks
+*.keystore
+*.p12
+*.key
+*.mobileprovision
+*.apk
+*.aab
+*.ipa
+ios/Pods/
+ios/build/
+android/.gradle/
+android/app/build/
+android/build/
+
+# ==============================================================================
+# Miscellaneous & Temporary
+# ==============================================================================
+.temp/
+.tmp/
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-Free Fitness App Ui Kit (Community)
-Free Fitness App Ui Kit (Community)/*
-design_system
-design_system/*
+Free Fitness App Ui Kit (Community)/
+design_system/

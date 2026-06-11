@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "hadafak-app",
+    "slug": "hadafak-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMotionUsageDescription": "Hadafak uses motion sensors to count your steps and track daily activity."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACTIVITY_RECOGNITION"
+      ],
+      "package": "com.m0t.hadafakapp"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Hadafak uses motion sensors to count your steps and track daily activity."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "670f8dfb-fa8c-4d6d-a6d6-79dccbf5d4de"
+      }
+    }
+  }
+}

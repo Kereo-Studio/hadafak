@@ -269,4 +269,15 @@ export class WorkoutsService {
       };
     });
   }
+
+  async deleteSession(id: string, userId: string): Promise<void> {
+    const session = await this.workoutSessionRepository.findOne({
+      where: { id, userId },
+    });
+    if (!session) {
+      throw new NotFoundException(`Workout session ${id} not found`);
+    }
+    await this.workoutSessionRepository.remove(session);
+  }
 }
+

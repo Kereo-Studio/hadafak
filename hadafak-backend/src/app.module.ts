@@ -13,6 +13,7 @@ import { NutritionModule } from './modules/nutrition/nutrition.module';
 import { StepsModule } from './modules/steps/steps.module';
 import { RecipesModule } from './modules/recipes/recipes.module';
 import { ProgressModule } from './modules/progress/progress.module';
+import { RunsModule } from './modules/runs/runs.module';
 
 @Module({
   imports: [
@@ -23,17 +24,23 @@ import { ProgressModule } from './modules/progress/progress.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('database.host'),
-        port: configService.get<number>('database.port'),
-        username: configService.get<string>('database.username'),
-        password: configService.get<string>('database.password'),
-        database: configService.get<string>('database.database'),
-        autoLoadEntities: true,
-        synchronize: configService.get<boolean>('database.synchronize'),
-        logging: true,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const url = configService.get<string>('database.url');
+        return {
+          type: 'postgres',
+          ...(url ? { url } : {
+            host: configService.get<string>('database.host'),
+            port: configService.get<number>('database.port'),
+            username: configService.get<string>('database.username'),
+            password: configService.get<string>('database.password'),
+            database: configService.get<string>('database.database'),
+          }),
+          autoLoadEntities: true,
+          synchronize: configService.get<boolean>('database.synchronize'),
+          logging: true,
+          ssl: url ? { rejectUnauthorized: false } : false,
+        };
+      },
     }),
     UsersModule,
     AuthModule,
@@ -45,6 +52,7 @@ import { ProgressModule } from './modules/progress/progress.module';
     StepsModule,
     RecipesModule,
     ProgressModule,
+    RunsModule,
   ],
 })
 export class AppModule {}

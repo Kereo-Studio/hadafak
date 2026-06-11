@@ -258,4 +258,46 @@ export class ProgramsService {
 
     return this.findById(savedProgram.id);
   }
+
+  async updateDayExercise(id: string, targetSets: number, targetRepsRange: string): Promise<ProgramDayExercise> {
+    const dayEx = await this.programDayExerciseRepository.findOne({ where: { id } });
+    if (!dayEx) {
+      throw new NotFoundException(`Exercise mapping with ID ${id} not found`);
+    }
+    dayEx.targetSets = targetSets;
+    dayEx.targetRepsRange = targetRepsRange;
+    return this.programDayExerciseRepository.save(dayEx);
+  }
+
+  async removeDayExercise(id: string): Promise<void> {
+    const dayEx = await this.programDayExerciseRepository.findOne({ where: { id } });
+    if (!dayEx) {
+      throw new NotFoundException(`Exercise mapping with ID ${id} not found`);
+    }
+    await this.programDayExerciseRepository.remove(dayEx);
+  }
+
+  async addDayExercise(dayId: string, exerciseId: string, targetSets: number, targetRepsRange: string): Promise<ProgramDayExercise> {
+    const day = await this.programDayRepository.findOne({ where: { id: dayId } });
+    if (!day) {
+      throw new NotFoundException(`Program day with ID ${dayId} not found`);
+    }
+    const exercise = await this.exerciseRepository.findOne({ where: { id: exerciseId } });
+    if (!exercise) {
+      throw new NotFoundException(`Exercise with ID ${exerciseId} not found`);
+    }
+
+    const existing = await this.programDayExerciseRepository.find({ where: { programDayId: dayId } });
+    const order = existing.length + 1;
+
+    const dayEx = this.programDayExerciseRepository.create({
+      programDayId: dayId,
+      exerciseId,
+      order,
+      targetSets,
+      targetRepsRange,
+      targetRestTime: 90,
+    });
+    return this.programDayExerciseRepository.save(dayEx);
+  }
 }
