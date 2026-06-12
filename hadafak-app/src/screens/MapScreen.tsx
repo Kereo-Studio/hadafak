@@ -369,14 +369,36 @@ export const MapScreen: React.FC = () => {
   };
 
   const startLocationWatch = async () => {
-    const { status: fgPerm } = await Location.requestForegroundPermissionsAsync();
-    if (fgPerm !== 'granted') {
+    try {
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert('Location Services Disabled', 'Please enable GPS/Location services on your device to start tracking.');
+        return false;
+      }
+    } catch (err) {
+      console.warn('Failed to check if location services are enabled:', err);
+    }
+
+    let fgPermStatus = 'denied';
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      fgPermStatus = status;
+    } catch (err) {
+      console.warn('Failed to request foreground location permission:', err);
+    }
+
+    if (fgPermStatus !== 'granted') {
       Alert.alert('Permission Denied', 'GPS tracking requires location authorization.');
       return false;
     }
 
-    const { status: bgPerm } = await Location.requestBackgroundPermissionsAsync();
-    const isBackgroundGranted = bgPerm === 'granted';
+    let isBackgroundGranted = false;
+    try {
+      const { status: bgPerm } = await Location.requestBackgroundPermissionsAsync();
+      isBackgroundGranted = bgPerm === 'granted';
+    } catch (bgError) {
+      console.warn('Failed to request background location permission:', bgError);
+    }
 
     if (!isBackgroundGranted) {
       Alert.alert(
@@ -668,41 +690,52 @@ export const MapScreen: React.FC = () => {
 
             if (session.status === 'running') {
               startTimer();
-              const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
-              if (!hasStarted) {
-                const { status: bgPerm } = await Location.getBackgroundPermissionsAsync();
-                if (bgPerm === 'granted') {
-                  await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-                    accuracy: Location.Accuracy.BestForNavigation,
-                    timeInterval: 2000,
-                    distanceInterval: 4,
-                    foregroundService: {
-                      notificationTitle: 'Hadef Running/Walking Tracker',
-                      notificationBody: 'Your workout is currently being tracked in the background.',
-                      notificationColor: COLORS.primary,
-                    },
-                  });
-                } else {
-                  if (locationSub.current) {
-                    locationSub.current.remove();
+              try {
+                const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+                if (!hasStarted) {
+                  let isBgGranted = false;
+                  try {
+                    const { status: bgPerm } = await Location.getBackgroundPermissionsAsync();
+                    isBgGranted = bgPerm === 'granted';
+                  } catch (err) {
+                    console.warn('Failed to get background permission status:', err);
                   }
-                  locationSub.current = await Location.watchPositionAsync(
-                    {
+
+                  if (isBgGranted) {
+                    await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
                       accuracy: Location.Accuracy.BestForNavigation,
                       timeInterval: 2000,
                       distanceInterval: 4,
-                    },
-                    (loc) => {
-                      const { latitude, longitude, speed } = loc.coords;
-                      setCurrentSpeed(Math.max(0, speed ?? 0));
-                      setUserLocation({ latitude, longitude });
-                      if (mapRef.current) {
-                        mapRef.current.animateToRegion({ latitude, longitude, latitudeDelta: 0.003, longitudeDelta: 0.003 }, 500);
-                      }
-                      updateForegroundPoint(loc);
+                      foregroundService: {
+                        notificationTitle: 'Hadef Running/Walking Tracker',
+                        notificationBody: 'Your workout is currently being tracked in the background.',
+                        notificationColor: COLORS.primary,
+                      },
+                    });
+                  } else {
+                    if (locationSub.current) {
+                      locationSub.current.remove();
                     }
-                  );
+                    locationSub.current = await Location.watchPositionAsync(
+                      {
+                        accuracy: Location.Accuracy.BestForNavigation,
+                        timeInterval: 2000,
+                        distanceInterval: 4,
+                      },
+                      (loc) => {
+                        const { latitude, longitude, speed } = loc.coords;
+                        setCurrentSpeed(Math.max(0, speed ?? 0));
+                        setUserLocation({ latitude, longitude });
+                        if (mapRef.current) {
+                          mapRef.current.animateToRegion({ latitude, longitude, latitudeDelta: 0.003, longitudeDelta: 0.003 }, 500);
+                        }
+                        updateForegroundPoint(loc);
+                      }
+                    );
+                  }
                 }
+              } catch (err) {
+                console.warn('Failed to restore location tracking:', err);
               }
             }
           }
