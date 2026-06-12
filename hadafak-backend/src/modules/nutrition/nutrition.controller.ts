@@ -4,6 +4,7 @@ import { NutritionService } from './nutrition.service';
 import { CreateFoodDto } from './dto/create-food.dto';
 import { LogFoodDto } from './dto/log-food.dto';
 import { LogWaterDto } from './dto/log-water.dto';
+import { ScanFoodDto } from './dto/scan-food.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { FoodSource } from './entities/food.entity';
@@ -99,5 +100,15 @@ export class NutritionController {
   @ApiResponse({ status: 200, description: 'List of foods sorted by user frequency.' })
   async getFrequent(@CurrentUser('sub') userId: string) {
     return this.nutritionService.getFrequentFoods(userId);
+  }
+
+  @Post('scan')
+  @ApiOperation({ summary: 'Scan food using AI/Gemini vision analysis' })
+  @ApiResponse({ status: 200, description: 'AI estimated macronutrients results.' })
+  async scanFood(
+    @CurrentUser('sub') userId: string,
+    @Body() dto: ScanFoodDto,
+  ) {
+    return this.nutritionService.scanFood(dto.imageBase64);
   }
 }

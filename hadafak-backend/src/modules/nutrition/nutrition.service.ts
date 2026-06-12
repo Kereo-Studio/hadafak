@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, ILike } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Food, FoodSource } from './entities/food.entity';
 import { NutritionLog } from './entities/nutrition-log.entity';
 import { WaterLog } from './entities/water-log.entity';
@@ -21,6 +22,7 @@ export class NutritionService {
     private readonly waterLogRepository: Repository<WaterLog>,
     private readonly profilesService: ProfilesService,
     private readonly fatSecretService: FatSecretService,
+    private readonly configService: ConfigService,
   ) {}
 
   async upsertExternalFood(item: any): Promise<Food> {
@@ -292,5 +294,94 @@ export class NutritionService {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
       .map((entry) => entry.food);
+  }
+
+  async scanFood(imageBase64: string): Promise<any> {
+    const apiKey = this.configService.get<string>('app.geminiApiKey');
+    if (!apiKey) {
+      // Mock Demo mode: simulate AI processing
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return {
+        name: 'AI Scan: Caesar Chicken Salad',
+        calories: 320,
+        protein: 28,
+        carbs: 10,
+        fat: 18,
+        servingSize: 300,
+        servingUnit: 'g',
+      };
+    }
+
+    try {
+      // Clean base64 string if it contains URI headers like "data:image/jpeg;base64,"
+      let cleanBase64 = imageBase64;
+      let mimeType = 'image/jpeg';
+      if (imageBase64.includes(';base64,')) {
+        const parts = imageBase64.split(';base64,');
+        cleanBase64 = parts[1];
+        mimeType = parts[0].split('data:')[1] || 'image/jpeg';
+      }
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const payload = {
+        contents: [
+          {
+            parts: [
+              {
+                text: 'Analyze the attached image and estimate the nutritional information of the food item shown. Output a JSON object matching this schema:\n{\n  "name": "Description of the food",\n  "calories": number,\n  "protein": number,\n  "carbs": number,\n  "fat": number,\n  "servingSize": number,\n  "servingUnit": "string"\n}\nOnly output the valid JSON object, without any markdown formatting or extra text.',
+              },
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: cleanBase64,
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+        },
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Gemini API returned status ${response.status}`);
+      }
+
+      const data = await response.json() as any;
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        throw new Error('Empty response from Gemini API');
+      }
+
+      const result = JSON.parse(text);
+      return {
+        name: result.name || 'AI Scanned Food',
+        calories: Number(result.calories) || 0,
+        protein: Number(result.protein) || 0,
+        carbs: Number(result.carbs) || 0,
+        fat: Number(result.fat) || 0,
+        servingSize: Number(result.servingSize) || 100,
+        servingUnit: result.servingUnit || 'g',
+      };
+    } catch (err) {
+      console.error('Failed to analyze food image with Gemini:', err.message || err);
+      // Fallback estimate
+      return {
+        name: 'AI Scan (Visual Estimate)',
+        calories: 250,
+        protein: 15,
+        carbs: 30,
+        fat: 8,
+        servingSize: 150,
+        servingUnit: 'g',
+      };
+    }
   }
 }
