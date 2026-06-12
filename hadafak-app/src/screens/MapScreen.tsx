@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Alert, Platform, Dimensions,
   Animated, PanResponder, TextInput, ActivityIndicator, KeyboardAvoidingView, Modal,
+  DeviceEventEmitter,
 } from 'react-native';
 import MapView, { Polyline, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -14,6 +15,8 @@ import {
 } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { api } from '../services/api';
+import { storage } from '../utils/storage';
+import { BACKGROUND_LOCATION_TASK } from '../utils/backgroundTasks';
 
 const { width, height: WINDOW_HEIGHT } = Dimensions.get('window');
 
@@ -297,64 +300,89 @@ export const MapScreen: React.FC = () => {
   };
 
   const startLocationWatch = async () => {
-    const { status: perm } = await Location.requestForegroundPermissionsAsync();
-    if (perm !== 'granted') {
+    const { status: fgPerm } = await Location.requestForegroundPermissionsAsync();
+    if (fgPerm !== 'granted') {
       Alert.alert('Permission Denied', 'GPS tracking requires location authorization.');
       return false;
     }
-    locationSub.current = await Location.watchPositionAsync(
-      {
+
+    const { status: bgPerm } = await Location.requestBackgroundPermissionsAsync();
+    if (bgPerm !== 'granted') {
+      Alert.alert(
+        'Background Location Required',
+        'To track your workout even when the screen is off or the app is closed, please select "Allow all the time" in location settings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Location.requestBackgroundPermissionsAsync() }
+        ]
+      );
+      return false;
+    }
+
+    try {
+      await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
         accuracy: Location.Accuracy.BestForNavigation,
         timeInterval: 2000,
         distanceInterval: 4,
-      },
-      (loc) => {
-        const { latitude, longitude, speed } = loc.coords;
-        const speedMs = Math.max(0, speed ?? 0);
-        setCurrentSpeed(speedMs);
-        setUserLocation({ latitude, longitude });
-
-        if (mapRef.current) {
-          mapRef.current.animateToRegion({ latitude, longitude, latitudeDelta: 0.003, longitudeDelta: 0.003 }, 500);
-        }
-
-        const now = new Date();
-        const elapsedSec = startTimeRef.current ? Math.round((now.getTime() - startTimeRef.current.getTime()) / 1000) : 0;
-        const newPoint: TrackPoint = {
-          latitude, longitude,
-          timestamp: now.toISOString(),
-          speed: speedMs,
-          elapsedTime: elapsedSec,
-        };
-
-        if (lastPointRef.current) {
-          const dist = haversineDistance(lastPointRef.current, newPoint);
-          setDistanceM(prev => prev + dist);
-        }
-        lastPointRef.current = newPoint;
-        setTrackPoints(prev => [...prev, newPoint]);
-      }
-    );
-    return true;
+        foregroundService: {
+          notificationTitle: 'Hadef Running/Walking Tracker',
+          notificationBody: 'Your workout is currently being tracked in the background.',
+          notificationColor: COLORS.primary,
+        },
+      });
+      return true;
+    } catch (err) {
+      console.error('Failed to start background location updates:', err);
+      Alert.alert('Error', 'Unable to start background tracking service.');
+      return false;
+    }
   };
 
-  const stopLocationWatch = () => {
-    locationSub.current?.remove();
-    locationSub.current = null;
+  const stopLocationWatch = async () => {
+    try {
+      const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+      if (hasStarted) {
+        await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+      }
+    } catch (err) {
+      console.warn('Error stopping background location updates:', err);
+    }
   };
 
   const handleStart = async () => {
     const ok = await startLocationWatch();
     if (!ok) return;
-    startTimeRef.current = new Date();
+    const now = new Date();
+    startTimeRef.current = now;
     setStatus('running');
+
+    const session = {
+      status: 'running',
+      startTime: now.toISOString(),
+      distanceM: 0,
+      trackPoints: [],
+      ghostRun: ghostRun,
+    };
+    await storage.setItem('active_workout_session', JSON.stringify(session));
+
     startTimer();
   };
 
-  const handlePause = () => {
+  const handlePause = async () => {
     setStatus('paused');
     stopTimer();
-    stopLocationWatch();
+    await stopLocationWatch();
+
+    try {
+      const raw = await storage.getItem('active_workout_session');
+      if (raw) {
+        const session = JSON.parse(raw);
+        const updated = { ...session, status: 'paused' };
+        await storage.setItem('active_workout_session', JSON.stringify(updated));
+      }
+    } catch (err) {
+      console.warn('Failed to update pause state in storage:', err);
+    }
   };
 
   const handleResume = async () => {
@@ -362,6 +390,17 @@ export const MapScreen: React.FC = () => {
     if (!ok) return;
     setStatus('running');
     startTimer();
+
+    try {
+      const raw = await storage.getItem('active_workout_session');
+      if (raw) {
+        const session = JSON.parse(raw);
+        const updated = { ...session, status: 'running' };
+        await storage.setItem('active_workout_session', JSON.stringify(updated));
+      }
+    } catch (err) {
+      console.warn('Failed to update resume state in storage:', err);
+    }
   };
 
   const handleStop = () => {
@@ -370,14 +409,13 @@ export const MapScreen: React.FC = () => {
       { text: 'Discard', style: 'destructive', onPress: resetRun },
       {
         text: 'Save Run',
-        onPress: () => {
+        onPress: async () => {
           stopTimer();
-          stopLocationWatch();
+          await stopLocationWatch();
           setStatus('idle');
 
           const distKm = Math.round((distanceM / 1000) * 100) / 100;
           const avgP = formatPace(distKm, elapsed);
-          // Standard estimate: ~70 kcal per km for a 70kg runner
           const cal = Math.round(distKm * 70);
 
           const hour = new Date().getHours();
@@ -400,9 +438,10 @@ export const MapScreen: React.FC = () => {
     ]);
   };
 
-  const resetRun = () => {
+  const resetRun = async () => {
     stopTimer();
-    stopLocationWatch();
+    await stopLocationWatch();
+    await storage.deleteItem('active_workout_session');
     setStatus('idle');
     setElapsed(0);
     setDistanceM(0);
@@ -454,8 +493,9 @@ export const MapScreen: React.FC = () => {
     }
   };
 
-  // Initialize initial region
+  // Initialize initial region, active sessions, and listen to background changes
   useEffect(() => {
+    // 1. Request initial permissions and location
     Location.requestForegroundPermissionsAsync().then(({ status: perm }) => {
       if (perm === 'granted') {
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(loc => {
@@ -463,7 +503,79 @@ export const MapScreen: React.FC = () => {
         }).catch(() => {});
       }
     });
-    return () => { stopTimer(); stopLocationWatch(); };
+
+    // 2. Restore active session if any exists in background storage
+    const restoreSession = async () => {
+      try {
+        const raw = await storage.getItem('active_workout_session');
+        if (raw) {
+          const session = JSON.parse(raw);
+          if (session.status === 'running' || session.status === 'paused') {
+            setStatus(session.status);
+            setDistanceM(Number(session.distanceM) || 0);
+            setTrackPoints(session.trackPoints || []);
+            if (session.trackPoints && session.trackPoints.length > 0) {
+              lastPointRef.current = session.trackPoints[session.trackPoints.length - 1];
+            }
+            if (session.startTime) {
+              startTimeRef.current = new Date(session.startTime);
+              const diffSec = Math.round((new Date().getTime() - startTimeRef.current.getTime()) / 1000);
+              setElapsed(diffSec);
+            }
+            if (session.ghostRun) {
+              setGhostRun(session.ghostRun);
+            }
+
+            if (session.status === 'running') {
+              startTimer();
+              const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+              if (!hasStarted) {
+                await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+                  accuracy: Location.Accuracy.BestForNavigation,
+                  timeInterval: 2000,
+                  distanceInterval: 4,
+                  foregroundService: {
+                    notificationTitle: 'Hadef Running/Walking Tracker',
+                    notificationBody: 'Your workout is currently being tracked in the background.',
+                    notificationColor: COLORS.primary,
+                  },
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to restore active workout session:', err);
+      }
+    };
+
+    restoreSession();
+
+    // 3. Listen to real-time events from background location task
+    const subscription = DeviceEventEmitter.addListener('BACKGROUND_LOCATION_UPDATE', (updatedSession) => {
+      setDistanceM(updatedSession.distanceM);
+      setTrackPoints(updatedSession.trackPoints);
+      if (updatedSession.trackPoints && updatedSession.trackPoints.length > 0) {
+        const last = updatedSession.trackPoints[updatedSession.trackPoints.length - 1];
+        lastPointRef.current = last;
+        setUserLocation({ latitude: last.latitude, longitude: last.longitude });
+        setCurrentSpeed(last.speed);
+        if (mapRef.current) {
+          mapRef.current.animateToRegion({
+            latitude: last.latitude,
+            longitude: last.longitude,
+            latitudeDelta: 0.003,
+            longitudeDelta: 0.003
+          }, 500);
+        }
+      }
+    });
+
+    return () => {
+      stopTimer();
+      stopLocationWatch();
+      subscription.remove();
+    };
   }, []);
 
   const distKm = distanceM / 1000;

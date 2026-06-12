@@ -17,7 +17,9 @@
       "infoPlist": {
         "NSMotionUsageDescription": "Hadafak uses motion sensors to count your steps and track daily activity.",
         "NSLocationWhenInUseUsageDescription": "Hadafak uses your location to track your runs and draw your route on the map.",
-        "NSLocationAlwaysUsageDescription": "Hadafak uses your location to track your runs and draw your route on the map."
+        "NSLocationAlwaysUsageDescription": "Hadafak uses your location to track your runs and draw your route on the map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Hadafak requires background location permission to track your runs even when the app is closed.",
+        "UIBackgroundModes": ["location", "fetch"]
       }
     },
     "android": {
@@ -30,7 +32,10 @@
       "permissions": [
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "package": "com.m0t.hadafakapp",
       "config": {
@@ -53,7 +58,9 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Hadafak uses your location to track your runs on the map."
+          "locationWhenInUsePermission": "Hadafak uses your location to track your runs on the map.",
+          "locationAlwaysAndWhenInUsePermission": "Hadafak requires background location permission to track your runs even when the app is closed.",
+          "isAndroidBackgroundLocationEnabled": true
         }
       ]
     ],

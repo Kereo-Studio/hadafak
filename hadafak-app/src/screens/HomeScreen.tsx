@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  AppState,
 } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import { pedometerService, getLocalTodaySteps, saveLocalTodaySteps } from '../utils/pedometerService';
@@ -513,8 +514,17 @@ export const HomeScreen: React.FC = () => {
 
       performSyncAndFetch();
 
+      const handleAppStateChange = (nextAppState: string) => {
+        if (nextAppState === 'active') {
+          performSyncAndFetch();
+        }
+      };
+
+      const appStateSub = AppState.addEventListener('change', handleAppStateChange);
+
       return () => {
         active = false;
+        appStateSub.remove();
         if (pedometerSubscription.current) {
           pedometerSubscription.current.remove();
           pedometerSubscription.current = null;
