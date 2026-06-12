@@ -200,6 +200,13 @@ export const MapScreen: React.FC = () => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<Date | null>(null);
   const lastPointRef = useRef<TrackPoint | null>(null);
+  const pausedDurationRef = useRef<number>(0);
+  const pausedTimeRef = useRef<Date | null>(null);
+  const statusRef = useRef<'idle' | 'running' | 'paused'>('idle');
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   // ── Bottom Card Animation (Draggable Sheet) ──
   const [cardExpanded, setCardExpanded] = useState(false);
@@ -283,20 +290,82 @@ export const MapScreen: React.FC = () => {
     : [];
 
   const startTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
-      setElapsed(prev => {
-        const next = prev + 1;
+      if (startTimeRef.current) {
+        const now = new Date();
+        const start = startTimeRef.current.getTime();
+        const pausedMs = pausedDurationRef.current || 0;
+        
+        let elapsedMs = 0;
+        if (statusRef.current === 'paused' && pausedTimeRef.current) {
+          elapsedMs = pausedTimeRef.current.getTime() - start - pausedMs;
+        } else {
+          elapsedMs = now.getTime() - start - pausedMs;
+        }
+        
+        const elapsedSec = Math.max(0, Math.round(elapsedMs / 1000));
+        setElapsed(elapsedSec);
+
         if (ghostRun?.routeCoordinates) {
-          const pos = interpolateGhost(ghostRun.routeCoordinates, next);
+          const pos = interpolateGhost(ghostRun.routeCoordinates, elapsedSec);
           setGhostPos(pos);
         }
-        return next;
-      });
+      }
     }, 1000);
   };
 
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+  };
+
+  const updateForegroundPoint = async (loc: Location.LocationObject) => {
+    try {
+      const rawSession = await storage.getItem('active_workout_session');
+      if (!rawSession) return;
+
+      const session = JSON.parse(rawSession);
+      if (session.status !== 'running') return;
+
+      let points = session.trackPoints || [];
+      let distanceM = Number(session.distanceM) || 0;
+      const startTime = new Date(session.startTime);
+
+      const { latitude, longitude, speed } = loc.coords;
+      const speedMs = Math.max(0, speed ?? 0);
+      const timestamp = loc.timestamp ? new Date(loc.timestamp) : new Date();
+      const elapsedSec = Math.round((timestamp.getTime() - startTime.getTime()) / 1000);
+
+      const newPoint = {
+        latitude,
+        longitude,
+        timestamp: timestamp.toISOString(),
+        speed: speedMs,
+        elapsedTime: elapsedSec,
+      };
+
+      if (points.length > 0) {
+        const lastPoint = points[points.length - 1];
+        const dist = haversineDistance(lastPoint, newPoint);
+        distanceM += dist;
+      }
+
+      points.push(newPoint);
+
+      const updatedSession = {
+        ...session,
+        trackPoints: points,
+        distanceM,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      await storage.setItem('active_workout_session', JSON.stringify(updatedSession));
+
+      setDistanceM(distanceM);
+      setTrackPoints(points);
+    } catch (err) {
+      console.warn('Failed to update foreground point:', err);
+    }
   };
 
   const startLocationWatch = async () => {
@@ -307,49 +376,78 @@ export const MapScreen: React.FC = () => {
     }
 
     const { status: bgPerm } = await Location.requestBackgroundPermissionsAsync();
-    if (bgPerm !== 'granted') {
+    const isBackgroundGranted = bgPerm === 'granted';
+
+    if (!isBackgroundGranted) {
       Alert.alert(
-        'Background Location Required',
-        'To track your workout even when the screen is off or the app is closed, please select "Allow all the time" in location settings.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => Location.requestBackgroundPermissionsAsync() }
-        ]
+        'Foreground-Only Tracking',
+        'Hadafak is not allowed to access location in the background. Tracking will pause if you close the app. To enable background tracking, select "Allow all the time" in Settings.',
+        [{ text: 'Continue' }]
       );
-      return false;
     }
 
     try {
-      await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-        accuracy: Location.Accuracy.BestForNavigation,
-        timeInterval: 2000,
-        distanceInterval: 4,
-        foregroundService: {
-          notificationTitle: 'Hadef Running/Walking Tracker',
-          notificationBody: 'Your workout is currently being tracked in the background.',
-          notificationColor: COLORS.primary,
-        },
-      });
+      if (isBackgroundGranted) {
+        await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: 2000,
+          distanceInterval: 4,
+          foregroundService: {
+            notificationTitle: 'Hadef Running/Walking Tracker',
+            notificationBody: 'Your workout is currently being tracked in the background.',
+            notificationColor: COLORS.primary,
+          },
+        });
+      } else {
+        if (locationSub.current) {
+          locationSub.current.remove();
+        }
+        locationSub.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 2000,
+            distanceInterval: 4,
+          },
+          (loc) => {
+            const { latitude, longitude, speed } = loc.coords;
+            const speedMs = Math.max(0, speed ?? 0);
+            setCurrentSpeed(speedMs);
+            setUserLocation({ latitude, longitude });
+
+            if (mapRef.current) {
+              mapRef.current.animateToRegion({ latitude, longitude, latitudeDelta: 0.003, longitudeDelta: 0.003 }, 500);
+            }
+
+            updateForegroundPoint(loc);
+          }
+        );
+      }
       return true;
     } catch (err) {
-      console.error('Failed to start background location updates:', err);
-      Alert.alert('Error', 'Unable to start background tracking service.');
+      console.error('Failed to start location updates:', err);
+      Alert.alert('Error', 'Unable to start location tracking. Please check permissions.');
       return false;
     }
   };
 
   const stopLocationWatch = async () => {
     try {
+      if (locationSub.current) {
+        locationSub.current.remove();
+        locationSub.current = null;
+      }
       const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
       if (hasStarted) {
         await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
       }
     } catch (err) {
-      console.warn('Error stopping background location updates:', err);
+      console.warn('Error stopping location updates:', err);
     }
   };
 
   const handleStart = async () => {
+    pausedDurationRef.current = 0;
+    pausedTimeRef.current = null;
     const ok = await startLocationWatch();
     if (!ok) return;
     const now = new Date();
@@ -362,6 +460,8 @@ export const MapScreen: React.FC = () => {
       distanceM: 0,
       trackPoints: [],
       ghostRun: ghostRun,
+      pausedDurationMs: 0,
+      pausedTime: null,
     };
     await storage.setItem('active_workout_session', JSON.stringify(session));
 
@@ -373,11 +473,18 @@ export const MapScreen: React.FC = () => {
     stopTimer();
     await stopLocationWatch();
 
+    const now = new Date();
+    pausedTimeRef.current = now;
+
     try {
       const raw = await storage.getItem('active_workout_session');
       if (raw) {
         const session = JSON.parse(raw);
-        const updated = { ...session, status: 'paused' };
+        const updated = { 
+          ...session, 
+          status: 'paused',
+          pausedTime: now.toISOString(),
+        };
         await storage.setItem('active_workout_session', JSON.stringify(updated));
       }
     } catch (err) {
@@ -389,13 +496,26 @@ export const MapScreen: React.FC = () => {
     const ok = await startLocationWatch();
     if (!ok) return;
     setStatus('running');
+
+    const now = new Date();
+    if (pausedTimeRef.current) {
+      const diff = now.getTime() - pausedTimeRef.current.getTime();
+      pausedDurationRef.current += diff;
+    }
+    pausedTimeRef.current = null;
+
     startTimer();
 
     try {
       const raw = await storage.getItem('active_workout_session');
       if (raw) {
         const session = JSON.parse(raw);
-        const updated = { ...session, status: 'running' };
+        const updated = { 
+          ...session, 
+          status: 'running',
+          pausedTime: null,
+          pausedDurationMs: pausedDurationRef.current,
+        };
         await storage.setItem('active_workout_session', JSON.stringify(updated));
       }
     } catch (err) {
@@ -449,6 +569,8 @@ export const MapScreen: React.FC = () => {
     setTrackPoints([]);
     lastPointRef.current = null;
     startTimeRef.current = null;
+    pausedDurationRef.current = 0;
+    pausedTimeRef.current = null;
     setGhostPos(null);
     setSummaryData(null);
     setShowSummaryModal(false);
@@ -519,9 +641,27 @@ export const MapScreen: React.FC = () => {
             }
             if (session.startTime) {
               startTimeRef.current = new Date(session.startTime);
-              const diffSec = Math.round((new Date().getTime() - startTimeRef.current.getTime()) / 1000);
-              setElapsed(diffSec);
             }
+            pausedDurationRef.current = Number(session.pausedDurationMs) || 0;
+            if (session.pausedTime) {
+              pausedTimeRef.current = new Date(session.pausedTime);
+            }
+
+            // Calculate correct dynamic elapsed time immediately
+            if (startTimeRef.current) {
+              const now = new Date();
+              const start = startTimeRef.current.getTime();
+              const pausedMs = pausedDurationRef.current;
+              
+              let elapsedMs = 0;
+              if (session.status === 'paused' && pausedTimeRef.current) {
+                elapsedMs = pausedTimeRef.current.getTime() - start - pausedMs;
+              } else {
+                elapsedMs = now.getTime() - start - pausedMs;
+              }
+              setElapsed(Math.max(0, Math.round(elapsedMs / 1000)));
+            }
+
             if (session.ghostRun) {
               setGhostRun(session.ghostRun);
             }
@@ -530,16 +670,39 @@ export const MapScreen: React.FC = () => {
               startTimer();
               const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
               if (!hasStarted) {
-                await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-                  accuracy: Location.Accuracy.BestForNavigation,
-                  timeInterval: 2000,
-                  distanceInterval: 4,
-                  foregroundService: {
-                    notificationTitle: 'Hadef Running/Walking Tracker',
-                    notificationBody: 'Your workout is currently being tracked in the background.',
-                    notificationColor: COLORS.primary,
-                  },
-                });
+                const { status: bgPerm } = await Location.getBackgroundPermissionsAsync();
+                if (bgPerm === 'granted') {
+                  await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+                    accuracy: Location.Accuracy.BestForNavigation,
+                    timeInterval: 2000,
+                    distanceInterval: 4,
+                    foregroundService: {
+                      notificationTitle: 'Hadef Running/Walking Tracker',
+                      notificationBody: 'Your workout is currently being tracked in the background.',
+                      notificationColor: COLORS.primary,
+                    },
+                  });
+                } else {
+                  if (locationSub.current) {
+                    locationSub.current.remove();
+                  }
+                  locationSub.current = await Location.watchPositionAsync(
+                    {
+                      accuracy: Location.Accuracy.BestForNavigation,
+                      timeInterval: 2000,
+                      distanceInterval: 4,
+                    },
+                    (loc) => {
+                      const { latitude, longitude, speed } = loc.coords;
+                      setCurrentSpeed(Math.max(0, speed ?? 0));
+                      setUserLocation({ latitude, longitude });
+                      if (mapRef.current) {
+                        mapRef.current.animateToRegion({ latitude, longitude, latitudeDelta: 0.003, longitudeDelta: 0.003 }, 500);
+                      }
+                      updateForegroundPoint(loc);
+                    }
+                  );
+                }
               }
             }
           }
