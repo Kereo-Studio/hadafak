@@ -1,3 +1,4 @@
+import { DataSource } from 'typeorm';
 import { AppDataSource } from '../data-source';
 import { Program, ProgramLevel } from '../../modules/programs/entities/program.entity';
 import { ProgramDay } from '../../modules/programs/entities/program-day.entity';
@@ -7,19 +8,15 @@ import { Food, FoodSource } from '../../modules/nutrition/entities/food.entity';
 import { Recipe, RecipeSource } from '../../modules/recipes/entities/recipe.entity';
 import { RecipeIngredient } from '../../modules/recipes/entities/recipe-ingredient.entity';
 
-async function seed() {
-  console.log('Initializing database connection for seeding...');
-  await AppDataSource.initialize();
-  console.log('Database connection initialized successfully.');
-
+export async function runSeeding(dataSource: DataSource) {
   console.log('Cleaning existing tables...');
-  await AppDataSource.getRepository(RecipeIngredient).createQueryBuilder().delete().execute();
-  await AppDataSource.getRepository(Recipe).createQueryBuilder().delete().execute();
-  await AppDataSource.getRepository(ProgramDayExercise).createQueryBuilder().delete().execute();
-  await AppDataSource.getRepository(ProgramDay).createQueryBuilder().delete().execute();
-  await AppDataSource.getRepository(Program).createQueryBuilder().delete().execute();
-  await AppDataSource.getRepository(Exercise).createQueryBuilder().delete().execute();
-  await AppDataSource.getRepository(Food).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(RecipeIngredient).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(Recipe).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(ProgramDayExercise).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(ProgramDay).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(Program).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(Exercise).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(Food).createQueryBuilder().delete().execute();
   console.log('Cleanup complete.');
 
   console.log('Seeding exercises...');
@@ -38,7 +35,7 @@ async function seed() {
     { name: 'Leg Extension', muscleGroup: 'Quads' },
   ];
 
-  const exerciseRepository = AppDataSource.getRepository(Exercise);
+  const exerciseRepository = dataSource.getRepository(Exercise);
   const seededExercises = await exerciseRepository.save(
     exercisesData.map((e) => exerciseRepository.create(e)),
   );
@@ -58,7 +55,7 @@ async function seed() {
     { name: 'Whey Protein', source: FoodSource.DATABASE, calories: 400, protein: 80, carbs: 6, fat: 6, servingSize: 30, servingUnit: 'scoop' },
   ];
   
-  const foodRepository = AppDataSource.getRepository(Food);
+  const foodRepository = dataSource.getRepository(Food);
   const seededFoods = await foodRepository.save(
     foodsData.map((f) => foodRepository.create(f)),
   );
@@ -71,8 +68,8 @@ async function seed() {
     return found.id;
   };
 
-  const recipeRepository = AppDataSource.getRepository(Recipe);
-  const recipeIngredientRepository = AppDataSource.getRepository(RecipeIngredient);
+  const recipeRepository = dataSource.getRepository(Recipe);
+  const recipeIngredientRepository = dataSource.getRepository(RecipeIngredient);
 
   // Pancake Recipe
   const pancakeRecipe = await recipeRepository.save(
@@ -140,9 +137,9 @@ async function seed() {
     return found.id;
   };
 
-  const programRepository = AppDataSource.getRepository(Program);
-  const programDayRepository = AppDataSource.getRepository(ProgramDay);
-  const programDayExerciseRepository = AppDataSource.getRepository(ProgramDayExercise);
+  const programRepository = dataSource.getRepository(Program);
+  const programDayRepository = dataSource.getRepository(ProgramDay);
+  const programDayExerciseRepository = dataSource.getRepository(ProgramDayExercise);
 
   console.log('Seeding programs...');
 
@@ -252,11 +249,20 @@ async function seed() {
   ]);
 
   console.log('Programs, ProgramDays, and Foods seeded successfully!');
+}
+
+async function seed() {
+  console.log('Initializing database connection for seeding...');
+  await AppDataSource.initialize();
+  console.log('Database connection initialized successfully.');
+  await runSeeding(AppDataSource);
   await AppDataSource.destroy();
   console.log('Database connection closed.');
 }
 
-seed().catch((err) => {
-  console.error('Error during seeding:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  seed().catch((err) => {
+    console.error('Error during seeding:', err);
+    process.exit(1);
+  });
+}
