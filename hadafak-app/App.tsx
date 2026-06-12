@@ -12,7 +12,7 @@ import { MapScreen } from './src/screens/MapScreen';
 import { NutritionScreen } from './src/screens/NutritionScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { storage } from './src/utils/storage';
-import { api } from './src/services/api';
+import { api, registerLogoutCallback } from './src/services/api';
 
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -29,6 +29,10 @@ export default function App() {
 
   // Check login status on launch
   useEffect(() => {
+    registerLogoutCallback(() => {
+      handleLogout();
+    });
+
     const checkLoginStatus = async () => {
       try {
         const token = await storage.getItem('access_token');
