@@ -7,6 +7,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as path from 'path';
+import { DataSource } from 'typeorm';
+import { Exercise } from './modules/exercises/entities/exercise.entity';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -53,6 +55,20 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document);
 
   app.enableShutdownHooks();
+
+  // Run db seeding if database has no exercises
+  try {
+    const dataSource = app.get(DataSource);
+    const exerciseCount = await dataSource.getRepository(Exercise).count();
+    if (exerciseCount === 0) {
+      console.log('Database appears empty. Seeding initial data...');
+      const { runSeeding } = await import('./database/seeds/seed');
+      await runSeeding(dataSource);
+      console.log('Seeding completed successfully!');
+    }
+  } catch (e) {
+    console.error('Error checking/seeding database on startup:', e);
+  }
 
   const port = configService.get<number>('app.port') || 3000;
   await app.listen(port, '0.0.0.0');
