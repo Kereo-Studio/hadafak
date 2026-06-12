@@ -62,7 +62,7 @@ async function bootstrap() {
     const exerciseCount = await dataSource.getRepository(Exercise).count();
     if (exerciseCount === 0) {
       console.log('Database appears empty. Seeding initial data...');
-      const { runSeeding } = await import('./database/seeds/seed');
+      const { runSeeding } = await import('./database/seeds/seed.js');
       await runSeeding(dataSource);
       console.log('Seeding completed successfully!');
     }
