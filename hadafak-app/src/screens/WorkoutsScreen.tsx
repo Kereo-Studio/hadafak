@@ -312,6 +312,15 @@ export const WorkoutsScreen: React.FC = () => {
   const [isProgramSelectorVisible, setIsProgramSelectorVisible] = useState(false);
   const [fetchingPrograms, setFetchingPrograms] = useState(false);
 
+  // Create custom program states
+  const [isCustomProgramModalVisible, setIsCustomProgramModalVisible] = useState(false);
+  const [customProgramName, setCustomProgramName] = useState('');
+  const [customProgramDesc, setCustomProgramDesc] = useState('');
+  const [customProgramLevel, setCustomProgramLevel] = useState('beginner');
+  const [customProgramDays, setCustomProgramDays] = useState<{ id: string; title: string }[]>([
+    { id: '1', title: 'Day 1: Push' }
+  ]);
+
   // Edit program exercise
   const [isEditPlanExModalVisible, setIsEditPlanExModalVisible] = useState(false);
   const [editingPlanEx, setEditingPlanEx] = useState<any | null>(null);
@@ -496,6 +505,76 @@ export const WorkoutsScreen: React.FC = () => {
       Alert.alert('Error', 'Unable to change workout program.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenCustomProgramModal = () => {
+    setCustomProgramName('');
+    setCustomProgramDesc('');
+    setCustomProgramLevel('beginner');
+    setCustomProgramDays([
+      { id: '1', title: 'Day 1' }
+    ]);
+    setIsCustomProgramModalVisible(true);
+  };
+
+  const handleAddCustomDay = () => {
+    const nextNum = customProgramDays.length + 1;
+    setCustomProgramDays([
+      ...customProgramDays,
+      { id: String(Date.now()), title: `Day ${nextNum}` }
+    ]);
+  };
+
+  const handleRemoveCustomDay = (id: string) => {
+    setCustomProgramDays(customProgramDays.filter(d => d.id !== id));
+  };
+
+  const handleUpdateCustomDayTitle = (id: string, text: string) => {
+    setCustomProgramDays(
+      customProgramDays.map(d => d.id === id ? { ...d, title: text } : d)
+    );
+  };
+
+  const handleSaveCustomProgram = async () => {
+    if (!customProgramName.trim()) {
+      Alert.alert('Error', 'Please enter a program name.');
+      return;
+    }
+    if (customProgramDays.length === 0) {
+      Alert.alert('Error', 'Please add at least one split day.');
+      return;
+    }
+    for (const d of customProgramDays) {
+      if (!d.title.trim()) {
+        Alert.alert('Error', 'Please fill in all day titles.');
+        return;
+      }
+    }
+
+    setIsRegenerating(true);
+    try {
+      const programRes = await api.post('/programs', {
+        name: customProgramName,
+        description: customProgramDesc || 'Custom workout program.',
+        level: customProgramLevel,
+        days: customProgramDays.map((d, index) => ({
+          dayNumber: index + 1,
+          title: d.title,
+        })),
+      });
+
+      const programId = programRes.data.id;
+      await api.post(`/profiles/assign-program/${programId}`);
+      
+      setIsCustomProgramModalVisible(false);
+      await fetchWorkoutData();
+      Alert.alert('Success', 'Your custom workout program has been created and assigned!');
+    } catch (err) {
+      console.warn('Failed to create custom program:', err);
+      Alert.alert('Error', 'Failed to create custom program.');
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -1306,6 +1385,15 @@ export const WorkoutsScreen: React.FC = () => {
                           )}
                         </TouchableOpacity>
                       </View>
+
+                      <TouchableOpacity
+                        style={styles.planCreateCustomBtn}
+                        onPress={handleOpenCustomProgramModal}
+                        activeOpacity={0.8}
+                      >
+                        <Plus size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                        <Text style={styles.planCreateCustomBtnText}>Create Custom Plan</Text>
+                      </TouchableOpacity>
                     </View>
 
                     {/* Render split days */}
@@ -1412,6 +1500,15 @@ export const WorkoutsScreen: React.FC = () => {
                       activeOpacity={0.8}
                     >
                       <Text style={[styles.planEmptyBtnText, { color: COLORS.primary }]}>Choose Program Manually</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.planEmptyBtn, { marginTop: 12, backgroundColor: COLORS.primaryLight }]}
+                      onPress={handleOpenCustomProgramModal}
+                      activeOpacity={0.8}
+                    >
+                      <Plus size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+                      <Text style={[styles.planEmptyBtnText, { color: COLORS.primary }]}>Create Custom Plan</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1807,6 +1904,127 @@ export const WorkoutsScreen: React.FC = () => {
                   )}
                 </ScrollView>
               )}
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Create Custom Program Modal */}
+      <Modal
+        visible={isCustomProgramModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCustomProgramModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setIsCustomProgramModalVisible(false)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitleText}>Create Custom Plan</Text>
+                <TouchableOpacity 
+                  onPress={() => setIsCustomProgramModalVisible(false)}
+                >
+                  <X size={20} color={COLORS.textLight} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                {/* Program Name */}
+                <Text style={styles.inputLabel}>Plan Name</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. Strength Push-Pull-Legs"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={customProgramName}
+                  onChangeText={setCustomProgramName}
+                />
+
+                {/* Program Description */}
+                <Text style={styles.inputLabel}>Description</Text>
+                <TextInput
+                  style={[styles.modalInput, { height: 60, textAlignVertical: 'top' }]}
+                  placeholder="e.g. 3-day split focused on heavy compound movements"
+                  placeholderTextColor={COLORS.textMuted}
+                  multiline={true}
+                  numberOfLines={2}
+                  value={customProgramDesc}
+                  onChangeText={setCustomProgramDesc}
+                />
+
+                {/* Experience Level */}
+                <Text style={styles.inputLabel}>Target Experience Level</Text>
+                <View style={styles.levelSelectorContainer}>
+                  {['beginner', 'intermediate', 'advanced'].map((lvl) => (
+                    <TouchableOpacity
+                      key={lvl}
+                      style={[
+                        styles.levelSelectorBtn,
+                        customProgramLevel === lvl && styles.levelSelectorBtnActive
+                      ]}
+                      onPress={() => setCustomProgramLevel(lvl)}
+                    >
+                      <Text
+                        style={[
+                          styles.levelSelectorText,
+                          customProgramLevel === lvl && styles.levelSelectorTextActive
+                        ]}
+                      >
+                        {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Split Days List */}
+                <View style={styles.daysHeaderRow}>
+                  <Text style={styles.inputLabel}>Workout Days / Splits</Text>
+                  <TouchableOpacity 
+                    style={styles.addDayInlineBtn}
+                    onPress={handleAddCustomDay}
+                  >
+                    <Plus size={14} color={COLORS.primary} style={{ marginRight: 2 }} />
+                    <Text style={styles.addDayInlineText}>Add Day</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {customProgramDays.map((day, idx) => (
+                  <View key={day.id} style={styles.customDayInputRow}>
+                    <Text style={styles.customDayNumberLabel}>{idx + 1}</Text>
+                    <TextInput
+                      style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                      placeholder={`e.g. Day ${idx + 1}: Push`}
+                      placeholderTextColor={COLORS.textMuted}
+                      value={day.title}
+                      onChangeText={(txt) => handleUpdateCustomDayTitle(day.id, txt)}
+                    />
+                    <TouchableOpacity
+                      style={styles.removeDayBtn}
+                      onPress={() => handleRemoveCustomDay(day.id)}
+                    >
+                      <Trash2 size={16} color="#DC2626" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                {customProgramDays.length === 0 && (
+                  <Text style={styles.noDaysWarningText}>
+                    Please add at least one workout day to this plan.
+                  </Text>
+                )}
+
+                {/* Save Button */}
+                <TouchableOpacity
+                  style={styles.saveCustomProgramBtn}
+                  onPress={handleSaveCustomProgram}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.saveCustomProgramBtnText}>Create & Assign Plan</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
           </TouchableWithoutFeedback>
         </TouchableOpacity>
@@ -3131,5 +3349,111 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.error,
     marginLeft: 6,
+  },
+  planCreateCustomBtn: {
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary + '1F',
+    borderRadius: 12,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  planCreateCustomBtnText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  levelSelectorContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  levelSelectorBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  levelSelectorBtnActive: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  levelSelectorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textLight,
+  },
+  levelSelectorTextActive: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  daysHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  addDayInlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.primaryLight,
+  },
+  addDayInlineText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  customDayInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  customDayNumberLabel: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryLight,
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  removeDayBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+  },
+  noDaysWarningText: {
+    fontSize: 12,
+    color: COLORS.error,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginVertical: 10,
+  },
+  saveCustomProgramBtn: {
+    backgroundColor: COLORS.primary,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    ...SHADOWS.subtle,
+  },
+  saveCustomProgramBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

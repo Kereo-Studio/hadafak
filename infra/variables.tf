@@ -46,3 +46,17 @@ variable "database_url" {
   description = "Connection string for Neon Postgres database"
   sensitive   = true
 }
+
+variable "fatsecret_client_id" {
+  type        = string
+  description = "FatSecret Client ID"
+  default     = ""
+}
+
+variable "fatsecret_client_secret" {
+  type        = string
+  description = "FatSecret Client Secret"
+  sensitive   = true
+  default     = ""
+}
+

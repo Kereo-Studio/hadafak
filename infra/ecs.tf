@@ -109,7 +109,9 @@ resource "aws_ecs_task_definition" "app" {
         { name = "JWT_ACCESS_EXPIRATION", value = "15m" },
         { name = "JWT_REFRESH_EXPIRATION", value = "7d" },
         { name = "AWS_S3_BUCKET_NAME", value = aws_s3_bucket.uploads.id },
-        { name = "AWS_S3_REGION", value = var.aws_region }
+        { name = "AWS_S3_REGION", value = var.aws_region },
+        { name = "FATSECRET_CLIENT_ID", value = var.fatsecret_client_id },
+        { name = "FATSECRET_CLIENT_SECRET", value = var.fatsecret_client_secret }
       ]
       logConfiguration = {
         logDriver = "awslogs"
