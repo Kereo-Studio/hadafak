@@ -60,3 +60,11 @@ variable "fatsecret_client_secret" {
   default     = ""
 }
 
+variable "gemini_api_key" {
+  type        = string
+  description = "Gemini API Key for AI nutrition and recipe services"
+  sensitive   = true
+  default     = ""
+}
+
+

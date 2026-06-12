@@ -12,6 +12,7 @@ import {
   Alert,
   Dimensions,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS } from '../theme/colors';
@@ -31,7 +32,10 @@ import {
   Clock,
   Utensils,
   BookOpen,
+  Camera,
+  Upload,
 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { api } from '../services/api';
 
@@ -239,6 +243,21 @@ export const NutritionScreen: React.FC = () => {
   const [customServingUnit, setCustomServingUnit] = useState('g');
   const [isCreatingFood, setIsCreatingFood] = useState(false);
 
+  // AI Scan States
+  const [modalActiveTab, setModalActiveTab] = useState<'search' | 'scan' | 'custom'>('search');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isAiScanning, setIsAiScanning] = useState(false);
+  const [aiResult, setAiResult] = useState<{
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    servingSize: number;
+    servingUnit: string;
+  } | null>(null);
+  const [aiQuantity, setAiQuantity] = useState('1');
+
   // Quick Seed Common Foods for Offline/Instant fallback search
   const QUICK_FALLBACK_FOODS: FoodItem[] = [
     { id: '1', name: 'Oatmeal (cooked)', calories: 120, protein: 5, carbs: 22, fat: 2 },
@@ -410,6 +429,122 @@ export const NutritionScreen: React.FC = () => {
       fetchDailySummary();
     } catch (e) {
       console.warn('Failed to delete food log:', e);
+    }
+  };
+
+  const handleCloseLogModal = () => {
+    setIsLogModalVisible(false);
+    setShowCustomForm(false);
+    setModalActiveTab('search');
+    setSelectedFood(null);
+    setSelectedImage(null);
+    setAiResult(null);
+    setAiQuantity('1');
+  };
+
+  const pickImageFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Hadafak needs media library permissions to pick an image.');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setSelectedImage(result.assets[0].uri);
+        setAiResult(null);
+        if (result.assets[0].base64) {
+          handleAiScan(result.assets[0].base64);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to pick image:', e);
+      Alert.alert('Error', 'Failed to pick image from gallery.');
+    }
+  };
+
+  const takePhotoWithCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Hadafak needs camera permissions to snap a photo.');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setSelectedImage(result.assets[0].uri);
+        setAiResult(null);
+        if (result.assets[0].base64) {
+          handleAiScan(result.assets[0].base64);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to take photo:', e);
+      Alert.alert('Error', 'Failed to capture photo.');
+    }
+  };
+
+  const handleAiScan = async (base64Data: string) => {
+    setIsAiScanning(true);
+    try {
+      const response = await api.post('/nutrition/scan', {
+        imageBase64: base64Data,
+      });
+      setAiResult(response.data);
+    } catch (e) {
+      console.error('AI Scan request failed:', e);
+      Alert.alert('Scan Failed', 'AI model analysis failed. Please check connection and try again.');
+    } finally {
+      setIsAiScanning(false);
+    }
+  };
+
+  const handleLogAiFood = async () => {
+    if (!aiResult) return;
+    const qty = parseFloat(aiQuantity);
+    if (isNaN(qty) || qty <= 0) {
+      Alert.alert('Error', 'Please input a valid quantity/serving amount.');
+      return;
+    }
+
+    try {
+      // 1. Create a food dictionary entry for the AI scanned food
+      const foodRes = await api.post('/nutrition/foods', {
+        name: aiResult.name,
+        calories: Math.round(aiResult.calories),
+        protein: Math.round(aiResult.protein),
+        carbs: Math.round(aiResult.carbs),
+        fat: Math.round(aiResult.fat),
+        servingSize: aiResult.servingSize,
+        servingUnit: aiResult.servingUnit,
+      });
+
+      // 2. Log this newly created AI food to daily logs
+      await api.post('/nutrition/logs', {
+        foodId: foodRes.data.id,
+        quantity: qty,
+        mealType: selectedMealType,
+        date,
+      });
+
+      // Clear states & Refresh
+      handleCloseLogModal();
+      fetchDailySummary();
+    } catch (e) {
+      Alert.alert('Error', 'Could not log scanned food to database.');
     }
   };
 
@@ -997,7 +1132,7 @@ export const NutritionScreen: React.FC = () => {
         visible={isLogModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setIsLogModalVisible(false)}
+        onRequestClose={handleCloseLogModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -1008,11 +1143,7 @@ export const NutritionScreen: React.FC = () => {
                 Log {selectedMealType.charAt(0).toUpperCase() + selectedMealType.slice(1)}
               </Text>
               <TouchableOpacity
-                onPress={() => {
-                  setIsLogModalVisible(false);
-                  setShowCustomForm(false);
-                  setSelectedFood(null);
-                }}
+                onPress={handleCloseLogModal}
                 style={styles.modalCloseCircle}
               >
                 <X size={20} color={COLORS.text} />
@@ -1022,24 +1153,43 @@ export const NutritionScreen: React.FC = () => {
             {/* Custom food tab switch */}
             <View style={styles.modalTabHeader}>
               <TouchableOpacity
-                style={[styles.modalTabBtn, !showCustomForm && styles.modalTabBtnActive]}
-                onPress={() => setShowCustomForm(false)}
+                style={[styles.modalTabBtn, modalActiveTab === 'search' && styles.modalTabBtnActive]}
+                onPress={() => {
+                  setModalActiveTab('search');
+                  setShowCustomForm(false);
+                }}
               >
-                <Text style={[styles.modalTabLabel, !showCustomForm && styles.modalTabLabelActive]}>
-                  Search Food Dictionary
+                <Text style={[styles.modalTabLabel, modalActiveTab === 'search' && styles.modalTabLabelActive]}>
+                  Search
                 </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
-                style={[styles.modalTabBtn, showCustomForm && styles.modalTabBtnActive]}
-                onPress={() => setShowCustomForm(true)}
+                style={[styles.modalTabBtn, modalActiveTab === 'scan' && styles.modalTabBtnActive]}
+                onPress={() => {
+                  setModalActiveTab('scan');
+                  setShowCustomForm(false);
+                }}
               >
-                <Text style={[styles.modalTabLabel, showCustomForm && styles.modalTabLabelActive]}>
-                  Quick Custom Food
+                <Text style={[styles.modalTabLabel, modalActiveTab === 'scan' && styles.modalTabLabelActive]}>
+                  AI Scan
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalTabBtn, modalActiveTab === 'custom' && styles.modalTabBtnActive]}
+                onPress={() => {
+                  setModalActiveTab('custom');
+                  setShowCustomForm(true);
+                }}
+              >
+                <Text style={[styles.modalTabLabel, modalActiveTab === 'custom' && styles.modalTabLabelActive]}>
+                  Custom
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {!showCustomForm ? (
+            {modalActiveTab === 'search' && (
               /* Search flow */
               <View style={styles.searchFlowContainer}>
                 {selectedFood ? (
@@ -1127,7 +1277,135 @@ export const NutritionScreen: React.FC = () => {
                   </View>
                 )}
               </View>
-            ) : (
+            )}
+
+            {modalActiveTab === 'scan' && (
+              /* AI Scan flow */
+              <ScrollView style={styles.aiScanContainer} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+                {!selectedImage ? (
+                  <View style={styles.aiSelectorCard}>
+                    <Sparkles size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
+                    <Text style={styles.aiCardTitle}>Analyze Food with AI</Text>
+                    <Text style={styles.aiCardSubtitle}>
+                      Snap a photo of your meal or upload an image, and Gemini will estimate ingredients and macronutrients automatically!
+                    </Text>
+
+                    <View style={styles.aiActionsCol}>
+                      <TouchableOpacity
+                        style={styles.aiActionBtnPrimary}
+                        onPress={takePhotoWithCamera}
+                      >
+                        <Camera size={20} color="#FFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.aiActionBtnText}>Take Live Photo</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.aiActionBtnSecondary}
+                        onPress={pickImageFromGallery}
+                      >
+                        <Upload size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                        <Text style={styles.aiActionBtnTextSecondary}>Upload from Gallery</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.aiPreviewCard}>
+                    <View style={styles.aiImagePreviewWrapper}>
+                      <Image source={{ uri: selectedImage }} style={styles.aiImagePreview} />
+                      
+                      {isAiScanning && (
+                        <View style={styles.scannerOverlay}>
+                          <ActivityIndicator size="large" color={COLORS.primary} />
+                          <Text style={styles.scanningText}>Gemini AI is scanning...</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {isAiScanning && (
+                      <View style={styles.aiLoadingPhrases}>
+                        <Text style={styles.aiLoadingText}>• Reading visual properties...</Text>
+                        <Text style={styles.aiLoadingText}>• Guessing ingredients & density...</Text>
+                        <Text style={styles.aiLoadingText}>• Calculating estimated macros...</Text>
+                      </View>
+                    )}
+
+                    {!isAiScanning && aiResult && (
+                      <View style={styles.aiResultContent}>
+                        <View style={styles.aiResultHeaderRow}>
+                          <Sparkles size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+                          <Text style={styles.aiResultTitle}>AI Nutrition Estimate</Text>
+                        </View>
+
+                        <Text style={styles.aiFoodName}>{aiResult.name}</Text>
+                        <Text style={styles.aiServingInfo}>
+                          Est. Serving Size: {aiResult.servingSize} {aiResult.servingUnit}
+                        </Text>
+
+                        {/* Macros Grid */}
+                        <View style={styles.aiMacrosGrid}>
+                          <View style={[styles.aiMacroBox, { borderColor: '#E53E3E' }]}>
+                            <Text style={[styles.aiMacroVal, { color: '#E53E3E' }]}>{Math.round(aiResult.calories)}</Text>
+                            <Text style={styles.aiMacroLbl}>Calories</Text>
+                          </View>
+                          <View style={[styles.aiMacroBox, { borderColor: COLORS.primary }]}>
+                            <Text style={[styles.aiMacroVal, { color: COLORS.primary }]}>{aiResult.protein}g</Text>
+                            <Text style={styles.aiMacroLbl}>Protein</Text>
+                          </View>
+                          <View style={[styles.aiMacroBox, { borderColor: '#DD6B20' }]}>
+                            <Text style={[styles.aiMacroVal, { color: '#DD6B20' }]}>{aiResult.carbs}g</Text>
+                            <Text style={styles.aiMacroLbl}>Carbs</Text>
+                          </View>
+                          <View style={[styles.aiMacroBox, { borderColor: '#319795' }]}>
+                            <Text style={[styles.aiMacroVal, { color: '#319795' }]}>{aiResult.fat}g</Text>
+                            <Text style={styles.aiMacroLbl}>Fat</Text>
+                          </View>
+                        </View>
+
+                        {/* Qty multiplier */}
+                        <View style={styles.qtyInputRow}>
+                          <Text style={styles.qtyLabel}>Number of Servings: </Text>
+                          <TextInput
+                            style={styles.qtyInput}
+                            value={aiQuantity}
+                            onChangeText={setAiQuantity}
+                            keyboardType="decimal-pad"
+                            placeholder="1.0"
+                          />
+                        </View>
+
+                        <View style={styles.confirmActionsRow}>
+                          <TouchableOpacity
+                            onPress={() => setSelectedImage(null)}
+                            style={styles.cancelChoiceBtn}
+                          >
+                            <Text style={styles.cancelChoiceText}>Retake Photo</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={handleLogAiFood}
+                            style={styles.confirmLogBtn}
+                          >
+                            <Text style={styles.confirmLogText}>Log Food</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+
+                    {!isAiScanning && !aiResult && (
+                      <View style={{ marginTop: 16 }}>
+                        <TouchableOpacity
+                          style={styles.aiActionBtnSecondary}
+                          onPress={() => setSelectedImage(null)}
+                        >
+                          <Text style={styles.aiActionBtnTextSecondary}>Clear & Go Back</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+            )}
+
+            {modalActiveTab === 'custom' && (
               /* Custom food insertion form */
               <ScrollView style={styles.customFormContainer} showsVerticalScrollIndicator={false}>
                 <View style={styles.inputGroup}>
@@ -2607,5 +2885,162 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+  },
+  // AI Scan Styles
+  aiScanContainer: {
+    flex: 1,
+  },
+  aiSelectorCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    marginTop: 20,
+  },
+  aiCardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  aiCardSubtitle: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+  },
+  aiActionsCol: {
+    width: '100%',
+    gap: 12,
+  },
+  aiActionBtnPrimary: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.primary,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.subtle,
+  },
+  aiActionBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  aiActionBtnSecondary: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aiActionBtnTextSecondary: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  aiPreviewCard: {
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  aiImagePreviewWrapper: {
+    width: '100%',
+    height: 220,
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  aiImagePreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+    opacity: 0.85,
+  },
+  scannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanningText: {
+    color: '#FFF',
+    marginTop: 12,
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  aiLoadingPhrases: {
+    marginTop: 16,
+    width: '100%',
+    backgroundColor: COLORS.surfaceLight,
+    padding: 16,
+    borderRadius: 16,
+    gap: 8,
+  },
+  aiLoadingText: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    fontWeight: '600',
+  },
+  aiResultContent: {
+    width: '100%',
+    marginTop: 20,
+  },
+  aiResultHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  aiResultTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  aiFoodName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  aiServingInfo: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  aiMacrosGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 20,
+    gap: 8,
+  },
+  aiMacroBox: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceLight,
+  },
+  aiMacroVal: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  aiMacroLbl: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    marginTop: 2,
   },
 });
