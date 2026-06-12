@@ -103,3 +103,24 @@ android/build/
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 Free Fitness App Ui Kit (Community)/
 design_system/
+
+# ==============================================================================
+# Terraform Specifics
+# ==============================================================================
+**/.terraform/
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+**/*.tfvars
+**/*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+!*.tfvars.example
+!override.tf.example
+reactnative-should-have.md

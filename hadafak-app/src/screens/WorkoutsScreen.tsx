@@ -129,8 +129,183 @@ export const WorkoutsScreen: React.FC = () => {
     }
   };
 
+  const formatRunDuration = (seconds: number) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hrs > 0) {
+      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatRunDate = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) {
+        return `Today, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      } else if (diffDays === 1) {
+        return `Yesterday, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      }
+      
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${months[d.getMonth()]} ${d.getDate()}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const renderMiniRoutePath = (coords: { latitude: number; longitude: number }[]) => {
+    if (!coords || coords.length < 2) return null;
+    
+    let minLat = Infinity, maxLat = -Infinity;
+    let minLng = Infinity, maxLng = -Infinity;
+    
+    coords.forEach(pt => {
+      if (pt.latitude < minLat) minLat = pt.latitude;
+      if (pt.latitude > maxLat) maxLat = pt.latitude;
+      if (pt.longitude < minLng) minLng = pt.longitude;
+      if (pt.longitude > maxLng) maxLng = pt.longitude;
+    });
+    
+    const latSpan = maxLat - minLat;
+    const lngSpan = maxLng - minLng;
+    const maxSpan = Math.max(latSpan, lngSpan);
+    
+    if (maxSpan === 0) return null;
+    
+    const size = 50;
+    const padding = 4;
+    const innerSize = size - padding * 2;
+    
+    const points = coords.map(pt => {
+      const x = padding + ((pt.longitude - minLng) / maxSpan) * innerSize;
+      const y = padding + (1 - (pt.latitude - minLat) / maxSpan) * innerSize;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    
+    const pathData = `M ${points.join(' L ')}`;
+    
+    return (
+      <Svg width={size} height={size} style={styles.miniRouteSvg}>
+        <Path
+          d={pathData}
+          fill="none"
+          stroke={COLORS.primary}
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  };
+
+  const handleDeleteRun = (id: string) => {
+    Alert.alert('Delete Run', 'Are you sure you want to delete this run session?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setLoading(true);
+            await api.delete(`/runs/${id}`);
+            await fetchWorkoutData();
+          } catch (err) {
+            Alert.alert('Error', 'Unable to delete run session.');
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const renderRunsHistory = () => {
+    if (runsHistory.length === 0) {
+      return (
+        <View style={styles.emptyHistoryCard}>
+          <Award size={36} color={COLORS.textMuted} style={{ marginBottom: 10 }} />
+          <Text style={styles.emptyHistoryText}>No runs completed yet. Get outside and track your first route!</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={{ paddingBottom: 24 }}>
+        {runsHistory.map((run) => {
+          const distanceKm = Number(run.distanceKm) || 0;
+          const durationSeconds = Number(run.durationSeconds) || 0;
+          
+          let paceStr = '--:--';
+          if (distanceKm > 0 && durationSeconds > 0) {
+            const totalMins = durationSeconds / 60;
+            const paceMins = Math.floor(totalMins / distanceKm);
+            const paceSecs = Math.round(((totalMins / distanceKm) - paceMins) * 60);
+            paceStr = `${paceMins}:${paceSecs.toString().padStart(2, '0')}`;
+          }
+
+          const calories = Math.round(distanceKm * 70);
+
+          return (
+            <View key={run.id} style={styles.runHistoryCard}>
+              <View style={styles.runCardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.runCardTitle} numberOfLines={1}>{run.title || 'Outdoor Run'}</Text>
+                  <Text style={styles.runCardDate}>{formatRunDate(run.startTime)}</Text>
+                </View>
+                <View style={styles.miniRouteContainer}>
+                  {renderMiniRoutePath(run.routeCoordinates) || (
+                    <View style={styles.miniRoutePlaceholder}>
+                      <Award size={16} color={COLORS.textMuted} />
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              <View style={styles.runStatsRow}>
+                <View style={styles.runStatColumn}>
+                  <Text style={styles.runStatValue}>{distanceKm.toFixed(2)}</Text>
+                  <Text style={styles.runStatLabel}>Dist (km)</Text>
+                </View>
+                <View style={styles.runStatColumn}>
+                  <Text style={styles.runStatValue}>{formatRunDuration(durationSeconds)}</Text>
+                  <Text style={styles.runStatLabel}>Time</Text>
+                </View>
+                <View style={styles.runStatColumn}>
+                  <Text style={styles.runStatValue}>{paceStr}</Text>
+                  <Text style={styles.runStatLabel}>Pace (/km)</Text>
+                </View>
+                <View style={styles.runStatColumn}>
+                  <Text style={styles.runStatValue}>{calories}</Text>
+                  <Text style={styles.runStatLabel}>kcal</Text>
+                </View>
+              </View>
+
+              <View style={styles.runCardFooter}>
+                <TouchableOpacity
+                  style={styles.runDeleteBtn}
+                  onPress={() => handleDeleteRun(run.id)}
+                  activeOpacity={0.7}
+                >
+                  <Trash2 size={16} color={COLORS.error} />
+                  <Text style={styles.runDeleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   // Tabs and Program Walkthrough & Manual Editing States
-  const [activeTab, setActiveTab] = useState<'logs' | 'plan'>('logs');
+  const [activeTab, setActiveTab] = useState<'gym' | 'runs' | 'plan'>('gym');
+  const [runsHistory, setRunsHistory] = useState<any[]>([]);
   const [currentProgram, setCurrentProgram] = useState<any | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [allPrograms, setAllPrograms] = useState<any[]>([]);
@@ -165,10 +340,11 @@ export const WorkoutsScreen: React.FC = () => {
 
   const fetchWorkoutData = async () => {
     try {
-      const [historyRes, volumeRes, activeRes] = await Promise.allSettled([
+      const [historyRes, volumeRes, activeRes, runsRes] = await Promise.allSettled([
         api.get('/workouts/history'),
         api.get('/workouts/stats/volume'),
         api.get('/workouts/active'),
+        api.get('/runs'),
       ]);
 
       let workoutHistory: WorkoutHistoryItem[] = [];
@@ -183,6 +359,10 @@ export const WorkoutsScreen: React.FC = () => {
         if (trends.length > 2) {
           setVolumeStats(trends.slice(-6)); // Show last 6 sessions
         }
+      }
+
+      if (runsRes.status === 'fulfilled' && runsRes.value.data) {
+        setRunsHistory(runsRes.value.data);
       }
 
       if (activeRes.status === 'fulfilled' && activeRes.value.data) {
@@ -852,7 +1032,9 @@ export const WorkoutsScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.appHeader}>
-        <Text style={styles.headerTitle}>Gym Tracker</Text>
+        <Text style={styles.headerTitle}>
+          {activeTab === 'gym' ? 'Gym History' : activeTab === 'runs' ? 'Runs History' : 'Training Plan'}
+        </Text>
       </View>
 
       <ScrollView
@@ -867,13 +1049,23 @@ export const WorkoutsScreen: React.FC = () => {
             {/* Rich Tabs Selector */}
             <View style={styles.tabContainer}>
               <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'logs' && styles.tabButtonActive]}
-                onPress={() => setActiveTab('logs')}
+                style={[styles.tabButton, activeTab === 'gym' && styles.tabButtonActive]}
+                onPress={() => setActiveTab('gym')}
                 activeOpacity={0.8}
               >
-                <Clock size={16} color={activeTab === 'logs' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 6 }} />
-                <Text style={[styles.tabButtonText, activeTab === 'logs' && styles.tabButtonTextActive]}>
-                  Workout History
+                <Clock size={16} color={activeTab === 'gym' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 4 }} />
+                <Text style={[styles.tabButtonText, activeTab === 'gym' && styles.tabButtonTextActive]}>
+                  Gym
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabButton, activeTab === 'runs' && styles.tabButtonActive]}
+                onPress={() => setActiveTab('runs')}
+                activeOpacity={0.8}
+              >
+                <TrendingUp size={16} color={activeTab === 'runs' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 4 }} />
+                <Text style={[styles.tabButtonText, activeTab === 'runs' && styles.tabButtonTextActive]}>
+                  Runs
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -881,14 +1073,14 @@ export const WorkoutsScreen: React.FC = () => {
                 onPress={() => setActiveTab('plan')}
                 activeOpacity={0.8}
               >
-                <Dumbbell size={16} color={activeTab === 'plan' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 6 }} />
+                <Dumbbell size={16} color={activeTab === 'plan' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 4 }} />
                 <Text style={[styles.tabButtonText, activeTab === 'plan' && styles.tabButtonTextActive]}>
-                  Active Plan Split
+                  Plans
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {activeTab === 'logs' ? (
+            {activeTab === 'gym' ? (
               <View>
                 {/* Volume progression chart card */}
                 <View style={styles.chartCard}>
@@ -1070,6 +1262,10 @@ export const WorkoutsScreen: React.FC = () => {
                     <Text style={styles.emptyHistoryText}>No workouts logged yet. Your fitness journey starts now!</Text>
                   </View>
                 )}
+              </View>
+            ) : activeTab === 'runs' ? (
+              <View style={{ flex: 1 }}>
+                {renderRunsHistory()}
               </View>
             ) : (
               /* ACTIVE PLAN TAB PANEL */
@@ -2851,5 +3047,89 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textMuted,
     textTransform: 'uppercase',
+  },
+  runHistoryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E8ECF2',
+    ...SHADOWS.card,
+  },
+  runCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  runCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  runCardDate: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  miniRouteContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  miniRouteSvg: {
+    backgroundColor: '#F5ECF4',
+  },
+  miniRoutePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  runStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  runStatColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  runStatValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.text,
+  },
+  runStatLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textLight,
+    marginTop: 2,
+  },
+  runCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 10,
+  },
+  runDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  runDeleteText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.error,
+    marginLeft: 6,
   },
 });

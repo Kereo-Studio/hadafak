@@ -60,6 +60,8 @@ export class RunSession {
     latitude: number;
     longitude: number;
     timestamp: string;
+    speed: number;       // m/s — used for pace heatmap coloring
+    elapsedTime: number; // seconds since start — used for ghost runner
   }>;
 
   @CreateDateColumn({ name: 'created_at' })

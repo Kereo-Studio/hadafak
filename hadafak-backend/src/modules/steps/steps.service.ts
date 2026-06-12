@@ -26,11 +26,10 @@ export class StepsService {
       const dateStr = start.toISOString().split('T')[0];
       datesToUpdate.add(dateStr);
 
-      // Overlap Resolution: Delete any existing sensor interval in the exact same timeframe to avoid double counting
+      // Overlap Resolution: Delete any existing sensor interval starting at the same time to avoid double counting
       await this.stepIntervalRepository.delete({
         userId,
         startTime: start,
-        endTime: end,
         source: StepSource.SENSOR,
       });
 

@@ -14,6 +14,7 @@ import { StepsModule } from './modules/steps/steps.module';
 import { RecipesModule } from './modules/recipes/recipes.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { RunsModule } from './modules/runs/runs.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -54,5 +55,6 @@ import { RunsModule } from './modules/runs/runs.module';
     ProgressModule,
     RunsModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}

@@ -5,6 +5,7 @@ import { BodyMetricLog } from './entities/body-metric-log.entity';
 import { ProgressPhoto, PhotoAngle } from './entities/progress-photo.entity';
 import { LogMetricDto } from './dto/log-metric.dto';
 import { ProfilesService } from '../profiles/profiles.service';
+import { S3Service } from '../../common/services/s3.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -16,6 +17,7 @@ export class ProgressService {
     @InjectRepository(ProgressPhoto)
     private readonly photoRepository: Repository<ProgressPhoto>,
     private readonly profilesService: ProfilesService,
+    private readonly s3Service: S3Service,
   ) {}
 
   async logMetric(userId: string, dto: LogMetricDto): Promise<BodyMetricLog> {
@@ -92,8 +94,8 @@ export class ProgressService {
     });
 
     if (photo) {
-      // Safely delete previous local image file to preserve disk space
-      this.deleteLocalFile(photo.imageUrl);
+      // Safely delete previous image file
+      await this.deletePhotoFile(photo.imageUrl);
       photo.imageUrl = imageUrl;
     } else {
       photo = this.photoRepository.create({
@@ -123,7 +125,7 @@ export class ProgressService {
       throw new NotFoundException(`Progress photo with ID ${photoId} not found`);
     }
 
-    this.deleteLocalFile(photo.imageUrl);
+    await this.deletePhotoFile(photo.imageUrl);
     await this.photoRepository.remove(photo);
   }
 
@@ -257,19 +259,22 @@ export class ProgressService {
     };
   }
 
-  private deleteLocalFile(fileUrl: string) {
-    if (!fileUrl.startsWith('/uploads/')) return;
-    try {
-      const filePath = path.join(
-        __dirname,
-        '../../..', // go to projects/hadafak/hadafak-backend root
-        fileUrl,
-      );
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+  private async deletePhotoFile(fileUrl: string) {
+    if (fileUrl.startsWith('http') && this.s3Service.isConfigured()) {
+      await this.s3Service.deleteFile(fileUrl);
+    } else if (fileUrl.startsWith('/uploads/')) {
+      try {
+        const filePath = path.join(
+          __dirname,
+          '../../..', // go to projects/hadafak/hadafak-backend root
+          fileUrl,
+        );
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (e) {
+        // Ignore delete errors
       }
-    } catch (e) {
-      // Ignore delete errors
     }
   }
 }

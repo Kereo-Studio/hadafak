@@ -14,6 +14,16 @@ export class CoordinateDto {
   @ApiProperty({ example: '2026-06-11T08:00:00.000Z' })
   @IsString()
   timestamp: string;
+
+  @ApiProperty({ example: 2.8, required: false })
+  @IsOptional()
+  @IsNumber()
+  speed?: number;
+
+  @ApiProperty({ example: 0, required: false })
+  @IsOptional()
+  @IsNumber()
+  elapsedTime?: number;
 }
 
 export class CreateRunSessionDto {

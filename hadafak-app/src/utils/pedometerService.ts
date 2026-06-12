@@ -1,5 +1,34 @@
 import { Pedometer } from 'expo-sensors';
 import { Platform, Linking, Alert } from 'react-native';
+import { storage } from './storage';
+
+export const getLocalTodaySteps = async (): Promise<number> => {
+  const todayStr = new Date().toISOString().split('T')[0];
+  try {
+    const raw = await storage.getItem('daily_steps_data');
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data.date === todayStr) {
+        return Number(data.steps) || 0;
+      }
+    }
+  } catch (e) {
+    // Ignore
+  }
+  return 0;
+};
+
+export const saveLocalTodaySteps = async (steps: number): Promise<void> => {
+  const todayStr = new Date().toISOString().split('T')[0];
+  try {
+    await storage.setItem('daily_steps_data', JSON.stringify({
+      date: todayStr,
+      steps,
+    }));
+  } catch (e) {
+    // Ignore
+  }
+};
 
 // Only show the "go to settings" alert once per app session
 let hasShownSettingsAlert = false;
@@ -86,7 +115,25 @@ export const pedometerService = {
         source: 'sensor';
       }> = [];
 
-      for (let i = 0; i < 48; i++) {
+      // 1. Sync current partial hour block (from start of current hour to now)
+      const currentStart = new Date(now.getTime());
+      currentStart.setMinutes(0, 0, 0);
+      try {
+        const result = await Pedometer.getStepCountAsync(currentStart, now);
+        if (result && result.steps > 0) {
+          intervalsToSync.push({
+            startTime: currentStart.toISOString(),
+            endTime: now.toISOString(),
+            steps: result.steps,
+            source: 'sensor',
+          });
+        }
+      } catch (e) {
+        // Skip
+      }
+
+      // 2. Sync previous 47 completed hours
+      for (let i = 0; i < 47; i++) {
         const start = new Date(now.getTime() - (i + 1) * 60 * 60 * 1000);
         start.setMinutes(0, 0, 0);
         const end = new Date(now.getTime() - i * 60 * 60 * 1000);
@@ -105,6 +152,35 @@ export const pedometerService = {
           }
         } catch (e) {
           // Skip failed intervals silently
+        }
+      }
+
+      if (intervalsToSync.length === 0) {
+        // Fallback: Query the entire day from midnight to now (Android compatibility)
+        const startOfDay = new Date(now.getTime());
+        startOfDay.setHours(0, 0, 0, 0);
+        try {
+          const result = await Pedometer.getStepCountAsync(startOfDay, now);
+          if (result && result.steps > 0) {
+            intervalsToSync.push({
+              startTime: startOfDay.toISOString(),
+              endTime: now.toISOString(),
+              steps: result.steps,
+              source: 'sensor',
+            });
+          }
+        } catch (e) {
+          console.log('[Pedometer] Daily fallback query not supported (Android). Using local storage steps.');
+          // Android compatibility: Use cached steps from local AsyncStorage
+          const localSteps = await getLocalTodaySteps();
+          if (localSteps > 0) {
+            intervalsToSync.push({
+              startTime: startOfDay.toISOString(),
+              endTime: now.toISOString(),
+              steps: localSteps,
+              source: 'sensor',
+            });
+          }
         }
       }
 

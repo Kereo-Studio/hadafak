@@ -12,7 +12,6 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ProgressService } from './progress.service';
@@ -20,13 +19,17 @@ import { LogMetricDto } from './dto/log-metric.dto';
 import { UploadPhotoDto } from './dto/upload-photo.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { S3Service } from '../../common/services/s3.service';
 
 @ApiTags('Progress')
 @Controller('progress')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ProgressController {
-  constructor(private readonly progressService: ProgressService) {}
+  constructor(
+    private readonly progressService: ProgressService,
+    private readonly s3Service: S3Service,
+  ) {}
 
   @Post('metrics')
   @ApiOperation({ summary: 'Log or update daily weight, body composition, and circumference metrics' })
@@ -53,20 +56,6 @@ export class ProgressController {
   @Post('photos/upload')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const dest = './uploads/progress-photos';
-          if (!fs.existsSync(dest)) {
-            fs.mkdirSync(dest, { recursive: true });
-          }
-          cb(null, dest);
-        },
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname);
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, `photo-${uniqueSuffix}${ext}`);
-        },
-      }),
       fileFilter: (req, file, cb) => {
         const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
         if (allowedMimeTypes.includes(file.mimetype)) {
@@ -91,8 +80,26 @@ export class ProgressController {
     if (!file) {
       throw new BadRequestException('Image file is required');
     }
-    const relativeUrl = `/uploads/progress-photos/${file.filename}`;
-    return this.progressService.logPhoto(userId, dto.angle, relativeUrl, dto.date);
+
+    let imageUrl: string;
+
+    if (this.s3Service.isConfigured()) {
+      imageUrl = await this.s3Service.uploadFile(file, 'progress-photos');
+    } else {
+      // Local fallback configuration
+      const dest = './uploads/progress-photos';
+      if (!fs.existsSync(dest)) {
+        fs.mkdirSync(dest, { recursive: true });
+      }
+      const ext = path.extname(file.originalname);
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const filename = `photo-${uniqueSuffix}${ext}`;
+      const filePath = path.join(dest, filename);
+      fs.writeFileSync(filePath, file.buffer);
+      imageUrl = `/uploads/progress-photos/${filename}`;
+    }
+
+    return this.progressService.logPhoto(userId, dto.angle, imageUrl, dto.date);
   }
 
   @Get('photos')

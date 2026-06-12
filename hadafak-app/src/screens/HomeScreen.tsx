@@ -15,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { Pedometer } from 'expo-sensors';
-import { pedometerService } from '../utils/pedometerService';
+import { pedometerService, getLocalTodaySteps, saveLocalTodaySteps } from '../utils/pedometerService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../theme/colors';
@@ -193,21 +193,59 @@ export const HomeScreen: React.FC = () => {
         }
       }
 
+      // Fetch local steps count for today as a baseline to prevent 0 resets
+      let localStepsForToday = 0;
+      try {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const now = new Date();
+        const localRes = await Pedometer.getStepCountAsync(startOfToday, now);
+        if (localRes && localRes.steps !== undefined) {
+          localStepsForToday = localRes.steps;
+        }
+      } catch (e) {
+        // Fallback to AsyncStorage (Android compatibility)
+        localStepsForToday = await getLocalTodaySteps();
+      }
+
       // 2. Map steps & distance
       let currentSteps = 0;
       let currentDistance = '0 m';
       let stepsBurned = 0;
+
+      let userHeight = 170;
+      let userWeight = 70;
+      let userGender = 'female';
+      if (profile) {
+        if (profile.height) userHeight = Number(profile.height);
+        if (profile.weight) userWeight = Number(profile.weight);
+        if (profile.gender) userGender = profile.gender.toLowerCase();
+      }
+      const isMale = userGender === 'male' || userGender === 'm';
+      const strideFactor = isMale ? 0.415 : 0.413;
+      const strideLengthKm = (userHeight * strideFactor) / 100000;
+      const caloriesPerStep = userWeight * 0.00057;
+
       if (stepsRes.status === 'fulfilled' && stepsRes.value.data) {
         const data = stepsRes.value.data;
         if (data.totalSteps !== undefined) {
-          currentSteps = data.totalSteps;
-          setTodaySteps(data.totalSteps.toLocaleString());
+          // Use whichever is higher (backend or local device reading) to prevent resets to 0
+          const finalSteps = Math.max(data.totalSteps, localStepsForToday);
+          currentSteps = finalSteps;
+          setTodaySteps(finalSteps.toLocaleString());
+          saveLocalTodaySteps(finalSteps);
+          
+          currentDistance = `${Math.round(finalSteps * strideLengthKm * 1000)} m`;
+          stepsBurned = Math.round(finalSteps * caloriesPerStep);
         }
-        if (data.distanceKm !== undefined) {
-          // Convert Km back to meters for the metrics bar
-          currentDistance = `${Math.round(data.distanceKm * 1000)} m`;
-        }
-        stepsBurned = data.caloriesBurned || 0;
+      } else {
+        // Fallback: Query Pedometer directly if server is offline (e.g. phone is unplugged)
+        currentSteps = localStepsForToday;
+        setTodaySteps(localStepsForToday.toLocaleString());
+        saveLocalTodaySteps(localStepsForToday);
+        
+        currentDistance = `${Math.round(localStepsForToday * strideLengthKm * 1000)} m`;
+        stepsBurned = Math.round(localStepsForToday * caloriesPerStep);
       }
 
       // 3. Map calories burnt & consumed
@@ -419,22 +457,19 @@ export const HomeScreen: React.FC = () => {
       }
 
       // Start watching live steps (resets to 0 since starting the listener)
-      let initialWatchedSteps: number | null = null;
+      let lastReportedSteps = 0;
 
       pedometerSubscription.current = Pedometer.watchStepCount((result) => {
-        if (initialWatchedSteps === null) {
-          initialWatchedSteps = result.steps;
-        }
-
-        const deltaSteps = result.steps - initialWatchedSteps;
+        const deltaSteps = result.steps - lastReportedSteps;
         if (deltaSteps > 0) {
+          lastReportedSteps = result.steps;
           // Update local steps state immediately!
           setTodaySteps((prev) => {
             const currentVal = parseInt(prev.replace(/,/g, ''), 10) || 0;
             const newVal = currentVal + deltaSteps;
 
-            // Trigger sync if steps changed significantly (e.g. 50 steps)
-            const syncThreshold = 50;
+            // Trigger sync if steps changed significantly (e.g. 35 steps)
+            const syncThreshold = 35;
             const diffSinceSync = newVal - lastSyncedStepsRef.current;
             if (diffSinceSync >= syncThreshold && !isSyncingStepsRef.current) {
               isSyncingStepsRef.current = true;
@@ -445,6 +480,9 @@ export const HomeScreen: React.FC = () => {
                 isSyncingStepsRef.current = false;
               });
             }
+
+            // Save updated steps to local AsyncStorage so it persists!
+            saveLocalTodaySteps(newVal);
 
             return newVal.toLocaleString();
           });

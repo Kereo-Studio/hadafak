@@ -1,0 +1,18 @@
+# Example tfvars file. Rename this to terraform.tfvars and fill in the values.
+
+# AWS Region to deploy to
+aws_region = "eu-central-1"
+
+# Project and Environment naming
+project_name = "hadafak"
+environment  = "production"
+
+# Database config (Commented out in favor of database_url)
+# db_username = "hadafak_admin"
+# db_password = "ChooseAStrongPassword123!" # CHANGE THIS!
+# db_name     = "hadafak_db"
+
+database_url = "postgresql://user:password@ep-something.region.aws.neon.tech/hadafak_db?sslmode=require"
+
+# JWT configuration
+jwt_secret = "your-very-long-and-secure-jwt-secret-key" # CHANGE THIS!
