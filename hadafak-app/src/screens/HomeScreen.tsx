@@ -722,9 +722,6 @@ export const HomeScreen: React.FC = () => {
                 />
                 <View>
                   <Text style={[styles.cardKcal, isActive && styles.cardKcalActive]}>
-                    Quick Log
-                  </Text>
-                  <Text style={[styles.cardTitle, isActive && styles.cardTitleActive]}>
                     {exercise.name}
                   </Text>
                 </View>
@@ -1364,13 +1361,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   activityCard: {
-    width: 115,
-    height: 135,
+    width: 105,
+    height: 100,
     backgroundColor: COLORS.background,
     borderWidth: 1.5,
     borderColor: COLORS.border,
-    borderRadius: 24,
-    padding: 16,
+    borderRadius: 20,
+    padding: 12,
     marginRight: 12,
     justifyContent: 'space-between',
   },
@@ -1379,10 +1376,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   cardIcon: {
-    marginBottom: 10,
+    marginBottom: 4,
   },
   cardKcal: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: COLORS.text,
   },

@@ -8,6 +8,7 @@ import { CreateFoodDto } from './dto/create-food.dto';
 import { LogFoodDto } from './dto/log-food.dto';
 import { LogWaterDto } from './dto/log-water.dto';
 import { ProfilesService } from '../profiles/profiles.service';
+import { FatSecretService } from './fatsecret.service';
 
 @Injectable()
 export class NutritionService {
@@ -19,14 +20,42 @@ export class NutritionService {
     @InjectRepository(WaterLog)
     private readonly waterLogRepository: Repository<WaterLog>,
     private readonly profilesService: ProfilesService,
+    private readonly fatSecretService: FatSecretService,
   ) {}
 
-  async searchFoods(query?: string, barcode?: string, source?: FoodSource, userId?: string): Promise<Food[]> {
-    const where: any = {};
-
-    if (barcode) {
-      where.barcode = barcode;
+  async upsertExternalFood(item: any): Promise<Food> {
+    const barcodeKey = item.barcode || item.id;
+    let food = await this.foodRepository.findOne({ where: { barcode: barcodeKey } });
+    if (!food) {
+      food = this.foodRepository.create({
+        name: item.name,
+        barcode: barcodeKey,
+        source: FoodSource.DATABASE,
+        calories: item.calories,
+        protein: item.protein,
+        carbs: item.carbs,
+        fat: item.fat,
+        servingSize: item.servingSize,
+        servingUnit: item.servingUnit,
+      });
+      food = await this.foodRepository.save(food);
     }
+    return food;
+  }
+
+  async searchFoods(query?: string, barcode?: string, source?: FoodSource, userId?: string): Promise<Food[]> {
+    if (barcode) {
+      let localFood = await this.foodRepository.findOne({ where: { barcode } });
+      if (!localFood) {
+        const extItem = await this.fatSecretService.findByBarcode(barcode);
+        if (extItem) {
+          localFood = await this.upsertExternalFood(extItem);
+        }
+      }
+      return localFood ? [localFood] : [];
+    }
+
+    const where: any = {};
 
     if (source) {
       where.source = source;
@@ -47,6 +76,18 @@ export class NutritionService {
       foods = foods.filter((f) => f.userId === null || f.userId === userId);
     } else {
       foods = foods.filter((f) => f.userId === null);
+    }
+
+    // If a search query is provided, query FatSecret to fetch additional branded items
+    if (query) {
+      const extItems = await this.fatSecretService.searchFoods(query);
+      for (const extItem of extItems) {
+        const existsInList = foods.some((f) => f.barcode === extItem.id || f.barcode === extItem.barcode);
+        if (!existsInList) {
+          const upserted = await this.upsertExternalFood(extItem);
+          foods.push(upserted);
+        }
+      }
     }
 
     return foods;
