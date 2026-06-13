@@ -86,6 +86,13 @@ export class WorkoutsController {
     return this.workoutsService.findUserHistory(userId);
   }
 
+  @Get('plans')
+  @ApiOperation({ summary: 'Get all workout plans for the current user' })
+  @ApiResponse({ status: 200, description: 'List of workout plans.' })
+  async getPlans(@CurrentUser('sub') userId: string) {
+    return this.workoutsService.findAllWorkoutPlans(userId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Retrieve specific workout plan or logged session by ID' })
   @ApiResponse({ status: 200, description: 'Workout plan or session details.' })

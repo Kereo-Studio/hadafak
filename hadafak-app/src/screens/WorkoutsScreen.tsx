@@ -782,8 +782,9 @@ export const WorkoutsScreen: React.FC = () => {
     setIsSearchingAddPlanEx(true);
     try {
       const res = await api.get(`/exercises?q=${encodeURIComponent(query)}`);
-      if (res.data && res.data.length > 0) {
-        setAddPlanExResults(res.data);
+      const exercises = res.data?.data ?? res.data;
+      if (Array.isArray(exercises) && exercises.length > 0) {
+        setAddPlanExResults(exercises);
       } else {
         const matches = FALLBACK_EXERCISES.filter((e) =>
           e.name.toLowerCase().includes(query.toLowerCase())
@@ -869,7 +870,8 @@ export const WorkoutsScreen: React.FC = () => {
       }
 
       const res = await api.get(url);
-      setCatalogExercises(res.data || []);
+      const exercises = res.data?.data ?? res.data;
+      setCatalogExercises(Array.isArray(exercises) ? exercises : []);
     } catch (err) {
       console.warn('Failed to load catalog:', err);
     } finally {
@@ -1133,8 +1135,9 @@ export const WorkoutsScreen: React.FC = () => {
     setIsSearching(true);
     try {
       const res = await api.get(`/exercises?q=${encodeURIComponent(query)}`);
-      if (res.data && res.data.length > 0) {
-        setExerciseResults(res.data);
+      const exercises = res.data?.data ?? res.data;
+      if (Array.isArray(exercises) && exercises.length > 0) {
+        setExerciseResults(exercises);
       } else {
         const matches = FALLBACK_EXERCISES.filter((e) =>
           e.name.toLowerCase().includes(query.toLowerCase())

@@ -75,11 +75,17 @@ export class ExternalSyncService {
     let skippedCount = 0;
 
     const allDbExercises = await this.exerciseRepository.find();
+    const existingExternalIds = new Set(allDbExercises.map(e => e.externalId).filter(Boolean));
 
     // Process ExerciseDB
     for (const raw of exerciseDbRaw) {
       const mapped = await this.mapExerciseDb(raw);
       if (!mapped) continue;
+
+      if (existingExternalIds.has(mapped.externalId)) {
+        skippedCount++;
+        continue;
+      }
 
       const isDuplicate = this.checkSimilarityDuplicate(mapped, allDbExercises);
       if (isDuplicate) {
@@ -87,9 +93,15 @@ export class ExternalSyncService {
         continue;
       }
 
-      await this.exerciseRepository.save(mapped);
-      allDbExercises.push(mapped);
-      syncedCount++;
+      try {
+        await this.exerciseRepository.upsert(mapped, { conflictPaths: ['externalId'], skipUpdateIfNoValuesChanged: true });
+        allDbExercises.push(mapped);
+        existingExternalIds.add(mapped.externalId);
+        syncedCount++;
+      } catch (e) {
+        this.logger.warn(`Failed to upsert exercise "${mapped.displayName}": ${e.message}`);
+        skippedCount++;
+      }
     }
 
     // Process Wger
@@ -97,15 +109,26 @@ export class ExternalSyncService {
       const mapped = await this.mapWger(raw);
       if (!mapped) continue;
 
+      if (existingExternalIds.has(mapped.externalId)) {
+        skippedCount++;
+        continue;
+      }
+
       const isDuplicate = this.checkSimilarityDuplicate(mapped, allDbExercises);
       if (isDuplicate) {
         skippedCount++;
         continue;
       }
 
-      await this.exerciseRepository.save(mapped);
-      allDbExercises.push(mapped);
-      syncedCount++;
+      try {
+        await this.exerciseRepository.upsert(mapped, { conflictPaths: ['externalId'], skipUpdateIfNoValuesChanged: true });
+        allDbExercises.push(mapped);
+        existingExternalIds.add(mapped.externalId);
+        syncedCount++;
+      } catch (e) {
+        this.logger.warn(`Failed to upsert exercise "${mapped.displayName}": ${e.message}`);
+        skippedCount++;
+      }
     }
 
     return { synced: syncedCount, skipped: skippedCount };
@@ -236,6 +259,7 @@ export class ExternalSyncService {
 
     this.logger.log(`Performing dynamic query sync for "${q}"...`);
     const allDbExercises = await this.exerciseRepository.find();
+    const existingExternalIds = new Set(allDbExercises.map(e => e.externalId).filter(Boolean));
     let syncedCount = 0;
 
     // 1. Fetch from ExerciseDB
@@ -297,12 +321,19 @@ export class ExternalSyncService {
       const mapped = await this.mapExerciseDb(raw);
       if (!mapped) continue;
 
+      if (existingExternalIds.has(mapped.externalId)) continue;
+
       const isDuplicate = this.checkSimilarityDuplicate(mapped, allDbExercises);
       if (isDuplicate) continue;
 
-      await this.exerciseRepository.save(mapped);
-      allDbExercises.push(mapped);
-      syncedCount++;
+      try {
+        await this.exerciseRepository.upsert(mapped, { conflictPaths: ['externalId'], skipUpdateIfNoValuesChanged: true });
+        allDbExercises.push(mapped);
+        existingExternalIds.add(mapped.externalId);
+        syncedCount++;
+      } catch (e) {
+        this.logger.warn(`Failed to upsert exercise "${mapped.displayName}": ${e.message}`);
+      }
     }
 
     // Process Wger
@@ -310,12 +341,19 @@ export class ExternalSyncService {
       const mapped = await this.mapWger(raw);
       if (!mapped) continue;
 
+      if (existingExternalIds.has(mapped.externalId)) continue;
+
       const isDuplicate = this.checkSimilarityDuplicate(mapped, allDbExercises);
       if (isDuplicate) continue;
 
-      await this.exerciseRepository.save(mapped);
-      allDbExercises.push(mapped);
-      syncedCount++;
+      try {
+        await this.exerciseRepository.upsert(mapped, { conflictPaths: ['externalId'], skipUpdateIfNoValuesChanged: true });
+        allDbExercises.push(mapped);
+        existingExternalIds.add(mapped.externalId);
+        syncedCount++;
+      } catch (e) {
+        this.logger.warn(`Failed to upsert exercise "${mapped.displayName}": ${e.message}`);
+      }
     }
 
     if (syncedCount > 0) {
