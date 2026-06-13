@@ -5,6 +5,7 @@ import { NutritionLog } from './entities/nutrition-log.entity';
 import { WaterLog } from './entities/water-log.entity';
 import { NutritionService } from './nutrition.service';
 import { FatSecretService } from './fatsecret.service';
+import { OpenFoodFactsService } from './openfoodfacts.service';
 import { NutritionController } from './nutrition.controller';
 import { AuthModule } from '../auth/auth.module';
 import { ProfilesModule } from '../profiles/profiles.module';
@@ -15,9 +16,9 @@ import { ProfilesModule } from '../profiles/profiles.module';
     AuthModule,
     ProfilesModule,
   ],
-  providers: [NutritionService, FatSecretService],
+  providers: [NutritionService, FatSecretService, OpenFoodFactsService],
   controllers: [NutritionController],
-  exports: [NutritionService, FatSecretService, TypeOrmModule],
+  exports: [NutritionService, FatSecretService, OpenFoodFactsService, TypeOrmModule],
 })
-export class NutritionModule {}
+export class NutritionModule { }
 

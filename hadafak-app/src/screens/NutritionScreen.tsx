@@ -34,10 +34,12 @@ import {
   BookOpen,
   Camera,
   Upload,
+  ScanBarcode,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { api } from '../services/api';
+import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 
 const { width } = Dimensions.get('window');
 
@@ -72,7 +74,7 @@ export const NutritionScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'tracker' | 'recipes'>('tracker');
-  
+
   // Daily consumption details
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [summary, setSummary] = useState({
@@ -91,7 +93,7 @@ export const NutritionScreen: React.FC = () => {
   const [selectedRecipeTag, setSelectedRecipeTag] = useState<string>('');
   const [selectedRecipeDetail, setSelectedRecipeDetail] = useState<any>(null);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
-  
+
   // AI Fridge Generator states
   const [isFridgeModalVisible, setIsFridgeModalVisible] = useState(false);
   const [fridgeIngredients, setFridgeIngredients] = useState('');
@@ -117,7 +119,7 @@ export const NutritionScreen: React.FC = () => {
       const params: any = {};
       if (queryText) params.query = queryText;
       if (tagVal) params.tag = tagVal;
-      
+
       const res = await api.get('/recipes', { params });
       setRecipes(res.data || []);
     } catch (err) {
@@ -146,7 +148,7 @@ export const NutritionScreen: React.FC = () => {
         .split(',')
         .map((i) => i.trim())
         .filter((i) => i.length > 0);
-        
+
       const res = await api.post('/recipes/generate-ai', {
         ingredients: ingList,
         prompt: fridgePrompt.trim() || undefined,
@@ -189,7 +191,7 @@ export const NutritionScreen: React.FC = () => {
       setIsLogRecipeModalVisible(false);
       setIsDetailModalVisible(false);
       // Reload daily logs to reflect macros in circular chart rings
-      fetchDailySummary(); 
+      fetchDailySummary();
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.message || 'Failed to log recipe.');
     } finally {
@@ -231,6 +233,7 @@ export const NutritionScreen: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [quantity, setQuantity] = useState('1');
+  const [isScanModalVisible, setIsScanModalVisible] = useState(false);
 
   // Custom Food States
   const [showCustomForm, setShowCustomForm] = useState(false);
@@ -350,6 +353,32 @@ export const NutritionScreen: React.FC = () => {
     }
   };
 
+  // Hybrid Barcode Scanner Resolver
+  const handleBarcodeScan = async (barcode: string) => {
+    setIsSearching(true);
+    try {
+      const res = await api.get(`/nutrition/foods?barcode=${encodeURIComponent(barcode)}`);
+      if (res.data && res.data.length > 0) {
+        // Automatically select the resolved food to show servings configuration
+        setSelectedFood(res.data[0]);
+        setQuantity('1'); // default to 1 serving
+      } else {
+        Alert.alert(
+          'Product Not Found',
+          `No product found for barcode: ${barcode}. Feel free to add a custom food item.`
+        );
+      }
+    } catch (e) {
+      console.error('Error fetching barcode product details', e);
+      Alert.alert(
+        'Scan Failed',
+        'Could not fetch product details from our databases. Please try again.'
+      );
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   // Log food consumption
   const handleLogFood = async () => {
     if (!selectedFood) return;
@@ -453,7 +482,7 @@ export const NutritionScreen: React.FC = () => {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 0.8,
+        quality: 0.2,
         base64: true,
       });
 
@@ -480,7 +509,7 @@ export const NutritionScreen: React.FC = () => {
     try {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
-        quality: 0.8,
+        quality: 0.2,
         base64: true,
       });
 
@@ -928,7 +957,7 @@ export const NutritionScreen: React.FC = () => {
                     </Text>
                   </View>
                 </View>
-                
+
                 {/* Visual Blue Progress Bar */}
                 <View style={styles.waterProgressTrack}>
                   <View
@@ -1136,7 +1165,7 @@ export const NutritionScreen: React.FC = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            
+
             {/* Header */}
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>
@@ -1200,7 +1229,7 @@ export const NutritionScreen: React.FC = () => {
                     <Text style={styles.selectedFoodMacros}>
                       1 serving size: {selectedFood.servingSize || 100} {selectedFood.servingUnit || 'g'} • {selectedFood.calories} Kcal
                     </Text>
-                    
+
                     <View style={styles.qtyInputRow}>
                       <Text style={styles.qtyLabel}>Number of Servings: </Text>
                       <TextInput
@@ -1230,16 +1259,35 @@ export const NutritionScreen: React.FC = () => {
                 ) : (
                   /* Type query & show result matches */
                   <View style={{ flex: 1 }}>
-                    <View style={styles.searchBarWrapper}>
-                      <Search size={20} color={COLORS.textMuted} style={{ marginRight: 8 }} />
-                      <TextInput
-                        style={styles.searchInput}
-                        value={searchQuery}
-                        onChangeText={handleSearchFoods}
-                        placeholder="Search oatmeal, banana, egg, breast..."
-                        placeholderTextColor={COLORS.textMuted}
-                        autoFocus
-                      />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <View style={[styles.searchBarWrapper, { flex: 1 }]}>
+                        <Search size={20} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                        <TextInput
+                          style={styles.searchInput}
+                          value={searchQuery}
+                          onChangeText={handleSearchFoods}
+                          placeholder="Search oatmeal, banana, egg, breast..."
+                          placeholderTextColor={COLORS.textMuted}
+                          autoFocus
+                        />
+                      </View>
+                      <TouchableOpacity
+                        style={{
+                          marginLeft: 12,
+                          width: 48,
+                          height: 48,
+                          borderRadius: 24,
+                          backgroundColor: COLORS.surfaceLight,
+                          borderWidth: 1,
+                          borderColor: COLORS.border,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                        onPress={() => setIsScanModalVisible(true)}
+                        activeOpacity={0.8}
+                      >
+                        <ScanBarcode size={22} color={COLORS.primary} />
+                      </TouchableOpacity>
                     </View>
 
                     {isSearching ? (
@@ -1312,7 +1360,7 @@ export const NutritionScreen: React.FC = () => {
                   <View style={styles.aiPreviewCard}>
                     <View style={styles.aiImagePreviewWrapper}>
                       <Image source={{ uri: selectedImage }} style={styles.aiImagePreview} />
-                      
+
                       {isAiScanning && (
                         <View style={styles.scannerOverlay}>
                           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -1806,7 +1854,7 @@ export const NutritionScreen: React.FC = () => {
                                     <Text style={styles.subResultAction}>
                                       {substitutionResult.suggestedAmount} {substitutionResult.unit} of {substitutionResult.suggestedReplacement}
                                     </Text>
-                                    
+
                                     <View style={styles.subResultMacrosGrid}>
                                       <Text style={styles.subMacroLabel}>
                                         New Macros: {substitutionResult.macrosDifference.calories} Kcal • P: {substitutionResult.macrosDifference.protein}g • C: {substitutionResult.macrosDifference.carbs}g • F: {substitutionResult.macrosDifference.fat}g
@@ -1862,6 +1910,11 @@ export const NutritionScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+      <BarcodeScannerModal
+        visible={isScanModalVisible}
+        onClose={() => setIsScanModalVisible(false)}
+        onScan={handleBarcodeScan}
+      />
     </SafeAreaView>
   );
 };

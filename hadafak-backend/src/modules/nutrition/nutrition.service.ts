@@ -10,6 +10,7 @@ import { LogFoodDto } from './dto/log-food.dto';
 import { LogWaterDto } from './dto/log-water.dto';
 import { ProfilesService } from '../profiles/profiles.service';
 import { FatSecretService } from './fatsecret.service';
+import { OpenFoodFactsService } from './openfoodfacts.service';
 
 @Injectable()
 export class NutritionService {
@@ -22,8 +23,9 @@ export class NutritionService {
     private readonly waterLogRepository: Repository<WaterLog>,
     private readonly profilesService: ProfilesService,
     private readonly fatSecretService: FatSecretService,
+    private readonly openFoodFactsService: OpenFoodFactsService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   async upsertExternalFood(item: any): Promise<Food> {
     const barcodeKey = item.barcode || item.id;
@@ -39,6 +41,7 @@ export class NutritionService {
         fat: item.fat,
         servingSize: item.servingSize,
         servingUnit: item.servingUnit,
+        imageUrl: item.imageUrl ?? null,
       });
       food = await this.foodRepository.save(food);
     }
@@ -49,9 +52,16 @@ export class NutritionService {
     if (barcode) {
       let localFood = await this.foodRepository.findOne({ where: { barcode } });
       if (!localFood) {
-        const extItem = await this.fatSecretService.findByBarcode(barcode);
-        if (extItem) {
-          localFood = await this.upsertExternalFood(extItem);
+        // Fallback 1: Try Open Food Facts first (optimized for packaged grocery items)
+        const offItem = await this.openFoodFactsService.findByBarcode(barcode);
+        if (offItem) {
+          localFood = await this.upsertExternalFood(offItem);
+        } else {
+          // Fallback 2: Try FatSecret database
+          const extItem = await this.fatSecretService.findByBarcode(barcode);
+          if (extItem) {
+            localFood = await this.upsertExternalFood(extItem);
+          }
         }
       }
       return localFood ? [localFood] : [];
@@ -322,7 +332,7 @@ export class NutritionService {
         mimeType = parts[0].split('data:')[1] || 'image/jpeg';
       }
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
       const payload = {
         contents: [
           {
@@ -344,14 +354,32 @@ export class NutritionService {
         },
       };
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      let response: Response = null as any;
+      const attempts = 3;
+      let delay = 1000;
+
+      for (let i = 0; i < attempts; i++) {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (response.ok) {
+          break;
+        }
+
+        if (response.status === 503 || response.status === 429) {
+          console.warn(`Gemini API returned status ${response.status}. Retrying in ${delay}ms... (Attempt ${i + 1} of ${attempts})`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          delay *= 2;
+        } else {
+          throw new Error(`Gemini API returned status ${response.status}`);
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(`Gemini API returned status ${response.status}`);
+        throw new Error(`Gemini API returned status ${response.status} after ${attempts} attempts`);
       }
 
       const data = await response.json() as any;
@@ -372,16 +400,7 @@ export class NutritionService {
       };
     } catch (err) {
       console.error('Failed to analyze food image with Gemini:', err.message || err);
-      // Fallback estimate
-      return {
-        name: 'AI Scan (Visual Estimate)',
-        calories: 250,
-        protein: 15,
-        carbs: 30,
-        fat: 8,
-        servingSize: 150,
-        servingUnit: 'g',
-      };
+      throw new Error(`Failed to analyze food image: ${err.message || err}`);
     }
   }
 }

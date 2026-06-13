@@ -10,8 +10,14 @@ import * as path from 'path';
 import { DataSource } from 'typeorm';
 import { Exercise } from './modules/exercises/entities/exercise.entity';
 
+import { json, urlencoded } from 'express';
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Increase body limit for large base64 image uploads (like AI scanning)
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ limit: '50mb', extended: true }));
 
   // Enable Cross-Origin Resource Sharing (CORS)
   app.enableCors({
