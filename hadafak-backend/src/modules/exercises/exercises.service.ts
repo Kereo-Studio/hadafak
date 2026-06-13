@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Exercise, ExerciseDifficulty, ExerciseSource } from './entities/exercise.entity';
@@ -7,9 +7,11 @@ import { Equipment } from './entities/equipment.entity';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
 import { normalizeExerciseName } from './utils/normalize';
+import { ExternalSyncService } from './external-sync.service';
 
 @Injectable()
 export class ExercisesService {
+  private readonly logger = new Logger(ExercisesService.name);
   private readonly cache = new Map<string, { value: any; expiresAt: number }>();
   private readonly CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
@@ -20,6 +22,7 @@ export class ExercisesService {
     private readonly muscleGroupRepository: Repository<MuscleGroup>,
     @InjectRepository(Equipment)
     private readonly equipmentRepository: Repository<Equipment>,
+    private readonly syncService: ExternalSyncService,
   ) {}
 
   private clearCache() {
@@ -57,6 +60,23 @@ export class ExercisesService {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.max(1, Number(query.limit) || 20);
     const skip = (page - 1) * limit;
+
+    // Dynamically sync if search term is provided and database results are sparse
+    if (query.q && query.q.trim().length >= 3) {
+      try {
+        const dbCount = await this.exerciseRepository.createQueryBuilder('exercise')
+          .where('(exercise.name ILIKE :q OR exercise.displayName ILIKE :q)', { q: `%${query.q.trim()}%` })
+          .getCount();
+
+        if (dbCount < 5) {
+          this.logger.log(`Few exercises found locally for "${query.q}". Triggering dynamic search sync...`);
+          await this.syncService.syncExercisesForQuery(query.q);
+          this.clearCache();
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to dynamically sync exercises for query "${query.q}": ${err.message}`);
+      }
+    }
 
     // Build Cache Key
     const cacheKey = JSON.stringify({ ...query, page, limit });

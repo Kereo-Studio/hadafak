@@ -117,10 +117,10 @@ export class ExternalSyncService {
       if (ex.name === candidate.name || ex.externalId === candidate.externalId) {
         return true;
       }
-      const exNormalized = this.normalizeName(ex.displayName);
+      const exNormalized = this.normalizeName(ex.displayName || ex.name || '');
       const similarity = this.calculateJaccardSimilarity(candidateNormalized, exNormalized);
       if (similarity >= 0.7) {
-        this.logger.log(`Skipping duplicate detection: "${candidate.displayName}" matches "${ex.displayName}" with similarity ${similarity.toFixed(2)}`);
+        this.logger.log(`Skipping duplicate detection: "${candidate.displayName}" matches "${ex.displayName || ex.name}" with similarity ${similarity.toFixed(2)}`);
         return true;
       }
     }
@@ -135,7 +135,8 @@ export class ExternalSyncService {
     return intersection.size / union.size;
   }
 
-  private normalizeName(name: string): string {
+  private normalizeName(name: string | null | undefined): string {
+    if (!name) return '';
     return name
       .toLowerCase()
       .trim()
@@ -191,7 +192,10 @@ export class ExternalSyncService {
 
   private async mapWger(raw: any): Promise<Exercise | null> {
     try {
-      const displayName = raw.name;
+      const translation = raw.translations?.find((t: any) => t.language === 2) || raw.translations?.[0];
+      const displayName = translation?.name || raw.name;
+      if (!displayName) return null;
+
       const name = this.normalizeName(displayName);
 
       const rawMuscleName = raw.category?.name || 'back';
@@ -203,22 +207,121 @@ export class ExternalSyncService {
       const ex = new Exercise();
       ex.name = name;
       ex.displayName = this.capitalize(displayName);
-      ex.description = raw.description || `Wger exercise targeting ${rawMuscleName}.`;
+      
+      let desc = translation?.description || raw.description || `Wger exercise targeting ${rawMuscleName}.`;
+      desc = desc.replace(/<[^>]*>/g, '').trim();
+      ex.description = desc;
+      
       ex.muscleGroup = muscle;
       ex.equipment = eq;
       ex.difficulty = ExerciseDifficulty.INTERMEDIATE;
-      ex.instructions = raw.description ? [raw.description] : [];
+      ex.instructions = desc ? [desc] : [];
       ex.source = ExerciseSource.WGER;
       ex.externalId = raw.id ? raw.id.toString() : `wger-${name}`;
 
       return ex;
-    } catch {
+    } catch (err) {
+      this.logger.error(`Error mapping Wger exercise: ${err.message}`, err.stack);
       return null;
     }
   }
 
   private capitalize(s: string): string {
     return s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+
+  async syncExercisesForQuery(searchQuery: string): Promise<{ synced: number }> {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q || q.length < 3) return { synced: 0 };
+
+    this.logger.log(`Performing dynamic query sync for "${q}"...`);
+    const allDbExercises = await this.exerciseRepository.find();
+    let syncedCount = 0;
+
+    // 1. Fetch from ExerciseDB
+    let exerciseDbRaw: any[] = [];
+    try {
+      const apiKey = process.env.EXERCISEDB_API_KEY;
+      if (apiKey) {
+        // Fetch page 1 (10 items)
+        const res1 = await fetch(`https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(q)}?limit=10&offset=0`, {
+          headers: {
+            'X-RapidAPI-Key': apiKey,
+            'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+          },
+        });
+        if (res1.ok) {
+          const data1 = await res1.json();
+          if (Array.isArray(data1)) {
+            exerciseDbRaw.push(...data1);
+          }
+        }
+        
+        // Fetch page 2 (10 items)
+        const res2 = await fetch(`https://exercisedb.p.rapidapi.com/exercises/name/${encodeURIComponent(q)}?limit=10&offset=10`, {
+          headers: {
+            'X-RapidAPI-Key': apiKey,
+            'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+          },
+        });
+        if (res2.ok) {
+          const data2 = await res2.json();
+          if (Array.isArray(data2)) {
+            exerciseDbRaw.push(...data2);
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Dynamic ExerciseDB sync failed for "${q}": ${err.message}`);
+    }
+
+    // 2. Fetch from Wger
+    let wgerRaw: any[] = [];
+    try {
+      const wgerUrl = `https://wger.de/api/v2/exerciseinfo/?language=2&search=${encodeURIComponent(q)}&limit=20`;
+      const headers: Record<string, string> = {};
+      if (process.env.WGER_API_KEY) {
+        headers['Authorization'] = `Token ${process.env.WGER_API_KEY}`;
+      }
+      const res = await fetch(wgerUrl, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        wgerRaw = data.results || [];
+      }
+    } catch (err) {
+      this.logger.warn(`Dynamic Wger sync failed for "${q}": ${err.message}`);
+    }
+
+    // Process ExerciseDB
+    for (const raw of exerciseDbRaw) {
+      const mapped = await this.mapExerciseDb(raw);
+      if (!mapped) continue;
+
+      const isDuplicate = this.checkSimilarityDuplicate(mapped, allDbExercises);
+      if (isDuplicate) continue;
+
+      await this.exerciseRepository.save(mapped);
+      allDbExercises.push(mapped);
+      syncedCount++;
+    }
+
+    // Process Wger
+    for (const raw of wgerRaw) {
+      const mapped = await this.mapWger(raw);
+      if (!mapped) continue;
+
+      const isDuplicate = this.checkSimilarityDuplicate(mapped, allDbExercises);
+      if (isDuplicate) continue;
+
+      await this.exerciseRepository.save(mapped);
+      allDbExercises.push(mapped);
+      syncedCount++;
+    }
+
+    if (syncedCount > 0) {
+      this.logger.log(`Dynamic query sync for "${q}" completed: Synced ${syncedCount} new exercises.`);
+    }
+    return { synced: syncedCount };
   }
 
   private getMockExerciseDbData() {
