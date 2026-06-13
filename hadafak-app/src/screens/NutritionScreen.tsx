@@ -244,6 +244,7 @@ export const NutritionScreen: React.FC = () => {
   const [customFat, setCustomFat] = useState('');
   const [customServingSize, setCustomServingSize] = useState('100');
   const [customServingUnit, setCustomServingUnit] = useState('g');
+  const [customBarcode, setCustomBarcode] = useState('');
   const [isCreatingFood, setIsCreatingFood] = useState(false);
 
   // AI Scan States
@@ -424,6 +425,7 @@ export const NutritionScreen: React.FC = () => {
         fat: parseFloat(customFat || '0'),
         servingSize: parseFloat(customServingSize),
         servingUnit: customServingUnit,
+        barcode: customBarcode || undefined,
       });
 
       const newFood = foodRes.data;
@@ -444,6 +446,7 @@ export const NutritionScreen: React.FC = () => {
       setCustomProtein('');
       setCustomCarbs('');
       setCustomFat('');
+      setCustomBarcode('');
       fetchDailySummary();
     } catch (e) {
       Alert.alert('Error', 'Unable to create and log customized food.');
@@ -1535,6 +1538,17 @@ export const NutritionScreen: React.FC = () => {
                       onChangeText={setCustomServingUnit}
                     />
                   </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Barcode (Optional)</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    placeholder="e.g. 0123456789012"
+                    keyboardType="numeric"
+                    value={customBarcode}
+                    onChangeText={setCustomBarcode}
+                  />
                 </View>
 
                 <View style={styles.qtyInputRow}>
