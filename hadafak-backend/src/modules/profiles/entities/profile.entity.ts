@@ -14,6 +14,22 @@ export enum FitnessGoal {
   LOSE_FAT = 'lose_fat',
   STAY_ACTIVE = 'stay_active',
   ATHLETIC = 'athletic',
+  FAT_LOSS = 'fat_loss',
+  HYPERTROPHY = 'hypertrophy',
+  STRENGTH = 'strength',
+  ENDURANCE = 'endurance',
+}
+
+export enum FitnessLevel {
+  BEGINNER = 'beginner',
+  INTERMEDIATE = 'intermediate',
+  ADVANCED = 'advanced',
+}
+
+export enum EquipmentAccess {
+  GYM = 'gym',
+  HOME = 'home',
+  NONE = 'none',
 }
 
 @Entity('profiles')
@@ -71,4 +87,35 @@ export class Profile {
   @ManyToOne(() => Program, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'current_program_id' })
   currentProgram: Program;
+
+  @Column({ name: 'body_fat_percentage', type: 'decimal', precision: 5, scale: 2, nullable: true })
+  bodyFatPercentage: number;
+
+  @Column({
+    name: 'fitness_level',
+    type: 'enum',
+    enum: FitnessLevel,
+    default: FitnessLevel.BEGINNER,
+  })
+  fitnessLevel: FitnessLevel;
+
+  @Column({ name: 'days_per_week_available', type: 'int', default: 3 })
+  daysPerWeekAvailable: number;
+
+  @Column({ name: 'session_duration_minutes', type: 'int', default: 60 })
+  sessionDurationMinutes: number;
+
+  @Column({
+    name: 'equipment_access',
+    type: 'enum',
+    enum: EquipmentAccess,
+    default: EquipmentAccess.GYM,
+  })
+  equipmentAccess: EquipmentAccess;
+
+  @Column({ type: 'jsonb', default: [] })
+  injuries: string[];
+
+  @Column({ nullable: true })
+  preferences: string;
 }

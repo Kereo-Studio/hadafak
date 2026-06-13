@@ -29,9 +29,12 @@ import {
   Award,
   Clock,
   ChevronRight,
+  RefreshCw,
   TrendingUp,
   Edit2,
   Plus,
+  BookOpen,
+  Sparkles,
 } from 'lucide-react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText, G } from 'react-native-svg';
 import { api } from '../services/api';
@@ -336,6 +339,28 @@ export const WorkoutsScreen: React.FC = () => {
   const [addPlanExRepsRange, setAddPlanExRepsRange] = useState('8-12');
   const [isSearchingAddPlanEx, setIsSearchingAddPlanEx] = useState(false);
 
+  // Workout Plan Generator States
+  const [activeWorkoutPlan, setActiveWorkoutPlan] = useState<any | null>(null);
+  const [isGenModalVisible, setIsGenModalVisible] = useState(false);
+  const [genGoal, setGenGoal] = useState('hypertrophy');
+  const [genLevel, setGenLevel] = useState('beginner');
+  const [genDays, setGenDays] = useState(3);
+  const [genEquipment, setGenEquipment] = useState<string[]>(['dumbbell', 'barbell', 'machine']);
+  const [genInjuriesText, setGenInjuriesText] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Exercise Catalog States
+  const [isCatalogModalVisible, setIsCatalogModalVisible] = useState(false);
+  const [catalogExercises, setCatalogExercises] = useState<any[]>([]);
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogMuscle, setCatalogMuscle] = useState('');
+  const [catalogEquipment, setCatalogEquipment] = useState('');
+  const [catalogDifficulty, setCatalogDifficulty] = useState('');
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  const [selectedCatalogExercise, setSelectedCatalogExercise] = useState<any | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+
   const FALLBACK_EXERCISES: Exercise[] = [
     { id: 'e1', name: 'Barbell Bench Press', muscleGroup: 'Chest' },
     { id: 'e2', name: 'Dumbbell Incline Press', muscleGroup: 'Chest' },
@@ -434,6 +459,19 @@ export const WorkoutsScreen: React.FC = () => {
             console.warn('Error prefilling on load:', pe);
           }
         }
+      }
+      try {
+        const plansRes = await api.get('/workouts/plans');
+        if (plansRes.data && plansRes.data.length > 0) {
+          const sortedPlans = [...plansRes.data].sort((a: any, b: any) => {
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
+          setActiveWorkoutPlan(sortedPlans[0]);
+        } else {
+          setActiveWorkoutPlan(null);
+        }
+      } catch (err) {
+        console.warn('Failed to load workout plans in WorkoutsScreen:', err);
       }
       try {
         const profileRes = await api.get('/profiles/mine');
@@ -578,6 +616,66 @@ export const WorkoutsScreen: React.FC = () => {
     }
   };
 
+  const handleGenerateWorkoutPlan = async () => {
+    setIsGenerating(true);
+    try {
+      // 1. Update user profile details
+      await api.post('/profiles', {
+        fitnessLevel: genLevel,
+        equipmentAccess: genEquipment,
+        daysPerWeekAvailable: genDays,
+        injuries: genInjuriesText.trim() ? [genInjuriesText.trim()] : [],
+      });
+
+      // 2. Call generator endpoint
+      await api.post('/workouts/generate', {
+        goal: genGoal,
+        level: genLevel,
+        daysPerWeek: genDays,
+      });
+
+      Alert.alert('Success', 'Your personalized workout plan was generated successfully!');
+      setIsGenModalVisible(false);
+      
+      // Refresh workouts tab to retrieve newly generated plan
+      await fetchWorkoutData();
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Generation Error', e.response?.data?.message || 'Failed to generate personalized workout plan.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDeleteWorkoutPlan = async () => {
+    if (!activeWorkoutPlan) return;
+    Alert.alert(
+      'Reset Workout Plan',
+      'Are you sure you want to delete this custom/generated workout plan and start over?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await api.delete(`/workouts/plans/${activeWorkoutPlan.id}`);
+              setActiveWorkoutPlan(null);
+              await fetchWorkoutData();
+              Alert.alert('Success', 'Workout plan reset.');
+            } catch (err) {
+              console.warn(err);
+              Alert.alert('Error', 'Unable to delete workout plan.');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleOpenEditPlanEx = (pde: any) => {
     setEditingPlanEx(pde);
     setEditTargetSets(String(pde.targetSets || 3));
@@ -588,10 +686,37 @@ export const WorkoutsScreen: React.FC = () => {
   const handleSavePlanExEdit = async () => {
     if (!editingPlanEx) return;
     try {
-      await api.put(`/programs/exercises/${editingPlanEx.id}`, {
-        targetSets: parseInt(editTargetSets, 10),
-        targetRepsRange: editTargetRepsRange,
-      });
+      if (activeWorkoutPlan) {
+        const updatedExercises = activeWorkoutPlan.workoutExercises.map((we: any) => {
+          if (we.id === editingPlanEx.id) {
+            return {
+              ...we,
+              sets: parseInt(editTargetSets, 10),
+              reps: editTargetRepsRange,
+            };
+          }
+          return we;
+        });
+
+        const exercisesPayload = updatedExercises.map((we: any) => ({
+          exerciseId: we.exerciseId,
+          sets: we.sets,
+          reps: String(we.reps),
+          weight: we.weight || null,
+          restTimeSeconds: we.restTimeSeconds || 90,
+          dayNumber: we.dayNumber || 1,
+        }));
+
+        await api.patch(`/workouts/plans/${activeWorkoutPlan.id}`, {
+          name: activeWorkoutPlan.name,
+          exercises: exercisesPayload,
+        });
+      } else {
+        await api.put(`/programs/exercises/${editingPlanEx.id}`, {
+          targetSets: parseInt(editTargetSets, 10),
+          targetRepsRange: editTargetRepsRange,
+        });
+      }
       Alert.alert('Success', 'Exercise target parameters updated successfully.');
       setIsEditPlanExModalVisible(false);
       fetchWorkoutData();
@@ -611,7 +736,23 @@ export const WorkoutsScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.delete(`/programs/exercises/${pdeId}`);
+              if (activeWorkoutPlan) {
+                const updatedExercises = activeWorkoutPlan.workoutExercises.filter((we: any) => we.id !== pdeId);
+                const exercisesPayload = updatedExercises.map((we: any) => ({
+                  exerciseId: we.exerciseId,
+                  sets: we.sets,
+                  reps: String(we.reps),
+                  weight: we.weight || null,
+                  restTimeSeconds: we.restTimeSeconds || 90,
+                  dayNumber: we.dayNumber || 1,
+                }));
+                await api.patch(`/workouts/plans/${activeWorkoutPlan.id}`, {
+                  name: activeWorkoutPlan.name,
+                  exercises: exercisesPayload,
+                });
+              } else {
+                await api.delete(`/programs/exercises/${pdeId}`);
+              }
               Alert.alert('Success', 'Exercise removed from plan day.');
               fetchWorkoutData();
             } catch (err) {
@@ -624,7 +765,7 @@ export const WorkoutsScreen: React.FC = () => {
   };
 
   const handleOpenAddPlanEx = (dayId: string) => {
-    setSelectedDayIdForAdd(dayId);
+    setSelectedDayIdForAdd(String(dayId));
     setAddPlanExQuery('');
     setAddPlanExResults([]);
     setAddPlanExSets('3');
@@ -662,11 +803,39 @@ export const WorkoutsScreen: React.FC = () => {
   const handleConfirmAddExerciseToPlan = async (exercise: Exercise) => {
     if (!selectedDayIdForAdd) return;
     try {
-      await api.post(`/programs/days/${selectedDayIdForAdd}/exercises`, {
-        exerciseId: exercise.id,
-        targetSets: parseInt(addPlanExSets, 10),
-        targetRepsRange: addPlanExRepsRange,
-      });
+      if (activeWorkoutPlan) {
+        const newExItem = {
+          exerciseId: exercise.id,
+          sets: parseInt(addPlanExSets, 10),
+          reps: addPlanExRepsRange,
+          weight: null,
+          restTimeSeconds: 90,
+          dayNumber: Number(selectedDayIdForAdd),
+        };
+
+        const exercisesPayload = [
+          ...activeWorkoutPlan.workoutExercises.map((we: any) => ({
+            exerciseId: we.exerciseId,
+            sets: we.sets,
+            reps: String(we.reps),
+            weight: we.weight || null,
+            restTimeSeconds: we.restTimeSeconds || 90,
+            dayNumber: we.dayNumber || 1,
+          })),
+          newExItem,
+        ];
+
+        await api.patch(`/workouts/plans/${activeWorkoutPlan.id}`, {
+          name: activeWorkoutPlan.name,
+          exercises: exercisesPayload,
+        });
+      } else {
+        await api.post(`/programs/days/${selectedDayIdForAdd}/exercises`, {
+          exerciseId: exercise.id,
+          targetSets: parseInt(addPlanExSets, 10),
+          targetRepsRange: addPlanExRepsRange,
+        });
+      }
       Alert.alert('Success', 'Exercise added to training plan!');
       setIsAddPlanExModalVisible(false);
       setAddPlanExQuery('');
@@ -674,6 +843,104 @@ export const WorkoutsScreen: React.FC = () => {
       fetchWorkoutData();
     } catch (err) {
       Alert.alert('Error', 'Unable to add exercise to plan day.');
+    }
+  };
+
+  // Load exercise catalog with current filters
+  const fetchCatalogExercises = async () => {
+    setIsCatalogLoading(true);
+    try {
+      let url = `/exercises?limit=50`;
+      const params = [];
+      if (catalogQuery.trim()) {
+        params.push(`q=${encodeURIComponent(catalogQuery)}`);
+      }
+      if (catalogMuscle) {
+        params.push(`muscle=${encodeURIComponent(catalogMuscle)}`);
+      }
+      if (catalogEquipment) {
+        params.push(`equipment=${encodeURIComponent(catalogEquipment)}`);
+      }
+      if (catalogDifficulty) {
+        params.push(`difficulty=${encodeURIComponent(catalogDifficulty)}`);
+      }
+      if (params.length > 0) {
+        url += '&' + params.join('&');
+      }
+
+      const res = await api.get(url);
+      setCatalogExercises(res.data || []);
+    } catch (err) {
+      console.warn('Failed to load catalog:', err);
+    } finally {
+      setIsCatalogLoading(false);
+    }
+  };
+
+  // Trigger catalog sync
+  const handleSyncExercises = async () => {
+    setIsSyncing(true);
+    try {
+      await api.post('/exercises/sync');
+      Alert.alert('Success', 'Exercise catalog synchronized from external APIs!');
+      fetchCatalogExercises();
+    } catch (err: any) {
+      console.warn('Catalog sync failed:', err);
+      Alert.alert('Sync Error', err.response?.data?.message || 'Failed to sync exercises catalog.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isCatalogModalVisible) {
+      fetchCatalogExercises();
+    }
+  }, [isCatalogModalVisible, catalogQuery, catalogMuscle, catalogEquipment, catalogDifficulty]);
+
+  const handleAddCatalogExerciseToPlan = async (exercise: Exercise, targetDay: number, setsVal: string, repsVal: string) => {
+    try {
+      if (activeWorkoutPlan) {
+        const newExItem = {
+          exerciseId: exercise.id,
+          sets: parseInt(setsVal, 10) || 3,
+          reps: repsVal || '8-12',
+          weight: null,
+          restTimeSeconds: 90,
+          dayNumber: targetDay,
+        };
+
+        const exercisesPayload = [
+          ...activeWorkoutPlan.workoutExercises.map((we: any) => ({
+            exerciseId: we.exerciseId,
+            sets: we.sets,
+            reps: String(we.reps),
+            weight: we.weight || null,
+            restTimeSeconds: we.restTimeSeconds || 90,
+            dayNumber: we.dayNumber || 1,
+          })),
+          newExItem,
+        ];
+
+        await api.patch(`/workouts/plans/${activeWorkoutPlan.id}`, {
+          name: activeWorkoutPlan.name,
+          exercises: exercisesPayload,
+        });
+      } else {
+        if (currentProgram && currentProgram.days && currentProgram.days.length > 0) {
+          const targetDayObj = currentProgram.days[targetDay - 1] || currentProgram.days[0];
+          await api.post(`/programs/days/${targetDayObj.id}/exercises`, {
+            exerciseId: exercise.id,
+            targetSets: parseInt(setsVal, 10) || 3,
+            targetRepsRange: repsVal || '8-12',
+          });
+        }
+      }
+      Alert.alert('Success', 'Exercise added to training plan!');
+      setSelectedCatalogExercise(null);
+      fetchWorkoutData();
+    } catch (err) {
+      Alert.alert('Error', 'Unable to add exercise to training plan.');
     }
   };
 
@@ -707,61 +974,120 @@ export const WorkoutsScreen: React.FC = () => {
       let exercisesToPrefill: ActiveExercise[] = [];
       
       try {
-        const profileRes = await api.get('/profiles/mine');
-        const profile = profileRes.data;
-        if (profile && profile.currentProgramId) {
-          const programRes = await api.get(`/programs/${profile.currentProgramId}`);
-          const program = programRes.data;
-          
-          if (program && program.days && program.days.length > 0) {
-            const historyRes = await api.get('/workouts/history');
-            const historyList = historyRes.data || [];
-            let activeDayIdx = 0;
-            if (historyList.length > 0) {
-              const latestSession = historyList[0];
-              const now = new Date();
-              const year = now.getFullYear();
-              const month = String(now.getMonth() + 1).padStart(2, '0');
-              const dayVal = String(now.getDate()).padStart(2, '0');
-              const todayStr = `${year}-${month}-${dayVal}`;
-              
-              if (latestSession && latestSession.date === todayStr) {
-                activeDayIdx = Math.max(0, historyList.length - 1) % program.days.length;
-              } else {
-                activeDayIdx = historyList.length % program.days.length;
-              }
+        if (activeWorkoutPlan && activeWorkoutPlan.workoutExercises && activeWorkoutPlan.workoutExercises.length > 0) {
+          const daysMap: { [key: number]: any[] } = {};
+          activeWorkoutPlan.workoutExercises.forEach((we: any) => {
+            const dNum = we.dayNumber || 1;
+            if (!daysMap[dNum]) {
+              daysMap[dNum] = [];
             }
-            const activeDay = program.days[activeDayIdx];
-            
-            if (activeDay) {
-              programDayId = activeDay.id;
+            daysMap[dNum].push(we);
+          });
+          const numDays = Object.keys(daysMap).length || 1;
+
+          const historyRes = await api.get('/workouts/history');
+          const historyList = historyRes.data || [];
+          let activePlanDayIdx = 0;
+          if (historyList.length > 0) {
+            const latestSession = historyList[0];
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const dayVal = String(now.getDate()).padStart(2, '0');
+            const todayStr = `${year}-${month}-${dayVal}`;
+            if (latestSession && latestSession.date === todayStr) {
+              activePlanDayIdx = Math.max(0, historyList.length - 1) % numDays;
+            } else {
+              activePlanDayIdx = historyList.length % numDays;
+            }
+          }
+          
+          const activeDayNumber = activePlanDayIdx + 1;
+          const dayExercises = daysMap[activeDayNumber] || [];
+          if (dayExercises.length > 0) {
+            exercisesToPrefill = dayExercises.sort((a: any, b: any) => (a.orderIndex || 0) - (b.orderIndex || 0)).map((we: any) => {
+              const targetSetsCount = we.sets || 3;
+              let defaultReps = 10;
+              if (we.reps) {
+                const parts = String(we.reps).split('-');
+                if (parts.length > 1) {
+                  defaultReps = Math.round((parseInt(parts[0], 10) + parseInt(parts[1], 10)) / 2);
+                } else {
+                  defaultReps = parseInt(we.reps, 10) || 10;
+                }
+              }
               
-              if (activeDay.exercises && activeDay.exercises.length > 0) {
-                exercisesToPrefill = activeDay.exercises.map((pde: any) => {
-                  const targetSetsCount = pde.targetSets || 3;
-                  let defaultReps = 10;
-                  if (pde.targetRepsRange) {
-                    const parts = pde.targetRepsRange.split('-');
-                    if (parts.length > 1) {
-                      defaultReps = Math.round((parseInt(parts[0], 10) + parseInt(parts[1], 10)) / 2);
-                    } else {
-                      defaultReps = parseInt(pde.targetRepsRange, 10) || 10;
+              const sets = Array.from({ length: targetSetsCount }, (_, i) => ({
+                setNumber: i + 1,
+                reps: defaultReps,
+                weight: we.weight || 40,
+                completed: false,
+              }));
+              
+              return {
+                exerciseId: we.exerciseId,
+                name: we.exercise?.name || 'Exercise',
+                sets,
+              };
+            });
+          }
+        } else {
+          const profileRes = await api.get('/profiles/mine');
+          const profile = profileRes.data;
+          if (profile && profile.currentProgramId) {
+            const programRes = await api.get(`/programs/${profile.currentProgramId}`);
+            const program = programRes.data;
+            
+            if (program && program.days && program.days.length > 0) {
+              const historyRes = await api.get('/workouts/history');
+              const historyList = historyRes.data || [];
+              let activeDayIdx = 0;
+              if (historyList.length > 0) {
+                const latestSession = historyList[0];
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const dayVal = String(now.getDate()).padStart(2, '0');
+                const todayStr = `${year}-${month}-${dayVal}`;
+                
+                if (latestSession && latestSession.date === todayStr) {
+                  activeDayIdx = Math.max(0, historyList.length - 1) % program.days.length;
+                } else {
+                  activeDayIdx = historyList.length % program.days.length;
+                }
+              }
+              const activeDay = program.days[activeDayIdx];
+              
+              if (activeDay) {
+                programDayId = activeDay.id;
+                
+                if (activeDay.exercises && activeDay.exercises.length > 0) {
+                  exercisesToPrefill = activeDay.exercises.map((pde: any) => {
+                    const targetSetsCount = pde.targetSets || 3;
+                    let defaultReps = 10;
+                    if (pde.targetRepsRange) {
+                      const parts = pde.targetRepsRange.split('-');
+                      if (parts.length > 1) {
+                        defaultReps = Math.round((parseInt(parts[0], 10) + parseInt(parts[1], 10)) / 2);
+                      } else {
+                        defaultReps = parseInt(pde.targetRepsRange, 10) || 10;
+                      }
                     }
-                  }
-                  
-                  const sets = Array.from({ length: targetSetsCount }, (_, i) => ({
-                    setNumber: i + 1,
-                    reps: defaultReps,
-                    weight: 40,
-                    completed: false,
-                  }));
-                  
-                  return {
-                    exerciseId: pde.exerciseId,
-                    name: pde.exercise?.name || 'Exercise',
-                    sets,
-                  };
-                });
+                    
+                    const sets = Array.from({ length: targetSetsCount }, (_, i) => ({
+                      setNumber: i + 1,
+                      reps: defaultReps,
+                      weight: 40,
+                      completed: false,
+                    }));
+                    
+                    return {
+                      exerciseId: pde.exerciseId,
+                      name: pde.exercise?.name || 'Exercise',
+                      sets,
+                    };
+                  });
+                }
               }
             }
           }
@@ -1349,7 +1675,166 @@ export const WorkoutsScreen: React.FC = () => {
             ) : (
               /* ACTIVE PLAN TAB PANEL */
               <View style={{ flex: 1, paddingBottom: 30 }}>
-                {currentProgram ? (
+                {activeWorkoutPlan ? (
+                  <View>
+                    <View style={styles.planInfoCard}>
+                      <View style={styles.planInfoTitleRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.planProgramTitle}>{activeWorkoutPlan.name}</Text>
+                          <Text style={[styles.planProgramDesc, { marginTop: 4 }]}>
+                            Custom active workout plan tailored to your profile
+                          </Text>
+                        </View>
+                        <View style={[styles.planBadgeContainer, { backgroundColor: COLORS.primaryLight }]}>
+                          <Text style={[styles.planBadgeText, { color: COLORS.primary }]}>ACTIVE</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.planActionRow}>
+                        <TouchableOpacity
+                          style={[styles.planCardBtn, styles.planCardBtnOutline, { flex: 1, marginRight: 8 }]}
+                          onPress={() => setIsCatalogModalVisible(true)}
+                          activeOpacity={0.8}
+                        >
+                          <BookOpen size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                          <Text style={styles.planCardBtnOutlineText} numberOfLines={1}>Catalog</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.planCardBtn, styles.planCardBtnSolid, { flex: 1 }]}
+                          onPress={() => setIsGenModalVisible(true)}
+                          activeOpacity={0.8}
+                        >
+                          <Sparkles size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <Text style={styles.planCardBtnSolidText} numberOfLines={1}>Generator</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[styles.planCreateCustomBtn, { borderStyle: 'solid', borderColor: '#DC2626', opacity: 0.95, marginTop: 12 }]}
+                        onPress={handleDeleteWorkoutPlan}
+                        activeOpacity={0.8}
+                      >
+                        <Trash2 size={16} color="#DC2626" style={{ marginRight: 6 }} />
+                        <Text style={[styles.planCreateCustomBtnText, { color: '#DC2626' }]}>Reset & Delete Plan</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Render split days grouped dynamically */}
+                    {(() => {
+                      const daysMap: { [key: number]: any[] } = {};
+                      (activeWorkoutPlan.workoutExercises || []).forEach((we: any) => {
+                        const dNum = we.dayNumber || 1;
+                        if (!daysMap[dNum]) {
+                          daysMap[dNum] = [];
+                        }
+                        daysMap[dNum].push(we);
+                      });
+                      
+                      const dayNumbers = Object.keys(daysMap).map(Number).sort((a, b) => a - b);
+                      const totalDays = dayNumbers.length || 1;
+
+                      if (dayNumbers.length === 0) {
+                        return (
+                          <View style={styles.planExEmpty}>
+                            <Text style={styles.planExEmptyText}>No exercises in your plan yet. Tap below or use the Catalog/Generator to add some!</Text>
+                            <TouchableOpacity
+                              style={[styles.planEmptyBtn, { marginTop: 12, backgroundColor: COLORS.primaryLight }]}
+                              onPress={() => handleOpenAddPlanEx('1')}
+                              activeOpacity={0.8}
+                            >
+                              <Plus size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+                              <Text style={[styles.planEmptyBtnText, { color: COLORS.primary }]}>Add Exercise to Day 1</Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      }
+
+                      return dayNumbers.map((dayNum) => {
+                        let isDayActive = false;
+                        const dIdx = dayNum - 1;
+                        if (history.length > 0) {
+                          const latestSession = history[0];
+                          const now = new Date();
+                          const year = now.getFullYear();
+                          const month = String(now.getMonth() + 1).padStart(2, '0');
+                          const dayVal = String(now.getDate()).padStart(2, '0');
+                          const todayStr = `${year}-${month}-${dayVal}`;
+
+                          if (latestSession && latestSession.date === todayStr) {
+                            isDayActive = Math.max(0, history.length - 1) % totalDays === dIdx;
+                          } else {
+                            isDayActive = history.length % totalDays === dIdx;
+                          }
+                        } else {
+                          isDayActive = dIdx === 0;
+                        }
+
+                        const dayExList = daysMap[dayNum] || [];
+
+                        return (
+                          <View key={dayNum} style={[styles.planDayCard, isDayActive && styles.planDayCardActive]}>
+                            <View style={styles.planDayHeader}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={[styles.planDayBadge, isDayActive && styles.planDayBadgeActive]}>
+                                  <Text style={[styles.planDayBadgeText, isDayActive && styles.planDayBadgeTextActive]}>{dayNum}</Text>
+                                </View>
+                                <Text style={[styles.planDayTitle, isDayActive && styles.planDayTitleActive]}>
+                                  Day {dayNum} {isDayActive && <Text style={styles.activeDayIndicator}>(Active Day)</Text>}
+                                </Text>
+                              </View>
+                              
+                              <TouchableOpacity
+                                style={styles.planAddExIconBtn}
+                                onPress={() => handleOpenAddPlanEx(String(dayNum))}
+                                activeOpacity={0.7}
+                              >
+                                <Plus size={18} color={COLORS.primary} />
+                              </TouchableOpacity>
+                            </View>
+
+                            {/* Exercise List for this Day */}
+                            <View style={styles.planExList}>
+                              {dayExList.length > 0 ? (
+                                dayExList.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0)).map((we: any, eIdx: number) => (
+                                  <View key={we.id || eIdx} style={styles.planExRow}>
+                                    <View style={{ flex: 1, paddingRight: 8 }}>
+                                      <Text style={styles.planExName}>{we.exercise?.name || 'Exercise'}</Text>
+                                      <Text style={styles.planExDetails}>
+                                        {we.sets || 3} sets × {we.reps || '8-12'} reps
+                                      </Text>
+                                    </View>
+                                    
+                                    <View style={styles.planExActionsRow}>
+                                      <TouchableOpacity
+                                        style={styles.planExActionBtn}
+                                        onPress={() => handleOpenEditPlanEx(we)}
+                                        activeOpacity={0.7}
+                                      >
+                                        <Edit2 size={16} color={COLORS.textLight} />
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={[styles.planExActionBtn, { marginLeft: 12 }]}
+                                        onPress={() => handleRemovePlanEx(we.id)}
+                                        activeOpacity={0.7}
+                                      >
+                                        <Trash2 size={16} color="#DC2626" />
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+                                ))
+                              ) : (
+                                <View style={styles.planExEmpty}>
+                                  <Text style={styles.planExEmptyText}>No exercises in this split day.</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      });
+                    })()}
+                  </View>
+                ) : currentProgram ? (
                   <View>
                     <View style={styles.planInfoCard}>
                       <View style={styles.planInfoTitleRow}>
@@ -1480,35 +1965,31 @@ export const WorkoutsScreen: React.FC = () => {
                   </View>
                 ) : (
                   <View style={styles.planEmptyCard}>
+                    <Sparkles size={40} color={COLORS.primary} style={{ marginBottom: 12 }} />
                     <Text style={styles.planEmptyText}>No training plan assigned yet.</Text>
                     <TouchableOpacity
                       style={styles.planEmptyBtn}
-                      onPress={handleRegenerateProgram}
-                      disabled={isRegenerating}
+                      onPress={() => setIsGenModalVisible(true)}
                       activeOpacity={0.8}
                     >
-                      {isRegenerating ? (
-                        <ActivityIndicator size="small" color={COLORS.textInverse} />
-                      ) : (
-                        <Text style={styles.planEmptyBtnText}>Generate Personalized Program</Text>
-                      )}
+                      <Text style={styles.planEmptyBtnText}>Generate Personalized Plan</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={[styles.planEmptyBtn, { marginTop: 12, backgroundColor: COLORS.surfaceLight }]}
-                      onPress={handleOpenProgramSelector}
+                      onPress={() => setIsCatalogModalVisible(true)}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.planEmptyBtnText, { color: COLORS.primary }]}>Choose Program Manually</Text>
+                      <BookOpen size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                      <Text style={[styles.planEmptyBtnText, { color: COLORS.primary }]}>Browse Exercise Catalog</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={[styles.planEmptyBtn, { marginTop: 12, backgroundColor: COLORS.primaryLight }]}
-                      onPress={handleOpenCustomProgramModal}
+                      onPress={handleOpenProgramSelector}
                       activeOpacity={0.8}
                     >
-                      <Plus size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
-                      <Text style={[styles.planEmptyBtnText, { color: COLORS.primary }]}>Create Custom Plan</Text>
+                      <Text style={[styles.planEmptyBtnText, { color: COLORS.primary }]}>Choose Manual Program</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2025,6 +2506,420 @@ export const WorkoutsScreen: React.FC = () => {
                   <Text style={styles.saveCustomProgramBtnText}>Create & Assign Plan</Text>
                 </TouchableOpacity>
               </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Personalized Workout Generator Wizard Modal */}
+      <Modal
+        visible={isGenModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsGenModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setIsGenModalVisible(false)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Sparkles size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                  <Text style={styles.modalTitleText}>AI Workout Generator</Text>
+                </View>
+                <TouchableOpacity onPress={() => setIsGenModalVisible(false)}>
+                  <X size={20} color={COLORS.textLight} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+                <Text style={{ color: COLORS.textMuted, fontSize: 13, marginBottom: 16 }}>
+                  Generate a highly personalized training split tailored to your exact goal, schedule, and equipment.
+                </Text>
+
+                {/* Goal Selection */}
+                <Text style={styles.inputLabel}>Choose Your Goal</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {[
+                    { key: 'fat_loss', label: 'Fat Loss' },
+                    { key: 'hypertrophy', label: 'Hypertrophy' },
+                    { key: 'strength', label: 'Strength' },
+                    { key: 'endurance', label: 'Endurance' }
+                  ].map((item) => (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[
+                        styles.levelSelectorBtn,
+                        { flex: 0, paddingHorizontal: 12 },
+                        genGoal === item.key && styles.levelSelectorBtnActive
+                      ]}
+                      onPress={() => setGenGoal(item.key)}
+                    >
+                      <Text style={[styles.levelSelectorText, genGoal === item.key && styles.levelSelectorTextActive]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Level Selection */}
+                <Text style={styles.inputLabel}>Fitness Experience Level</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {['beginner', 'intermediate', 'advanced'].map((lvl) => (
+                    <TouchableOpacity
+                      key={lvl}
+                      style={[
+                        styles.levelSelectorBtn,
+                        { flex: 0, paddingHorizontal: 12 },
+                        genLevel === lvl && styles.levelSelectorBtnActive
+                      ]}
+                      onPress={() => setGenLevel(lvl)}
+                    >
+                      <Text style={[styles.levelSelectorText, genLevel === lvl && styles.levelSelectorTextActive]}>
+                        {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Days Selection */}
+                <Text style={styles.inputLabel}>Days Available Per Week</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {[2, 3, 4, 5, 6].map((days) => (
+                    <TouchableOpacity
+                      key={days}
+                      style={[
+                        styles.levelSelectorBtn,
+                        { flex: 0, width: 45, alignItems: 'center' },
+                        genDays === days && styles.levelSelectorBtnActive
+                      ]}
+                      onPress={() => setGenDays(days)}
+                    >
+                      <Text style={[styles.levelSelectorText, genDays === days && styles.levelSelectorTextActive]}>
+                        {days}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Equipment Checklist */}
+                <Text style={styles.inputLabel}>Equipment Access</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {['dumbbell', 'barbell', 'machine', 'cable', 'bodyweight', 'kettlebell'].map((eq) => {
+                    const hasAccess = genEquipment.includes(eq);
+                    return (
+                      <TouchableOpacity
+                        key={eq}
+                        style={[
+                          styles.levelSelectorBtn,
+                          { flex: 0, paddingHorizontal: 12 },
+                          hasAccess && styles.levelSelectorBtnActive
+                        ]}
+                        onPress={() => {
+                          if (hasAccess) {
+                            setGenEquipment(genEquipment.filter(item => item !== eq));
+                          } else {
+                            setGenEquipment([...genEquipment, eq]);
+                          }
+                        }}
+                      >
+                        <Text style={[styles.levelSelectorText, hasAccess && styles.levelSelectorTextActive]}>
+                          {eq.charAt(0).toUpperCase() + eq.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Injuries */}
+                <Text style={styles.inputLabel}>Injuries / Physical Limitations</Text>
+                <TextInput
+                  style={[styles.modalInput, { height: 60, textAlignVertical: 'top' }]}
+                  placeholder="e.g. Lower back pain, shoulder impingement (optional)"
+                  placeholderTextColor={COLORS.textMuted}
+                  multiline={true}
+                  numberOfLines={2}
+                  value={genInjuriesText}
+                  onChangeText={setGenInjuriesText}
+                />
+
+                {/* Submit button */}
+                <TouchableOpacity
+                  style={[styles.saveCustomProgramBtn, { marginTop: 12, backgroundColor: COLORS.primary }]}
+                  onPress={handleGenerateWorkoutPlan}
+                  disabled={isGenerating}
+                  activeOpacity={0.8}
+                >
+                  {isGenerating ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Sparkles size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.saveCustomProgramBtnText}>Generate My Plan Now</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Exercise Catalog Modal */}
+      <Modal
+        visible={isCatalogModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCatalogModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setIsCatalogModalVisible(false)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <BookOpen size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                  <Text style={styles.modalTitleText}>Exercise Catalog</Text>
+                </View>
+                <TouchableOpacity onPress={() => setIsCatalogModalVisible(false)}>
+                  <X size={20} color={COLORS.textLight} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Sync Button */}
+              <TouchableOpacity
+                style={[styles.planCreateCustomBtn, { marginBottom: 12, backgroundColor: COLORS.surfaceLight }]}
+                onPress={handleSyncExercises}
+                disabled={isSyncing}
+                activeOpacity={0.8}
+              >
+                {isSyncing ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <RefreshCw size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
+                    <Text style={[styles.planCreateCustomBtnText, { color: COLORS.primary }]}>Sync External Catalog</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Search Box */}
+              <View style={styles.searchContainer}>
+                <Search size={18} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search catalog..."
+                  value={catalogQuery}
+                  onChangeText={setCatalogQuery}
+                  autoCorrect={false}
+                />
+              </View>
+
+              {/* Muscle Filters */}
+              <Text style={styles.inputLabelSmall}>Muscle Group</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                {['', 'chest', 'back', 'legs', 'shoulders', 'arms', 'core'].map((muscle) => (
+                  <TouchableOpacity
+                    key={muscle}
+                    style={[
+                      styles.levelSelectorBtn,
+                      { flex: 0, paddingHorizontal: 10, marginRight: 6, paddingVertical: 6 },
+                      catalogMuscle === muscle && styles.levelSelectorBtnActive
+                    ]}
+                    onPress={() => setCatalogMuscle(muscle)}
+                  >
+                    <Text style={[styles.levelSelectorText, { fontSize: 12 }, catalogMuscle === muscle && styles.levelSelectorTextActive]}>
+                      {muscle ? muscle.toUpperCase() : 'ALL'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Equipment Filters */}
+              <Text style={styles.inputLabelSmall}>Equipment</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {['', 'bodyweight', 'dumbbell', 'barbell', 'machine', 'cable', 'kettlebell'].map((eq) => (
+                  <TouchableOpacity
+                    key={eq}
+                    style={[
+                      styles.levelSelectorBtn,
+                      { flex: 0, paddingHorizontal: 10, marginRight: 6, paddingVertical: 6 },
+                      catalogEquipment === eq && styles.levelSelectorBtnActive
+                    ]}
+                    onPress={() => setCatalogEquipment(eq)}
+                  >
+                    <Text style={[styles.levelSelectorText, { fontSize: 12 }, catalogEquipment === eq && styles.levelSelectorTextActive]}>
+                      {eq ? eq.toUpperCase() : 'ALL'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Exercises List */}
+              {isCatalogLoading ? (
+                <ActivityIndicator size="large" color={COLORS.primary} style={{ marginVertical: 30 }} />
+              ) : (
+                <FlatList
+                  data={catalogExercises}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[styles.catalogSearchItem, { paddingVertical: 12 }]}
+                      onPress={() => setSelectedCatalogExercise(item)}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.catalogSearchName}>{item.displayName || item.name}</Text>
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                          <View style={{ backgroundColor: COLORS.surfaceLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 10, color: COLORS.textMuted }}>{item.muscleGroup}</Text>
+                          </View>
+                          <View style={{ backgroundColor: COLORS.surfaceLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 10, color: COLORS.textMuted }}>{item.equipment}</Text>
+                          </View>
+                          <View style={{ backgroundColor: COLORS.primaryLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 10, color: COLORS.primary }}>{item.difficulty}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <ChevronRight size={18} color={COLORS.textMuted} />
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={
+                    <View style={{ alignItems: 'center', marginVertical: 30 }}>
+                      <Text style={{ color: COLORS.textMuted }}>No catalog exercises match your filters.</Text>
+                    </View>
+                  }
+                />
+              )}
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Catalog Exercise Details Card Overlay Modal */}
+      <Modal
+        visible={selectedCatalogExercise !== null}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setSelectedCatalogExercise(null)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setSelectedCatalogExercise(null)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={[styles.modalContent, { maxHeight: '85%' }]}>
+              {selectedCatalogExercise && (
+                <View style={{ flex: 1 }}>
+                  <View style={styles.modalHeaderRow}>
+                    <Text style={styles.modalTitleText}>{selectedCatalogExercise.displayName || selectedCatalogExercise.name}</Text>
+                    <TouchableOpacity onPress={() => setSelectedCatalogExercise(null)}>
+                      <X size={20} color={COLORS.textLight} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                    {/* Badge details */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                      <View style={{ backgroundColor: COLORS.surfaceLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: COLORS.textMuted }}>Muscle: {selectedCatalogExercise.muscleGroup}</Text>
+                      </View>
+                      <View style={{ backgroundColor: COLORS.surfaceLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: COLORS.textMuted }}>Equipment: {selectedCatalogExercise.equipment}</Text>
+                      </View>
+                      <View style={{ backgroundColor: COLORS.primaryLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 12, color: COLORS.primary }}>Difficulty: {selectedCatalogExercise.difficulty}</Text>
+                      </View>
+                    </View>
+
+                    {selectedCatalogExercise.description && (
+                      <View style={{ marginBottom: 16 }}>
+                        <Text style={styles.inputLabelSmall}>Description</Text>
+                        <Text style={{ color: COLORS.textLight, fontSize: 13, lineHeight: 18 }}>
+                          {selectedCatalogExercise.description}
+                        </Text>
+                      </View>
+                    )}
+
+                    {selectedCatalogExercise.instructions && selectedCatalogExercise.instructions.length > 0 && (
+                      <View style={{ marginBottom: 16 }}>
+                        <Text style={styles.inputLabelSmall}>Instructions</Text>
+                        {(Array.isArray(selectedCatalogExercise.instructions) 
+                          ? selectedCatalogExercise.instructions 
+                          : typeof selectedCatalogExercise.instructions === 'string'
+                            ? JSON.parse(selectedCatalogExercise.instructions)
+                            : []
+                        ).map((step: string, idx: number) => (
+                          <Text key={idx} style={{ color: COLORS.textLight, fontSize: 13, marginBottom: 6, lineHeight: 18 }}>
+                            {idx + 1}. {step}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Add to plan parameters picker */}
+                    <View style={{ backgroundColor: COLORS.background, padding: 12, borderRadius: 8, marginTop: 12, borderWidth: 1, borderColor: COLORS.border }}>
+                      <Text style={[styles.inputLabel, { color: COLORS.text, marginBottom: 10 }]}>Add to Training Plan Day</Text>
+                      
+                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: COLORS.textMuted, fontSize: 11, marginBottom: 4 }}>Day (Split)</Text>
+                          <TextInput
+                            style={[styles.modalInput, { marginBottom: 0 }]}
+                            keyboardType="number-pad"
+                            defaultValue="1"
+                            onChangeText={(val) => {
+                              (selectedCatalogExercise as any)._targetDay = Number(val) || 1;
+                            }}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: COLORS.textMuted, fontSize: 11, marginBottom: 4 }}>Sets</Text>
+                          <TextInput
+                            style={[styles.modalInput, { marginBottom: 0 }]}
+                            keyboardType="number-pad"
+                            defaultValue="3"
+                            onChangeText={(val) => {
+                              (selectedCatalogExercise as any)._sets = val;
+                            }}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: COLORS.textMuted, fontSize: 11, marginBottom: 4 }}>Reps Range</Text>
+                          <TextInput
+                            style={[styles.modalInput, { marginBottom: 0 }]}
+                            defaultValue="8-12"
+                            onChangeText={(val) => {
+                              (selectedCatalogExercise as any)._reps = val;
+                            }}
+                          />
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[styles.saveCustomProgramBtn, { backgroundColor: COLORS.primary, marginTop: 4 }]}
+                        onPress={() => {
+                          const targetDay = (selectedCatalogExercise as any)._targetDay || 1;
+                          const sets = (selectedCatalogExercise as any)._sets || '3';
+                          const reps = (selectedCatalogExercise as any)._reps || '8-12';
+                          handleAddCatalogExerciseToPlan(selectedCatalogExercise, targetDay, sets, reps);
+                        }}
+                      >
+                        <Plus size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.saveCustomProgramBtnText}>Add Exercise to Plan</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </ScrollView>
+                </View>
+              )}
             </View>
           </TouchableWithoutFeedback>
         </TouchableOpacity>

@@ -3,41 +3,100 @@ import { AppDataSource } from '../data-source';
 import { Program, ProgramLevel } from '../../modules/programs/entities/program.entity';
 import { ProgramDay } from '../../modules/programs/entities/program-day.entity';
 import { ProgramDayExercise } from '../../modules/programs/entities/program-day-exercise.entity';
-import { Exercise } from '../../modules/exercises/entities/exercise.entity';
+import { Exercise, ExerciseDifficulty, ExerciseSource } from '../../modules/exercises/entities/exercise.entity';
+import { MuscleGroup } from '../../modules/exercises/entities/muscle-group.entity';
+import { Equipment } from '../../modules/exercises/entities/equipment.entity';
+import { WorkoutPlan, WorkoutGoal, WorkoutLevel } from '../../modules/workouts/entities/workout-plan.entity';
+import { WorkoutExercise } from '../../modules/workouts/entities/workout-exercise.entity';
+import { PerformanceLog } from '../../modules/performance-tracking/entities/performance-log.entity';
 import { Food, FoodSource } from '../../modules/nutrition/entities/food.entity';
 import { Recipe, RecipeSource } from '../../modules/recipes/entities/recipe.entity';
 import { RecipeIngredient } from '../../modules/recipes/entities/recipe-ingredient.entity';
+import { normalizeExerciseName } from '../../modules/exercises/utils/normalize';
 
 export async function runSeeding(dataSource: DataSource) {
   console.log('Cleaning existing tables...');
+  try {
+    await dataSource.getRepository(PerformanceLog).createQueryBuilder().delete().execute();
+  } catch (err) {
+    // Table might not exist yet if running before synchronization
+  }
+  await dataSource.getRepository(WorkoutExercise).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(WorkoutPlan).createQueryBuilder().delete().execute();
   await dataSource.getRepository(RecipeIngredient).createQueryBuilder().delete().execute();
   await dataSource.getRepository(Recipe).createQueryBuilder().delete().execute();
   await dataSource.getRepository(ProgramDayExercise).createQueryBuilder().delete().execute();
   await dataSource.getRepository(ProgramDay).createQueryBuilder().delete().execute();
   await dataSource.getRepository(Program).createQueryBuilder().delete().execute();
   await dataSource.getRepository(Exercise).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(MuscleGroup).createQueryBuilder().delete().execute();
+  await dataSource.getRepository(Equipment).createQueryBuilder().delete().execute();
   await dataSource.getRepository(Food).createQueryBuilder().delete().execute();
   console.log('Cleanup complete.');
 
+  console.log('Seeding muscle groups and equipment...');
+  const muscleGroups = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core', 'quads', 'hamstrings', 'biceps', 'triceps'];
+  const equipmentTypes = ['bodyweight', 'dumbbell', 'barbell', 'machine', 'cable', 'kettlebell'];
+
+  const muscleGroupRepo = dataSource.getRepository(MuscleGroup);
+  const equipmentRepo = dataSource.getRepository(Equipment);
+
+  const seededMuscles = await Promise.all(
+    muscleGroups.map(name => {
+      const item = muscleGroupRepo.create({ name });
+      return muscleGroupRepo.save(item);
+    })
+  );
+
+  const seededEquipment = await Promise.all(
+    equipmentTypes.map(name => {
+      const item = equipmentRepo.create({ name });
+      return equipmentRepo.save(item);
+    })
+  );
+
+  const getMuscle = (name: string): MuscleGroup => {
+    const found = seededMuscles.find(m => m.name === name.toLowerCase());
+    if (!found) throw new Error(`Seeding Error: Muscle group ${name} not found`);
+    return found;
+  };
+
+  const getEquipment = (name: string): Equipment => {
+    const found = seededEquipment.find(e => e.name === name.toLowerCase());
+    if (!found) throw new Error(`Seeding Error: Equipment ${name} not found`);
+    return found;
+  };
+
   console.log('Seeding exercises...');
   const exercisesData = [
-    { name: 'Bench Press', muscleGroup: 'Chest' },
-    { name: 'Incline Dumbbell Press', muscleGroup: 'Chest' },
-    { name: 'Barbell Squat', muscleGroup: 'Quads' },
-    { name: 'Romanian Deadlift', muscleGroup: 'Hamstrings' },
-    { name: 'Pull-up', muscleGroup: 'Back' },
-    { name: 'Barbell Row', muscleGroup: 'Back' },
-    { name: 'Overhead Press', muscleGroup: 'Shoulders' },
-    { name: 'Dumbbell Lateral Raise', muscleGroup: 'Shoulders' },
-    { name: 'Bicep Curl', muscleGroup: 'Biceps' },
-    { name: 'Tricep Pushdown', muscleGroup: 'Triceps' },
-    { name: 'Lying Leg Curl', muscleGroup: 'Hamstrings' },
-    { name: 'Leg Extension', muscleGroup: 'Quads' },
+    { displayName: 'Bench Press', muscleGroupName: 'chest', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
+    { displayName: 'Incline Dumbbell Press', muscleGroupName: 'chest', equipmentName: 'dumbbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
+    { displayName: 'Barbell Squat', muscleGroupName: 'quads', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
+    { displayName: 'Romanian Deadlift', muscleGroupName: 'hamstrings', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
+    { displayName: 'Pull-up', muscleGroupName: 'back', equipmentName: 'bodyweight', difficulty: ExerciseDifficulty.INTERMEDIATE },
+    { displayName: 'Barbell Row', muscleGroupName: 'back', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
+    { displayName: 'Overhead Press', muscleGroupName: 'shoulders', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
+    { displayName: 'Dumbbell Lateral Raise', muscleGroupName: 'shoulders', equipmentName: 'dumbbell', difficulty: ExerciseDifficulty.BEGINNER },
+    { displayName: 'Bicep Curl', muscleGroupName: 'biceps', equipmentName: 'dumbbell', difficulty: ExerciseDifficulty.BEGINNER },
+    { displayName: 'Tricep Pushdown', muscleGroupName: 'triceps', equipmentName: 'cable', difficulty: ExerciseDifficulty.BEGINNER },
+    { displayName: 'Lying Leg Curl', muscleGroupName: 'hamstrings', equipmentName: 'machine', difficulty: ExerciseDifficulty.BEGINNER },
+    { displayName: 'Leg Extension', muscleGroupName: 'quads', equipmentName: 'machine', difficulty: ExerciseDifficulty.BEGINNER },
   ];
 
   const exerciseRepository = dataSource.getRepository(Exercise);
-  const seededExercises = await exerciseRepository.save(
-    exercisesData.map((e) => exerciseRepository.create(e)),
+  const seededExercises = await Promise.all(
+    exercisesData.map(e => {
+      const item = exerciseRepository.create({
+        name: normalizeExerciseName(e.displayName),
+        displayName: e.displayName,
+        muscleGroup: getMuscle(e.muscleGroupName),
+        equipment: getEquipment(e.equipmentName),
+        difficulty: e.difficulty,
+        instructions: [`Set up for ${e.displayName}`, `Perform ${e.displayName} with correct form`],
+        source: ExerciseSource.INTERNAL,
+      });
+      return exerciseRepository.save(item);
+    })
   );
   console.log(`Seeded ${seededExercises.length} exercises.`);
 
@@ -132,7 +191,7 @@ export async function runSeeding(dataSource: DataSource) {
   console.log('Seeded 2 global database recipes.');
 
   const getExId = (name: string): string => {
-    const found = seededExercises.find((e) => e.name.toLowerCase() === name.toLowerCase());
+    const found = seededExercises.find((e) => e.displayName.toLowerCase() === name.toLowerCase());
     if (!found) throw new Error(`Exercise not found during seeding: ${name}`);
     return found.id;
   };
@@ -255,6 +314,9 @@ async function seed() {
   console.log('Initializing database connection for seeding...');
   await AppDataSource.initialize();
   console.log('Database connection initialized successfully.');
+  console.log('Synchronizing schema (dropping existing tables)...');
+  await AppDataSource.synchronize(true);
+  console.log('Schema synchronized.');
   await runSeeding(AppDataSource);
   await AppDataSource.destroy();
   console.log('Database connection closed.');

@@ -1,9 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNumber, IsString, IsOptional, Min, Max } from 'class-validator';
-import { FitnessGoal } from '../entities/profile.entity';
+import { IsEnum, IsNumber, IsString, IsOptional, Min, Max, IsArray } from 'class-validator';
+import { FitnessGoal, FitnessLevel, EquipmentAccess } from '../entities/profile.entity';
 
 export class CreateProfileDto {
-  @ApiProperty({ enum: FitnessGoal, example: FitnessGoal.LOSE_FAT })
+  @ApiProperty({ enum: FitnessGoal, example: FitnessGoal.HYPERTROPHY })
   @IsEnum(FitnessGoal)
   goal: FitnessGoal;
 
@@ -58,4 +58,46 @@ export class CreateProfileDto {
   @IsOptional()
   @IsNumber()
   dailySteps?: number;
+
+  @ApiProperty({ example: 15.5, required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(2)
+  @Max(70)
+  bodyFatPercentage?: number;
+
+  @ApiProperty({ enum: FitnessLevel, example: FitnessLevel.BEGINNER, required: false })
+  @IsOptional()
+  @IsEnum(FitnessLevel)
+  fitnessLevel?: FitnessLevel;
+
+  @ApiProperty({ example: 3, required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(7)
+  daysPerWeekAvailable?: number;
+
+  @ApiProperty({ example: 60, required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(240)
+  sessionDurationMinutes?: number;
+
+  @ApiProperty({ enum: EquipmentAccess, example: EquipmentAccess.GYM, required: false })
+  @IsOptional()
+  @IsEnum(EquipmentAccess)
+  equipmentAccess?: EquipmentAccess;
+
+  @ApiProperty({ example: ['shoulder injury'], required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  injuries?: string[];
+
+  @ApiProperty({ example: 'strength training focus', required: false })
+  @IsOptional()
+  @IsString()
+  preferences?: string;
 }

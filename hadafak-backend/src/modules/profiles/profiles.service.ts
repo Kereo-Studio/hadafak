@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Profile, FitnessGoal } from './entities/profile.entity';
+import { Profile, FitnessGoal, FitnessLevel, EquipmentAccess } from './entities/profile.entity';
 import { CreateProfileDto } from './dto/create-profile.dto';
 
 @Injectable()
@@ -31,6 +31,21 @@ export class ProfilesService {
     profile.dailyProtein = dto.dailyProtein ?? this.calculateProtein(dto);
     profile.dailyWater = dto.dailyWater ?? this.calculateWater(dto);
     profile.dailySteps = dto.dailySteps ?? this.calculateSteps(dto);
+
+    // Dynamic workout profile updates
+    profile.bodyFatPercentage = dto.bodyFatPercentage ?? profile.bodyFatPercentage ?? null;
+    profile.fitnessLevel = dto.fitnessLevel ?? profile.fitnessLevel ?? FitnessLevel.BEGINNER;
+    profile.daysPerWeekAvailable = dto.daysPerWeekAvailable ?? dto.trainingDays ?? profile.daysPerWeekAvailable ?? 3;
+    profile.sessionDurationMinutes = dto.sessionDurationMinutes ?? profile.sessionDurationMinutes ?? 60;
+    
+    if (dto.equipmentAccess) {
+      profile.equipmentAccess = dto.equipmentAccess;
+    } else if (dto.trainingLocation) {
+      profile.equipmentAccess = dto.trainingLocation === 'home' ? EquipmentAccess.HOME : EquipmentAccess.GYM;
+    }
+
+    profile.injuries = dto.injuries ?? profile.injuries ?? [];
+    profile.preferences = dto.preferences ?? profile.preferences ?? null;
 
     return this.profileRepository.save(profile);
   }
@@ -78,8 +93,10 @@ export class ProfilesService {
 
     switch (dto.goal) {
       case FitnessGoal.LOSE_FAT:
+      case FitnessGoal.FAT_LOSS:
         return Math.round(tdee - 500);
       case FitnessGoal.GAIN_MUSCLE:
+      case FitnessGoal.HYPERTROPHY:
         return Math.round(tdee + 300);
       default:
         return Math.round(tdee);
@@ -90,10 +107,12 @@ export class ProfilesService {
     let factor = 1.2;
     switch (dto.goal) {
       case FitnessGoal.GAIN_MUSCLE:
+      case FitnessGoal.HYPERTROPHY:
       case FitnessGoal.ATHLETIC:
         factor = 2.0;
         break;
       case FitnessGoal.LOSE_FAT:
+      case FitnessGoal.FAT_LOSS:
         factor = 1.8;
         break;
     }
@@ -107,6 +126,7 @@ export class ProfilesService {
   private calculateSteps(dto: CreateProfileDto): number {
     switch (dto.goal) {
       case FitnessGoal.LOSE_FAT:
+      case FitnessGoal.FAT_LOSS:
       case FitnessGoal.ATHLETIC:
         return 10000;
       default:

@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorkoutSession } from './entities/workout-session.entity';
 import { ExerciseLog, ExerciseSetLog } from './entities/exercise-log.entity';
+import { WorkoutPlan } from './entities/workout-plan.entity';
+import { WorkoutExercise } from './entities/workout-exercise.entity';
 import { LogWorkoutDto } from './dto/log-workout.dto';
+import { CreateWorkoutPlanDto } from './dto/create-workout-plan.dto';
+import { UpdateWorkoutPlanDto } from './dto/update-workout-plan.dto';
+import { AddExerciseToPlanDto } from './dto/add-exercise-to-plan.dto';
 
 @Injectable()
 export class WorkoutsService {
@@ -12,7 +17,15 @@ export class WorkoutsService {
     private readonly workoutSessionRepository: Repository<WorkoutSession>,
     @InjectRepository(ExerciseLog)
     private readonly exerciseLogRepository: Repository<ExerciseLog>,
+    @InjectRepository(WorkoutPlan)
+    private readonly workoutPlanRepository: Repository<WorkoutPlan>,
+    @InjectRepository(WorkoutExercise)
+    private readonly workoutExerciseRepository: Repository<WorkoutExercise>,
   ) {}
+
+  // ==========================================
+  // EXERCISES / LOGGING LOGIC
+  // ==========================================
 
   async getActiveSession(userId: string): Promise<WorkoutSession | null> {
     return this.workoutSessionRepository.findOne({
@@ -279,5 +292,218 @@ export class WorkoutsService {
     }
     await this.workoutSessionRepository.remove(session);
   }
-}
 
+  // ==========================================
+  // WORKOUT BUILDER / PLANS LOGIC
+  // ==========================================
+
+  async createWorkoutPlan(userId: string | null, dto: CreateWorkoutPlanDto): Promise<WorkoutPlan> {
+    const plan = this.workoutPlanRepository.create({
+      name: dto.name,
+      goal: dto.goal,
+      level: dto.level,
+      userId,
+      isTemplate: dto.isTemplate || false,
+    });
+
+    const savedPlan = await this.workoutPlanRepository.save(plan);
+
+    if (dto.exercises && dto.exercises.length > 0) {
+      const workoutExercises = dto.exercises.map((ex, index) => {
+        return this.workoutExerciseRepository.create({
+          workoutPlanId: savedPlan.id,
+          exerciseId: ex.exerciseId,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: ex.weight,
+          restTimeSeconds: ex.restTimeSeconds || 90,
+          orderIndex: index,
+        });
+      });
+      await this.workoutExerciseRepository.save(workoutExercises);
+    }
+
+    return this.findWorkoutPlanById(savedPlan.id);
+  }
+
+  async findWorkoutPlanById(id: string): Promise<WorkoutPlan> {
+    const plan = await this.workoutPlanRepository.findOne({
+      where: { id },
+      relations: {
+        workoutExercises: {
+          exercise: {
+            muscleGroup: true,
+            equipment: true,
+          },
+        },
+      },
+    });
+
+    if (!plan) {
+      throw new NotFoundException(`Workout plan ${id} not found`);
+    }
+
+    // Sort exercises by their order index to keep presentation consistent
+    if (plan.workoutExercises) {
+      plan.workoutExercises.sort((a, b) => a.orderIndex - b.orderIndex);
+    }
+
+    return plan;
+  }
+
+  async findAllWorkoutPlans(userId: string | null): Promise<WorkoutPlan[]> {
+    // Returns user custom plans or templates if userId is null
+    const plans = await this.workoutPlanRepository.find({
+      where: userId ? { userId } : { isTemplate: true },
+      relations: {
+        workoutExercises: {
+          exercise: {
+            muscleGroup: true,
+            equipment: true,
+          },
+        },
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    plans.forEach((plan) => {
+      if (plan.workoutExercises) {
+        plan.workoutExercises.sort((a, b) => a.orderIndex - b.orderIndex);
+      }
+    });
+
+    return plans;
+  }
+
+  async updateWorkoutPlan(id: string, userId: string | null, dto: UpdateWorkoutPlanDto): Promise<WorkoutPlan> {
+    const plan = await this.findWorkoutPlanById(id);
+
+    if (userId && plan.userId !== userId) {
+      throw new ForbiddenException('You do not own this workout plan');
+    }
+
+    if (dto.name !== undefined) plan.name = dto.name;
+    if (dto.goal !== undefined) plan.goal = dto.goal;
+    if (dto.level !== undefined) plan.level = dto.level;
+    if (dto.isTemplate !== undefined) plan.isTemplate = dto.isTemplate;
+
+    await this.workoutPlanRepository.save(plan);
+
+    if (dto.exercises) {
+      // Re-create exercise items to update them completely
+      await this.workoutExerciseRepository.delete({ workoutPlanId: plan.id });
+
+      const workoutExercises = dto.exercises.map((ex, index) => {
+        return this.workoutExerciseRepository.create({
+          workoutPlanId: plan.id,
+          exerciseId: ex.exerciseId,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: ex.weight,
+          restTimeSeconds: ex.restTimeSeconds || 90,
+          orderIndex: index,
+          dayNumber: ex.dayNumber || 1,
+        });
+      });
+      await this.workoutExerciseRepository.save(workoutExercises);
+    }
+
+    return this.findWorkoutPlanById(id);
+  }
+
+  async deleteWorkoutPlan(id: string, userId: string | null): Promise<void> {
+    const plan = await this.findWorkoutPlanById(id);
+
+    if (userId && plan.userId !== userId) {
+      throw new ForbiddenException('You do not own this workout plan');
+    }
+
+    await this.workoutPlanRepository.remove(plan);
+  }
+
+  async addExerciseToPlan(planId: string, userId: string | null, dto: AddExerciseToPlanDto): Promise<WorkoutExercise> {
+    const plan = await this.findWorkoutPlanById(planId);
+
+    if (userId && plan.userId !== userId) {
+      throw new ForbiddenException('You do not own this workout plan');
+    }
+
+    const maxOrderEx = await this.workoutExerciseRepository.findOne({
+      where: { workoutPlanId: planId },
+      order: { orderIndex: 'DESC' },
+    });
+
+    const nextOrderIndex = maxOrderEx ? maxOrderEx.orderIndex + 1 : 0;
+
+    const workoutEx = this.workoutExerciseRepository.create({
+      workoutPlanId: planId,
+      exerciseId: dto.exerciseId,
+      sets: dto.sets || 3,
+      reps: dto.reps || '8-12',
+      weight: dto.weight,
+      restTimeSeconds: dto.restTimeSeconds || 90,
+      orderIndex: nextOrderIndex,
+      dayNumber: dto.dayNumber || 1,
+    });
+
+    return this.workoutExerciseRepository.save(workoutEx);
+  }
+
+  async reorderExercises(planId: string, userId: string | null, workoutExerciseIds: string[]): Promise<WorkoutPlan> {
+    const plan = await this.findWorkoutPlanById(planId);
+
+    if (userId && plan.userId !== userId) {
+      throw new ForbiddenException('You do not own this workout plan');
+    }
+
+    const currentExercises = await this.workoutExerciseRepository.find({
+      where: { workoutPlanId: planId },
+    });
+
+    const exerciseMap = new Map(currentExercises.map((e) => [e.id, e]));
+
+    // Reassign indices according to list order
+    const updatedExercises: WorkoutExercise[] = [];
+    workoutExerciseIds.forEach((id, index) => {
+      const ex = exerciseMap.get(id);
+      if (ex) {
+        ex.orderIndex = index;
+        updatedExercises.push(ex);
+      }
+    });
+
+    await this.workoutExerciseRepository.save(updatedExercises);
+    return this.findWorkoutPlanById(planId);
+  }
+
+  async cloneWorkoutPlan(templateId: string, userId: string, newName?: string): Promise<WorkoutPlan> {
+    const template = await this.findWorkoutPlanById(templateId);
+
+    const clonedPlan = this.workoutPlanRepository.create({
+      name: newName || `${template.name} (Clone)`,
+      goal: template.goal,
+      level: template.level,
+      userId,
+      isTemplate: false,
+    });
+
+    const savedPlan = await this.workoutPlanRepository.save(clonedPlan);
+
+    if (template.workoutExercises && template.workoutExercises.length > 0) {
+      const clonedExercises = template.workoutExercises.map((ex) => {
+        return this.workoutExerciseRepository.create({
+          workoutPlanId: savedPlan.id,
+          exerciseId: ex.exerciseId,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: ex.weight,
+          restTimeSeconds: ex.restTimeSeconds,
+          orderIndex: ex.orderIndex,
+        });
+      });
+      await this.workoutExerciseRepository.save(clonedExercises);
+    }
+
+    return this.findWorkoutPlanById(savedPlan.id);
+  }
+}

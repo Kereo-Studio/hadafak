@@ -1,9 +1,12 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Delete } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, Delete, Patch } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { WorkoutsService } from './workouts.service';
 import { LogWorkoutDto } from './dto/log-workout.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UpdateWorkoutPlanDto } from './dto/update-workout-plan.dto';
+import { AddExerciseToPlanDto } from './dto/add-exercise-to-plan.dto';
+import { ReorderExercisesDto } from './dto/reorder-exercises.dto';
 
 @ApiTags('Workouts')
 @Controller('workouts')
@@ -84,14 +87,54 @@ export class WorkoutsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Retrieve specific logged session by ID' })
-  @ApiResponse({ status: 200, description: 'Workout session details.' })
-  @ApiResponse({ status: 404, description: 'Workout session not found.' })
+  @ApiOperation({ summary: 'Retrieve specific workout plan or logged session by ID' })
+  @ApiResponse({ status: 200, description: 'Workout plan or session details.' })
+  @ApiResponse({ status: 404, description: 'Not found.' })
   async getById(
     @CurrentUser('sub') userId: string,
     @Param('id') id: string,
   ) {
+    try {
+      const plan = await this.workoutsService.findWorkoutPlanById(id);
+      if (plan) return plan;
+    } catch (err) {
+      // Fall back to finding logged session if plan not found
+    }
     return this.workoutsService.findSessionById(id, userId);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update a workout plan' })
+  @ApiResponse({ status: 200, description: 'Plan successfully updated.' })
+  @ApiResponse({ status: 404, description: 'Plan not found.' })
+  async updatePlan(
+    @CurrentUser('sub') userId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateWorkoutPlanDto,
+  ) {
+    return this.workoutsService.updateWorkoutPlan(id, userId, dto);
+  }
+
+  @Post(':id/exercises')
+  @ApiOperation({ summary: 'Add an exercise to a workout plan' })
+  @ApiResponse({ status: 201, description: 'Exercise added successfully.' })
+  async addExercise(
+    @CurrentUser('sub') userId: string,
+    @Param('id') planId: string,
+    @Body() dto: AddExerciseToPlanDto,
+  ) {
+    return this.workoutsService.addExerciseToPlan(planId, userId, dto);
+  }
+
+  @Patch(':id/reorder')
+  @ApiOperation({ summary: 'Reorder exercises in a workout plan' })
+  @ApiResponse({ status: 200, description: 'Plan successfully reordered.' })
+  async reorder(
+    @CurrentUser('sub') userId: string,
+    @Param('id') planId: string,
+    @Body() dto: ReorderExercisesDto,
+  ) {
+    return this.workoutsService.reorderExercises(planId, userId, dto.workoutExerciseIds);
   }
 
   @Delete(':id')

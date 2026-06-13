@@ -14,6 +14,9 @@ import { StepsModule } from './modules/steps/steps.module';
 import { RecipesModule } from './modules/recipes/recipes.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { RunsModule } from './modules/runs/runs.module';
+import { PerformanceTrackingModule } from './modules/performance-tracking/performance-tracking.module';
+import { WorkoutGenerationModule } from './modules/workout-generation/workout-generation.module';
+import { AdaptationEngineModule } from './modules/adaptation-engine/adaptation-engine.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -54,6 +57,9 @@ import { HealthController } from './health.controller';
     RecipesModule,
     ProgressModule,
     RunsModule,
+    PerformanceTrackingModule,
+    WorkoutGenerationModule,
+    AdaptationEngineModule,
   ],
   controllers: [HealthController],
 })

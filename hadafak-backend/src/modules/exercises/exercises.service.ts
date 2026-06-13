@@ -1,34 +1,228 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Exercise } from './entities/exercise.entity';
+import { Exercise, ExerciseDifficulty, ExerciseSource } from './entities/exercise.entity';
+import { MuscleGroup } from './entities/muscle-group.entity';
+import { Equipment } from './entities/equipment.entity';
+import { CreateExerciseDto } from './dto/create-exercise.dto';
+import { UpdateExerciseDto } from './dto/update-exercise.dto';
+import { normalizeExerciseName } from './utils/normalize';
 
 @Injectable()
 export class ExercisesService {
+  private readonly cache = new Map<string, { value: any; expiresAt: number }>();
+  private readonly CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+
   constructor(
     @InjectRepository(Exercise)
     private readonly exerciseRepository: Repository<Exercise>,
+    @InjectRepository(MuscleGroup)
+    private readonly muscleGroupRepository: Repository<MuscleGroup>,
+    @InjectRepository(Equipment)
+    private readonly equipmentRepository: Repository<Equipment>,
   ) {}
 
-  async findAll(muscleGroup?: string): Promise<Exercise[]> {
-    if (muscleGroup) {
-      return this.exerciseRepository.find({
-        where: { muscleGroup },
+  private clearCache() {
+    this.cache.clear();
+  }
+
+  async findOrCreateMuscleGroup(name: string): Promise<MuscleGroup> {
+    const normalized = name.trim().toLowerCase();
+    let mg = await this.muscleGroupRepository.findOne({ where: { name: normalized } });
+    if (!mg) {
+      mg = this.muscleGroupRepository.create({ name: normalized });
+      mg = await this.muscleGroupRepository.save(mg);
+    }
+    return mg;
+  }
+
+  async findOrCreateEquipment(name: string): Promise<Equipment> {
+    const normalized = name.trim().toLowerCase();
+    let eq = await this.equipmentRepository.findOne({ where: { name: normalized } });
+    if (!eq) {
+      eq = this.equipmentRepository.create({ name: normalized });
+      eq = await this.equipmentRepository.save(eq);
+    }
+    return eq;
+  }
+
+  async findAll(query: {
+    q?: string;
+    muscle?: string;
+    equipment?: string;
+    difficulty?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: Exercise[]; total: number; page: number; limit: number }> {
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.max(1, Number(query.limit) || 20);
+    const skip = (page - 1) * limit;
+
+    // Build Cache Key
+    const cacheKey = JSON.stringify({ ...query, page, limit });
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
+    const queryBuilder = this.exerciseRepository.createQueryBuilder('exercise')
+      .leftJoinAndSelect('exercise.muscleGroup', 'muscleGroup')
+      .leftJoinAndSelect('exercise.secondaryMuscles', 'secondaryMuscles')
+      .leftJoinAndSelect('exercise.equipment', 'equipment');
+
+    if (query.q) {
+      queryBuilder.andWhere(
+        '(exercise.name ILIKE :q OR exercise.displayName ILIKE :q OR exercise.description ILIKE :q)',
+        { q: `%${query.q}%` }
+      );
+    }
+
+    if (query.muscle) {
+      queryBuilder.andWhere(
+        '(muscleGroup.name = :muscle OR muscleGroup.id = :muscle)',
+        { muscle: query.muscle.toLowerCase() }
+      );
+    }
+
+    if (query.equipment) {
+      queryBuilder.andWhere(
+        '(equipment.name = :equipment OR equipment.id = :equipment)',
+        { equipment: query.equipment.toLowerCase() }
+      );
+    }
+
+    if (query.difficulty) {
+      queryBuilder.andWhere('exercise.difficulty = :difficulty', {
+        difficulty: query.difficulty.toLowerCase(),
       });
     }
-    return this.exerciseRepository.find();
+
+    queryBuilder
+      .orderBy('exercise.displayName', 'ASC')
+      .skip(skip)
+      .take(limit);
+
+    const [data, total] = await queryBuilder.getManyAndCount();
+    const result = { data, total, page, limit };
+
+    this.cache.set(cacheKey, {
+      value: result,
+      expiresAt: Date.now() + this.CACHE_TTL,
+    });
+
+    return result;
   }
 
   async findById(id: string): Promise<Exercise> {
-    const exercise = await this.exerciseRepository.findOne({ where: { id } });
+    const exercise = await this.exerciseRepository.findOne({
+      where: { id },
+      relations: {
+        muscleGroup: true,
+        secondaryMuscles: true,
+        equipment: true,
+      },
+    });
     if (!exercise) {
       throw new NotFoundException(`Exercise with ID ${id} not found`);
     }
     return exercise;
   }
 
-  async create(name: string, muscleGroup: string): Promise<Exercise> {
-    const exercise = this.exerciseRepository.create({ name, muscleGroup });
-    return this.exerciseRepository.save(exercise);
+  async create(dto: CreateExerciseDto): Promise<Exercise> {
+    const normName = normalizeExerciseName(dto.displayName);
+    const existing = await this.exerciseRepository.findOne({ where: { name: normName } });
+    if (existing) {
+      throw new ConflictException(`Exercise with name "${dto.displayName}" already exists`);
+    }
+
+    const muscleGroup = await this.findOrCreateMuscleGroup(dto.muscleGroupName);
+    const equipment = await this.findOrCreateEquipment(dto.equipmentName);
+
+    const secondaryMuscles: MuscleGroup[] = [];
+    if (dto.secondaryMuscleGroupNames) {
+      for (const name of dto.secondaryMuscleGroupNames) {
+        secondaryMuscles.push(await this.findOrCreateMuscleGroup(name));
+      }
+    }
+
+    const exercise = this.exerciseRepository.create({
+      name: normName,
+      displayName: dto.displayName,
+      description: dto.description,
+      muscleGroup,
+      secondaryMuscles,
+      equipment,
+      difficulty: dto.difficulty,
+      instructions: dto.instructions || [],
+      gifUrl: dto.gifUrl,
+      videoUrl: dto.videoUrl,
+      source: ExerciseSource.INTERNAL,
+    });
+
+    const saved = await this.exerciseRepository.save(exercise);
+    this.clearCache();
+    return saved;
+  }
+
+  async update(id: string, dto: UpdateExerciseDto): Promise<Exercise> {
+    const exercise = await this.findById(id);
+
+    if (dto.displayName) {
+      const normName = normalizeExerciseName(dto.displayName);
+      if (normName !== exercise.name) {
+        const existing = await this.exerciseRepository.findOne({ where: { name: normName } });
+        if (existing && existing.id !== id) {
+          throw new ConflictException(`Exercise with name "${dto.displayName}" already exists`);
+        }
+        exercise.name = normName;
+      }
+      exercise.displayName = dto.displayName;
+    }
+
+    if (dto.description !== undefined) {
+      exercise.description = dto.description;
+    }
+
+    if (dto.difficulty) {
+      exercise.difficulty = dto.difficulty;
+    }
+
+    if (dto.instructions) {
+      exercise.instructions = dto.instructions;
+    }
+
+    if (dto.gifUrl !== undefined) {
+      exercise.gifUrl = dto.gifUrl;
+    }
+
+    if (dto.videoUrl !== undefined) {
+      exercise.videoUrl = dto.videoUrl;
+    }
+
+    if (dto.muscleGroupName) {
+      exercise.muscleGroup = await this.findOrCreateMuscleGroup(dto.muscleGroupName);
+    }
+
+    if (dto.equipmentName) {
+      exercise.equipment = await this.findOrCreateEquipment(dto.equipmentName);
+    }
+
+    if (dto.secondaryMuscleGroupNames) {
+      const secondaryMuscles: MuscleGroup[] = [];
+      for (const name of dto.secondaryMuscleGroupNames) {
+        secondaryMuscles.push(await this.findOrCreateMuscleGroup(name));
+      }
+      exercise.secondaryMuscles = secondaryMuscles;
+    }
+
+    const saved = await this.exerciseRepository.save(exercise);
+    this.clearCache();
+    return saved;
+  }
+
+  async remove(id: string): Promise<void> {
+    const exercise = await this.findById(id);
+    await this.exerciseRepository.remove(exercise);
+    this.clearCache();
   }
 }
