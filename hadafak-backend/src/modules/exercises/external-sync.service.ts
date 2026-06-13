@@ -48,18 +48,18 @@ export class ExternalSyncService {
 
     // 2. Fetch/Simulate Wger
     try {
-      const wgerUrl = process.env.WGER_API_URL || 'https://wger.de/api/v2/exercise/?language=2&limit=50';
+      const wgerUrl = process.env.WGER_API_URL || 'https://wger.de/api/v2/exerciseinfo/?language=2&limit=50';
+      this.logger.log('Fetching live exercises from Wger...');
+      const headers: Record<string, string> = {};
       if (process.env.WGER_API_KEY) {
-        this.logger.log('Fetching live exercises from Wger...');
-        const res = await fetch(wgerUrl, {
-          headers: {
-            'Authorization': `Token ${process.env.WGER_API_KEY}`,
-          },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          wgerRaw = data.results || [];
-        }
+        headers['Authorization'] = `Token ${process.env.WGER_API_KEY}`;
+      }
+      const res = await fetch(wgerUrl, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        wgerRaw = data.results || [];
+      } else {
+        this.logger.warn(`Wger API responded with status ${res.status}`);
       }
     } catch (err) {
       this.logger.warn(`Wger API fetch failed: ${err.message}. Falling back to mock.`);
