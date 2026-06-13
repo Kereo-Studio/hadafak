@@ -234,6 +234,7 @@ export const NutritionScreen: React.FC = () => {
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [quantity, setQuantity] = useState('1');
   const [isScanModalVisible, setIsScanModalVisible] = useState(false);
+  const [barcodeScanTarget, setBarcodeScanTarget] = useState<'search' | 'custom'>('search');
 
   // Custom Food States
   const [showCustomForm, setShowCustomForm] = useState(false);
@@ -356,6 +357,10 @@ export const NutritionScreen: React.FC = () => {
 
   // Hybrid Barcode Scanner Resolver
   const handleBarcodeScan = async (barcode: string) => {
+    if (barcodeScanTarget === 'custom') {
+      setCustomBarcode(barcode);
+      return;
+    }
     setIsSearching(true);
     try {
       const res = await api.get(`/nutrition/foods?barcode=${encodeURIComponent(barcode)}`);
@@ -1286,7 +1291,10 @@ export const NutritionScreen: React.FC = () => {
                           justifyContent: 'center',
                           alignItems: 'center',
                         }}
-                        onPress={() => setIsScanModalVisible(true)}
+                        onPress={() => {
+                          setBarcodeScanTarget('search');
+                          setIsScanModalVisible(true);
+                        }}
                         activeOpacity={0.8}
                       >
                         <ScanBarcode size={22} color={COLORS.primary} />
@@ -1542,13 +1550,25 @@ export const NutritionScreen: React.FC = () => {
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Barcode (Optional)</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    placeholder="e.g. 0123456789012"
-                    keyboardType="numeric"
-                    value={customBarcode}
-                    onChangeText={setCustomBarcode}
-                  />
+                  <View style={styles.barcodeInputContainer}>
+                    <TextInput
+                      style={[styles.modalTextInput, { flex: 1 }]}
+                      placeholder="e.g. 0123456789012"
+                      keyboardType="numeric"
+                      value={customBarcode}
+                      onChangeText={setCustomBarcode}
+                    />
+                    <TouchableOpacity
+                      style={styles.inlineScanButton}
+                      onPress={() => {
+                        setBarcodeScanTarget('custom');
+                        setIsScanModalVisible(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <ScanBarcode size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={styles.qtyInputRow}>
@@ -2952,6 +2972,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+  },
+  barcodeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inlineScanButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
   },
   // AI Scan Styles
   aiScanContainer: {
