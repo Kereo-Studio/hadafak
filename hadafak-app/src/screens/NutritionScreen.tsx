@@ -262,6 +262,7 @@ export const NutritionScreen: React.FC = () => {
     servingUnit: string;
   } | null>(null);
   const [aiQuantity, setAiQuantity] = useState('1');
+  const [frequentFoods, setFrequentFoods] = useState<FoodItem[]>([]);
 
   // Quick Seed Common Foods for Offline/Instant fallback search
   const QUICK_FALLBACK_FOODS: FoodItem[] = [
@@ -280,6 +281,15 @@ export const NutritionScreen: React.FC = () => {
       if (response.data) {
         setSummary(response.data.summary);
         setLoggedMeals(response.data.meals || []);
+      }
+
+      try {
+        const frequentRes = await api.get('/nutrition/foods/frequent');
+        if (frequentRes.data) {
+          setFrequentFoods(frequentRes.data);
+        }
+      } catch (freqErr) {
+        console.warn('Failed to load frequent foods:', freqErr);
       }
     } catch (e) {
       console.warn('Failed to load real logs, using mock values', e);
@@ -1305,7 +1315,13 @@ export const NutritionScreen: React.FC = () => {
                       <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 24 }} />
                     ) : (
                       <FlatList
-                        data={searchResults.length > 0 ? searchResults : QUICK_FALLBACK_FOODS.slice(0, 5)}
+                        data={
+                          searchResults.length > 0
+                            ? searchResults
+                            : frequentFoods.length > 0
+                            ? frequentFoods
+                            : QUICK_FALLBACK_FOODS.slice(0, 5)
+                        }
                         keyExtractor={(item) => item.id}
                         style={{ marginTop: 14 }}
                         ListHeaderComponent={
