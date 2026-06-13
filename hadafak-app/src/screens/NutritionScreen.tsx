@@ -1367,7 +1367,7 @@ export const NutritionScreen: React.FC = () => {
                       {isAiScanning && (
                         <View style={styles.scannerOverlay}>
                           <ActivityIndicator size="large" color={COLORS.primary} />
-                          <Text style={styles.scanningText}>Gemini AI is scanning...</Text>
+                          <Text style={styles.scanningText}>HADAFAK scanning your food please wait</Text>
                         </View>
                       )}
                     </View>
