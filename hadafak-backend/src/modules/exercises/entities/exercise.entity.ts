@@ -34,7 +34,7 @@ export class Exercise {
   @Column({ unique: true })
   name: string; // unique normalized lowercase key: e.g. "push-up"
 
-  @Column({ name: 'display_name' })
+  @Column({ name: 'display_name', nullable: true })
   displayName: string;
 
   @Column({ type: 'text', nullable: true })
