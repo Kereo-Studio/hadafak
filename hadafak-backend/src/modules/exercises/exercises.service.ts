@@ -225,4 +225,47 @@ export class ExercisesService {
     await this.exerciseRepository.remove(exercise);
     this.clearCache();
   }
+
+  async resolveExerciseId(idOrMock: string): Promise<string> {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrMock);
+    if (isUUID) {
+      return idOrMock;
+    }
+
+    const mockMapping: { [key: string]: string } = {
+      e1: 'Bench Press',
+      e2: 'Incline Dumbbell Press',
+      e3: 'Barbell Squat',
+      e4: 'Romanian Deadlift',
+      e5: 'Pull-up',
+      e6: 'Overhead Press',
+      e7: 'Bicep Curl',
+      e8: 'Tricep Pushdown',
+    };
+
+    const targetName = mockMapping[idOrMock] || idOrMock;
+    const normName = normalizeExerciseName(targetName);
+
+    let exercise = await this.exerciseRepository.findOne({
+      where: [{ name: normName }, { displayName: targetName }],
+    });
+
+    if (!exercise) {
+      const muscleGroup = await this.findOrCreateMuscleGroup('Other');
+      const equipment = await this.findOrCreateEquipment('Other');
+      exercise = this.exerciseRepository.create({
+        name: normName,
+        displayName: targetName,
+        muscleGroup,
+        equipment,
+        difficulty: ExerciseDifficulty.BEGINNER,
+        instructions: [],
+        source: ExerciseSource.INTERNAL,
+      });
+      exercise = await this.exerciseRepository.save(exercise);
+      this.clearCache();
+    }
+
+    return exercise.id;
+  }
 }

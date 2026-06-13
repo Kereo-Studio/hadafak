@@ -9,6 +9,7 @@ import { LogWorkoutDto } from './dto/log-workout.dto';
 import { CreateWorkoutPlanDto } from './dto/create-workout-plan.dto';
 import { UpdateWorkoutPlanDto } from './dto/update-workout-plan.dto';
 import { AddExerciseToPlanDto } from './dto/add-exercise-to-plan.dto';
+import { ExercisesService } from '../exercises/exercises.service';
 
 @Injectable()
 export class WorkoutsService {
@@ -21,6 +22,7 @@ export class WorkoutsService {
     private readonly workoutPlanRepository: Repository<WorkoutPlan>,
     @InjectRepository(WorkoutExercise)
     private readonly workoutExerciseRepository: Repository<WorkoutExercise>,
+    private readonly exercisesService: ExercisesService,
   ) {}
 
   // ==========================================
@@ -104,7 +106,8 @@ export class WorkoutsService {
     await this.exerciseLogRepository.delete({ workoutSessionId: session.id });
 
     if (dto.logs && dto.logs.length > 0) {
-      const logs = dto.logs.map((logDto) => {
+      const logs = await Promise.all(dto.logs.map(async (logDto) => {
+        const resolvedExerciseId = await this.exercisesService.resolveExerciseId(logDto.exerciseId);
         let bestRep = 0;
         let bestWeight = 0;
         let highestVolume = 0;
@@ -143,14 +146,14 @@ export class WorkoutsService {
 
         return this.exerciseLogRepository.create({
           workoutSessionId: session.id,
-          exerciseId: logDto.exerciseId,
+          exerciseId: resolvedExerciseId,
           sets,
           reps: bestRep,
           weight: bestWeight,
           oneRepMax: Math.round(maxOneRepMax * 100) / 100,
           rpe: maxRpe > 0 ? maxRpe : null,
         });
-      });
+      }));
       await this.exerciseLogRepository.save(logs);
     }
 
@@ -249,9 +252,10 @@ export class WorkoutsService {
   }
 
   async getExerciseProgression(userId: string, exerciseId: string) {
+    const resolvedExerciseId = await this.exercisesService.resolveExerciseId(exerciseId);
     const logs = await this.exerciseLogRepository.find({
       where: {
-        exerciseId,
+        exerciseId: resolvedExerciseId,
         workoutSession: { userId, completed: true },
       },
       relations: {
@@ -309,17 +313,18 @@ export class WorkoutsService {
     const savedPlan = await this.workoutPlanRepository.save(plan);
 
     if (dto.exercises && dto.exercises.length > 0) {
-      const workoutExercises = dto.exercises.map((ex, index) => {
+      const workoutExercises = await Promise.all(dto.exercises.map(async (ex, index) => {
+        const resolvedExerciseId = await this.exercisesService.resolveExerciseId(ex.exerciseId);
         return this.workoutExerciseRepository.create({
           workoutPlanId: savedPlan.id,
-          exerciseId: ex.exerciseId,
+          exerciseId: resolvedExerciseId,
           sets: ex.sets,
           reps: ex.reps,
           weight: ex.weight,
           restTimeSeconds: ex.restTimeSeconds || 90,
           orderIndex: index,
         });
-      });
+      }));
       await this.workoutExerciseRepository.save(workoutExercises);
     }
 
@@ -393,10 +398,11 @@ export class WorkoutsService {
       // Re-create exercise items to update them completely
       await this.workoutExerciseRepository.delete({ workoutPlanId: plan.id });
 
-      const workoutExercises = dto.exercises.map((ex, index) => {
+      const workoutExercises = await Promise.all(dto.exercises.map(async (ex, index) => {
+        const resolvedExerciseId = await this.exercisesService.resolveExerciseId(ex.exerciseId);
         return this.workoutExerciseRepository.create({
           workoutPlanId: plan.id,
-          exerciseId: ex.exerciseId,
+          exerciseId: resolvedExerciseId,
           sets: ex.sets,
           reps: ex.reps,
           weight: ex.weight,
@@ -404,7 +410,7 @@ export class WorkoutsService {
           orderIndex: index,
           dayNumber: ex.dayNumber || 1,
         });
-      });
+      }));
       await this.workoutExerciseRepository.save(workoutExercises);
     }
 
@@ -435,9 +441,10 @@ export class WorkoutsService {
 
     const nextOrderIndex = maxOrderEx ? maxOrderEx.orderIndex + 1 : 0;
 
+    const resolvedExerciseId = await this.exercisesService.resolveExerciseId(dto.exerciseId);
     const workoutEx = this.workoutExerciseRepository.create({
       workoutPlanId: planId,
-      exerciseId: dto.exerciseId,
+      exerciseId: resolvedExerciseId,
       sets: dto.sets || 3,
       reps: dto.reps || '8-12',
       weight: dto.weight,

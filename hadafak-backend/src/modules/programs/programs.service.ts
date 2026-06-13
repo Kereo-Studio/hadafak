@@ -6,6 +6,7 @@ import { ProgramDay } from './entities/program-day.entity';
 import { ProgramDayExercise } from './entities/program-day-exercise.entity';
 import { Exercise } from '../exercises/entities/exercise.entity';
 import { ProfilesService } from '../profiles/profiles.service';
+import { ExercisesService } from '../exercises/exercises.service';
 
 @Injectable()
 export class ProgramsService {
@@ -19,6 +20,7 @@ export class ProgramsService {
     @InjectRepository(Exercise)
     private readonly exerciseRepository: Repository<Exercise>,
     private readonly profilesService: ProfilesService,
+    private readonly exercisesService: ExercisesService,
   ) {}
 
   async findAll(): Promise<Program[]> {
@@ -282,9 +284,10 @@ export class ProgramsService {
     if (!day) {
       throw new NotFoundException(`Program day with ID ${dayId} not found`);
     }
-    const exercise = await this.exerciseRepository.findOne({ where: { id: exerciseId } });
+    const resolvedExerciseId = await this.exercisesService.resolveExerciseId(exerciseId);
+    const exercise = await this.exerciseRepository.findOne({ where: { id: resolvedExerciseId } });
     if (!exercise) {
-      throw new NotFoundException(`Exercise with ID ${exerciseId} not found`);
+      throw new NotFoundException(`Exercise with ID ${resolvedExerciseId} not found`);
     }
 
     const existing = await this.programDayExerciseRepository.find({ where: { programDayId: dayId } });
@@ -292,7 +295,7 @@ export class ProgramsService {
 
     const dayEx = this.programDayExerciseRepository.create({
       programDayId: dayId,
-      exerciseId,
+      exerciseId: resolvedExerciseId,
       order,
       targetSets,
       targetRepsRange,
