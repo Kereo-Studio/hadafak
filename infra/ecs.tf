@@ -112,7 +112,8 @@ resource "aws_ecs_task_definition" "app" {
         { name = "AWS_S3_REGION", value = var.aws_region },
         { name = "FATSECRET_CLIENT_ID", value = var.fatsecret_client_id },
         { name = "FATSECRET_CLIENT_SECRET", value = var.fatsecret_client_secret },
-        { name = "GEMINI_API_KEY", value = var.gemini_api_key }
+        { name = "GEMINI_API_KEY", value = var.gemini_api_key },
+        { name = "EXERCISEDB_API_KEY", value = var.exercisedb_api_key }
       ]
       logConfiguration = {
         logDriver = "awslogs"

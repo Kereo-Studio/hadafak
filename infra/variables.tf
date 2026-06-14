@@ -67,4 +67,11 @@ variable "gemini_api_key" {
   default     = ""
 }
 
+variable "exercisedb_api_key" {
+  type        = string
+  description = "ExerciseDB API Key"
+  sensitive   = true
+  default     = ""
+}
+
 
