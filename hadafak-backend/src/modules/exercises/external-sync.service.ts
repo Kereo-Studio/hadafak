@@ -41,21 +41,36 @@ export class ExternalSyncService {
       this.logger.warn(`ExerciseDB API fetch failed: ${err.message}.`);
     }
 
-    // 2. Fetch Wger
+    // 2. Fetch Wger (Paginated to retrieve all exercises, as Wger does not support search query parameters)
     try {
-      const wgerUrl = process.env.WGER_API_URL || 'https://wger.de/api/v2/exerciseinfo/?language=2&limit=50';
-      this.logger.log('Fetching live exercises from Wger...');
+      this.logger.log('Fetching all live exercises from Wger...');
+      const limit = 1000;
+      let offset = 0;
+      let hasMore = true;
       const headers: Record<string, string> = {};
       if (process.env.WGER_API_KEY) {
         headers['Authorization'] = `Token ${process.env.WGER_API_KEY}`;
       }
-      const res = await fetch(wgerUrl, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        wgerRaw = data.results || [];
-      } else {
-        this.logger.warn(`Wger API responded with status ${res.status}`);
+
+      while (hasMore) {
+        const wgerUrl = `https://wger.de/api/v2/exerciseinfo/?limit=${limit}&offset=${offset}`;
+        this.logger.log(`Fetching Wger exercises (limit=${limit}, offset=${offset})...`);
+        const res = await fetch(wgerUrl, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          const results = data.results || [];
+          wgerRaw.push(...results);
+          if (results.length < limit || wgerRaw.length >= (data.count || 0)) {
+            hasMore = false;
+          } else {
+            offset += limit;
+          }
+        } else {
+          this.logger.warn(`Wger API responded with status ${res.status}`);
+          hasMore = false;
+        }
       }
+      this.logger.log(`Fetched ${wgerRaw.length} total exercises from Wger.`);
     } catch (err) {
       this.logger.warn(`Wger API fetch failed: ${err.message}.`);
     }
@@ -84,12 +99,12 @@ export class ExternalSyncService {
       }
 
       try {
-        await this.exerciseRepository.upsert(mapped, { conflictPaths: ['externalId'], skipUpdateIfNoValuesChanged: true });
+        await this.exerciseRepository.save(mapped);
         allDbExercises.push(mapped);
         existingExternalIds.add(mapped.externalId);
         syncedCount++;
       } catch (e) {
-        this.logger.warn(`Failed to upsert exercise "${mapped.displayName}": ${e.message}`);
+        this.logger.warn(`Failed to save exercise "${mapped.displayName}": ${e.message}`);
         skippedCount++;
       }
     }
@@ -111,12 +126,12 @@ export class ExternalSyncService {
       }
 
       try {
-        await this.exerciseRepository.upsert(mapped, { conflictPaths: ['externalId'], skipUpdateIfNoValuesChanged: true });
+        await this.exerciseRepository.save(mapped);
         allDbExercises.push(mapped);
         existingExternalIds.add(mapped.externalId);
         syncedCount++;
       } catch (e) {
-        this.logger.warn(`Failed to upsert exercise "${mapped.displayName}": ${e.message}`);
+        this.logger.warn(`Failed to save exercise "${mapped.displayName}": ${e.message}`);
         skippedCount++;
       }
     }
@@ -289,23 +304,6 @@ export class ExternalSyncService {
       this.logger.warn(`Dynamic ExerciseDB sync failed for "${q}": ${err.message}`);
     }
 
-    // 2. Fetch from Wger
-    let wgerRaw: any[] = [];
-    try {
-      const wgerUrl = `https://wger.de/api/v2/exerciseinfo/?language=2&search=${encodeURIComponent(q)}&limit=20`;
-      const headers: Record<string, string> = {};
-      if (process.env.WGER_API_KEY) {
-        headers['Authorization'] = `Token ${process.env.WGER_API_KEY}`;
-      }
-      const res = await fetch(wgerUrl, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        wgerRaw = data.results || [];
-      }
-    } catch (err) {
-      this.logger.warn(`Dynamic Wger sync failed for "${q}": ${err.message}`);
-    }
-
     // Process ExerciseDB
     for (const raw of exerciseDbRaw) {
       const mapped = await this.mapExerciseDb(raw);
@@ -317,32 +315,12 @@ export class ExternalSyncService {
       if (isDuplicate) continue;
 
       try {
-        await this.exerciseRepository.upsert(mapped, { conflictPaths: ['externalId'], skipUpdateIfNoValuesChanged: true });
+        await this.exerciseRepository.save(mapped);
         allDbExercises.push(mapped);
         existingExternalIds.add(mapped.externalId);
         syncedCount++;
       } catch (e) {
-        this.logger.warn(`Failed to upsert exercise "${mapped.displayName}": ${e.message}`);
-      }
-    }
-
-    // Process Wger
-    for (const raw of wgerRaw) {
-      const mapped = await this.mapWger(raw);
-      if (!mapped) continue;
-
-      if (existingExternalIds.has(mapped.externalId)) continue;
-
-      const isDuplicate = this.checkSimilarityDuplicate(mapped, allDbExercises);
-      if (isDuplicate) continue;
-
-      try {
-        await this.exerciseRepository.upsert(mapped, { conflictPaths: ['externalId'], skipUpdateIfNoValuesChanged: true });
-        allDbExercises.push(mapped);
-        existingExternalIds.add(mapped.externalId);
-        syncedCount++;
-      } catch (e) {
-        this.logger.warn(`Failed to upsert exercise "${mapped.displayName}": ${e.message}`);
+        this.logger.warn(`Failed to save exercise "${mapped.displayName}": ${e.message}`);
       }
     }
 
