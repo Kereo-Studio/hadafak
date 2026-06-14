@@ -36,6 +36,7 @@ import {
   Camera,
   Trash2,
   Image as ImageIcon,
+  Ruler,
 } from 'lucide-react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText, G } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
@@ -183,6 +184,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const [logNeck, setLogNeck] = useState('');
   const [logHips, setLogHips] = useState('');
   const [isSavingMetrics, setIsSavingMetrics] = useState(false);
+  const [activeBiometricsSection, setActiveBiometricsSection] = useState<'composition' | 'circumference' | null>('composition');
 
   // Photo uploading states
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -1119,151 +1121,193 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             {/* Inputs Scroll container */}
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
               
-              <Text style={styles.metricsSectionHeading}>Body Composition</Text>
-              
-              <View style={styles.gridInputRow}>
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Weight (kg) *</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 75.5"
-                    value={logWeight}
-                    onChangeText={setLogWeight}
-                  />
+              {/* Section 1: Body Composition */}
+              <TouchableOpacity
+                style={styles.accordionHeader}
+                onPress={() => setActiveBiometricsSection(activeBiometricsSection === 'composition' ? null : 'composition')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.accordionHeaderLeft}>
+                  <Scale size={18} color={activeBiometricsSection === 'composition' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
+                  <Text style={[styles.accordionHeaderText, activeBiometricsSection === 'composition' && styles.accordionHeaderTextActive]}>
+                    Body Composition
+                  </Text>
                 </View>
+                {activeBiometricsSection === 'composition' ? (
+                  <ChevronDown size={18} color={COLORS.primary} />
+                ) : (
+                  <ChevronRight size={18} color={COLORS.textLight} />
+                )}
+              </TouchableOpacity>
 
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Body Fat %</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 15.2"
-                    value={logBodyFat}
-                    onChangeText={setLogBodyFat}
-                  />
+              {activeBiometricsSection === 'composition' && (
+                <View style={styles.accordionContent}>
+                  <View style={styles.gridInputRow}>
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Weight (kg) *</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 75.5"
+                        value={logWeight}
+                        onChangeText={setLogWeight}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Body Fat %</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 15.2"
+                        value={logBodyFat}
+                        onChangeText={setLogBodyFat}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Skeletal Muscle Mass (kg)</Text>
+                    <TextInput
+                      style={styles.modalTextInput}
+                      keyboardType="decimal-pad"
+                      placeholder="e.g. 35.8"
+                      value={logSkeletalMuscle}
+                      onChangeText={setLogSkeletalMuscle}
+                    />
+                  </View>
                 </View>
-              </View>
+              )}
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Skeletal Muscle Mass (kg)</Text>
-                <TextInput
-                  style={styles.modalTextInput}
-                  keyboardType="decimal-pad"
-                  placeholder="e.g. 35.8"
-                  value={logSkeletalMuscle}
-                  onChangeText={setLogSkeletalMuscle}
-                />
-              </View>
-
-              <Text style={[styles.metricsSectionHeading, { marginTop: 14 }]}>Circumference Measurements (cm)</Text>
-
-              <View style={styles.gridInputRow}>
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Waist</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 80.5"
-                    value={logWaist}
-                    onChangeText={setLogWaist}
-                  />
+              {/* Section 2: Circumference Measurements */}
+              <TouchableOpacity
+                style={styles.accordionHeader}
+                onPress={() => setActiveBiometricsSection(activeBiometricsSection === 'circumference' ? null : 'circumference')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.accordionHeaderLeft}>
+                  <Ruler size={18} color={activeBiometricsSection === 'circumference' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
+                  <Text style={[styles.accordionHeaderText, activeBiometricsSection === 'circumference' && styles.accordionHeaderTextActive]}>
+                    Circumference Measurements
+                  </Text>
                 </View>
+                {activeBiometricsSection === 'circumference' ? (
+                  <ChevronDown size={18} color={COLORS.primary} />
+                ) : (
+                  <ChevronRight size={18} color={COLORS.textLight} />
+                )}
+              </TouchableOpacity>
 
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Hips</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 92.4"
-                    value={logHips}
-                    onChangeText={setLogHips}
-                  />
+              {activeBiometricsSection === 'circumference' && (
+                <View style={styles.accordionContent}>
+                  <View style={styles.gridInputRow}>
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Waist</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 80.5"
+                        value={logWaist}
+                        onChangeText={setLogWaist}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Hips</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 92.4"
+                        value={logHips}
+                        onChangeText={setLogHips}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.gridInputRow}>
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Chest</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 100.2"
+                        value={logChest}
+                        onChangeText={setLogChest}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Shoulders</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 118.0"
+                        value={logShoulders}
+                        onChangeText={setLogShoulders}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.gridInputRow}>
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Left Bicep</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 36.5"
+                        value={logLeftBicep}
+                        onChangeText={setLogLeftBicep}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Right Bicep</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 36.8"
+                        value={logRightBicep}
+                        onChangeText={setLogRightBicep}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.gridInputRow}>
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Left Thigh</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 56.4"
+                        value={logLeftThigh}
+                        onChangeText={setLogLeftThigh}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Right Thigh</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        placeholder="e.g. 56.8"
+                        value={logRightThigh}
+                        onChangeText={setLogRightThigh}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Neck</Text>
+                    <TextInput
+                      style={styles.modalTextInput}
+                      keyboardType="decimal-pad"
+                      placeholder="e.g. 38.0"
+                      value={logNeck}
+                      onChangeText={setLogNeck}
+                    />
+                  </View>
                 </View>
-              </View>
-
-              <View style={styles.gridInputRow}>
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Chest</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 100.2"
-                    value={logChest}
-                    onChangeText={setLogChest}
-                  />
-                </View>
-
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Shoulders</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 118.0"
-                    value={logShoulders}
-                    onChangeText={setLogShoulders}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.gridInputRow}>
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Left Bicep</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 36.5"
-                    value={logLeftBicep}
-                    onChangeText={setLogLeftBicep}
-                  />
-                </View>
-
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Right Bicep</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 36.8"
-                    value={logRightBicep}
-                    onChangeText={setLogRightBicep}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.gridInputRow}>
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Left Thigh</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 56.4"
-                    value={logLeftThigh}
-                    onChangeText={setLogLeftThigh}
-                  />
-                </View>
-
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Right Thigh</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    placeholder="e.g. 56.8"
-                    value={logRightThigh}
-                    onChangeText={setLogRightThigh}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Neck</Text>
-                <TextInput
-                  style={styles.modalTextInput}
-                  keyboardType="decimal-pad"
-                  placeholder="e.g. 38.0"
-                  value={logNeck}
-                  onChangeText={setLogNeck}
-                />
-              </View>
+              )}
 
               <TouchableOpacity
                 onPress={handleSaveMetrics}
