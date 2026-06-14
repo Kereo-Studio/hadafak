@@ -1051,7 +1051,9 @@ export const WorkoutsScreen: React.FC = () => {
               
               return {
                 exerciseId: we.exerciseId,
-                name: we.exercise?.name || 'Exercise',
+                name: we.exercise?.displayName || we.exercise?.name || 'Exercise',
+                source: we.exercise?.source,
+                gifUrl: we.exercise?.gifUrl,
                 sets,
               };
             });
@@ -1108,7 +1110,9 @@ export const WorkoutsScreen: React.FC = () => {
                     
                     return {
                       exerciseId: pde.exerciseId,
-                      name: pde.exercise?.name || 'Exercise',
+                      name: pde.exercise?.displayName || pde.exercise?.name || 'Exercise',
+                      source: pde.exercise?.source,
+                      gifUrl: pde.exercise?.gifUrl,
                       sets,
                     };
                   });
