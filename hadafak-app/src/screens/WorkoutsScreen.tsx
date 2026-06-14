@@ -2402,91 +2402,77 @@ export const WorkoutsScreen: React.FC = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.finishModalContent}>
-            <Award size={38} color={COLORS.primary} style={{ marginBottom: 12 }} />
-            <Text style={styles.finishModalTitle}>Workout Completed!</Text>
-            <Text style={styles.finishModalDesc}>Rate your Rating of Perceived Exertion (RPE) from 1 to 10:</Text>
+            <Award size={40} color={COLORS.primary} style={{ marginBottom: 12, opacity: 0.9 }} />
+            <Text style={styles.finishModalTitle}>How was your workout?</Text>
             
-            {/* Custom Interactive RPE Slider */}
-            <View style={styles.customRpeSliderContainer}>
-              {/* Dynamic feedback badge */}
-              <View style={[styles.rpeStatusBadge, { backgroundColor: getRpeColor(parseInt(rpe)) + '20' }]}>
-                <Text style={[styles.rpeStatusText, { color: getRpeColor(parseInt(rpe)) }]}>
-                  RPE {rpe} • {getRpeStatusText(parseInt(rpe))}
-                </Text>
-              </View>
-              
-              <Text style={styles.rpeAdaptationSub}>
-                {getRpeAdaptationText(parseInt(rpe))}
-              </Text>
+            <Text style={styles.finishModalSubText}>
+              This will automatically adapt your program plan
+            </Text>
 
-              <View style={styles.sliderTrackWrapper}>
-                {/* Background Line */}
-                <View style={styles.sliderLineBg} />
-                {/* Colored Progress Line */}
+            {/* Selected Rating Indicator */}
+            <View style={styles.selectedRatingContainer}>
+              <Text style={[styles.selectedRatingNumber, { color: COLORS.primary }]}>
+                {rpe}
+              </Text>
+              <Text style={styles.selectedRatingLabel}>
+                {getRpeStatusText(parseInt(rpe))}
+              </Text>
+            </View>
+
+            {/* Custom Premium Slider Track */}
+            <View style={styles.sliderContainer}>
+              {/* The pill track bar */}
+              <View style={styles.sliderTrackLine}>
+                {/* Colored fill */}
                 <View 
                   style={[
-                    styles.sliderLineFill, 
+                    styles.sliderTrackFill, 
                     { 
                       width: `${((parseInt(rpe) - 1) / 9) * 100}%`,
-                      backgroundColor: getRpeColor(parseInt(rpe)) 
+                      backgroundColor: COLORS.primary 
                     }
                   ]} 
                 />
+              </View>
 
-                {/* Nodes (1 to 10) */}
-                <View style={styles.sliderNodesContainer}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-                    const isSelected = rpe === num.toString();
-                    const isPassed = parseInt(rpe) >= num;
+              {/* Steps/Ticks & Floating Thumb */}
+              <View style={styles.sliderNodesRow}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                  const isSelected = rpe === num.toString();
+                  const isPassed = parseInt(rpe) >= num;
 
-                    return (
-                      <TouchableOpacity
-                        key={num}
-                        style={styles.sliderNodeTouchTarget}
-                        onPress={() => setRpe(num.toString())}
-                        activeOpacity={0.8}
-                      >
+                  return (
+                    <TouchableOpacity
+                      key={num}
+                      style={styles.sliderNodeCell}
+                      onPress={() => setRpe(num.toString())}
+                      activeOpacity={0.8}
+                    >
+                      {isSelected ? (
+                        <View style={[styles.sliderThumbFloating, { borderColor: COLORS.primary }]}>
+                          <View style={[styles.sliderThumbInnerDot, { backgroundColor: COLORS.primary }]} />
+                        </View>
+                      ) : (
                         <View 
                           style={[
-                            styles.sliderNodeDot,
-                            isPassed && { backgroundColor: getRpeColor(parseInt(rpe)) },
-                            isSelected && {
-                              borderColor: getRpeColor(parseInt(rpe)),
-                              borderWidth: 3.5,
-                              backgroundColor: '#FFFFFF',
-                              transform: [{ scale: 1.35 }],
-                              shadowColor: getRpeColor(parseInt(rpe)),
-                              shadowOffset: { width: 0, height: 3 },
-                              shadowOpacity: 0.35,
-                              shadowRadius: 5,
-                              elevation: 5,
-                            }
+                            styles.sliderNodeIndicator,
+                            isPassed 
+                              ? { backgroundColor: COLORS.primary }
+                              : { backgroundColor: '#E2E8F0' }
                           ]}
                         />
-                        <Text 
-                          style={[
-                            styles.sliderNodeText,
-                            isSelected && {
-                              color: getRpeColor(parseInt(rpe)),
-                              fontWeight: '900',
-                              transform: [{ scale: 1.15 }]
-                            }
-                          ]}
-                        >
-                          {num}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
+            </View>
 
-              {/* Slider Labels (EZ on left, HARD on right) */}
-              <View style={styles.sliderLabelsRow}>
-                <Text style={[styles.sliderLabelText, parseInt(rpe) <= 3 && { color: '#34C759', fontWeight: '800' }]}>Easy</Text>
-                <Text style={[styles.sliderLabelText, (parseInt(rpe) >= 4 && parseInt(rpe) <= 6) && { color: '#FF9500', fontWeight: '800' }]}>Moderate</Text>
-                <Text style={[styles.sliderLabelText, parseInt(rpe) >= 7 && { color: '#FF3B30', fontWeight: '800' }]}>Hard</Text>
-              </View>
+            {/* Slider Boundary Labels */}
+            <View style={styles.sliderBoundaryRow}>
+              <Text style={[styles.sliderBoundaryText, parseInt(rpe) <= 3 && { color: '#34C759', fontWeight: '800' }]}>Easy</Text>
+              <Text style={[styles.sliderBoundaryText, (parseInt(rpe) >= 4 && parseInt(rpe) <= 6) && { color: '#FF9500', fontWeight: '800' }]}>Moderate</Text>
+              <Text style={[styles.sliderBoundaryText, parseInt(rpe) >= 7 && { color: '#FF3B30', fontWeight: '800' }]}>Hard</Text>
             </View>
 
             <View style={styles.finishActionsRow}>
@@ -3924,86 +3910,100 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 16,
   },
-  customRpeSliderContainer: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 28,
-    paddingHorizontal: 4,
-  },
-  rpeStatusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 6,
-  },
-  rpeStatusText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  rpeAdaptationSub: {
-    fontSize: 11,
-    color: '#8E8E93',
-    fontWeight: '600',
+  finishModalSubText: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    opacity: 0.6,
     textAlign: 'center',
+    lineHeight: 16,
+    marginTop: 4,
+    marginBottom: 24,
+  },
+  selectedRatingContainer: {
+    alignItems: 'center',
     marginBottom: 20,
   },
-  sliderTrackWrapper: {
+  selectedRatingNumber: {
+    fontSize: 48,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  selectedRatingLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.textLight,
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sliderContainer: {
     width: '100%',
-    height: 48,
+    height: 40,
     justifyContent: 'center',
     position: 'relative',
-    marginVertical: 4,
+    marginVertical: 12,
   },
-  sliderLineBg: {
-    position: 'absolute',
-    left: 10,
-    right: 10,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#E5E5EA',
+  sliderTrackLine: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    width: '100%',
+    overflow: 'hidden',
   },
-  sliderLineFill: {
-    position: 'absolute',
-    left: 10,
-    height: 6,
-    borderRadius: 3,
+  sliderTrackFill: {
+    height: '100%',
   },
-  sliderNodesContainer: {
+  sliderNodesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
     position: 'absolute',
-    paddingHorizontal: 4,
-  },
-  sliderNodeTouchTarget: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  sliderNodeCell: {
     width: 24,
-    height: 48,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  sliderNodeDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#C7C7CC',
+  sliderNodeIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  sliderNodeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#8E8E93',
-    marginTop: 6,
+  sliderThumbFloating: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  sliderLabelsRow: {
+  sliderThumbInnerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  sliderBoundaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    paddingHorizontal: 10,
-    marginTop: 8,
+    paddingHorizontal: 8,
+    marginBottom: 32,
   },
-  sliderLabelText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#8E8E93',
+  sliderBoundaryText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
   },
   finishActionsRow: {
     flexDirection: 'row',
