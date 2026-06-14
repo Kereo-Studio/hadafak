@@ -44,7 +44,7 @@ import {
   Utensils,
   BookOpen,
 } from 'lucide-react-native';
-import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
 
 const { width } = Dimensions.get('window');
@@ -62,16 +62,65 @@ const CARDIO_EXERCISES = [
   { id: 'hiit', name: 'HIIT Cardio', icon: Heart, type: 'run', category: 'run' },
 ];
 
+const MiniProgressCircle: React.FC<{
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+  color: string;
+  backgroundColor?: string;
+  children: React.ReactNode;
+}> = ({
+  percentage,
+  size = 46,
+  strokeWidth = 4.5,
+  color,
+  backgroundColor = '#F1F5F9',
+  children
+}) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const strokeDashoffset = circumference - (Math.min(Math.max(percentage, 0), 1) * circumference);
+
+  return (
+    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+      <View style={{ position: 'absolute', zIndex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        {children}
+      </View>
+      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={backgroundColor}
+          strokeWidth={strokeWidth}
+          fill="transparent"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="transparent"
+        />
+      </Svg>
+    </View>
+  );
+};
+
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const [selectedActivity, setSelectedActivity] = useState<string>('cycling');
   const [isCalendarVisible, setIsCalendarVisible] = useState(false);
-  
+
   // Real Calendar Date Selection States
   const [calDate, setCalDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
-  
+
   // Dynamic metrics pulled from backend
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,7 +133,7 @@ export const HomeScreen: React.FC = () => {
     const cleanHost = API_BASE_URL.replace('/api/v1', '');
     return `${cleanHost}${url}`;
   };
-  
+
   // Steps weekly chart data state
   const [chartData, setChartData] = useState<any[]>([]);
   const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
@@ -100,7 +149,7 @@ export const HomeScreen: React.FC = () => {
     steps: '0',
     points: '0',
   });
-  
+
   // Today's details grid indicators
   const [todayCalories, setTodayCalories] = useState('0');
   const [todaySteps, setTodaySteps] = useState('0');
@@ -112,7 +161,7 @@ export const HomeScreen: React.FC = () => {
     daysCount: 'Workout 1 of 5',
     nextExercise: 'Lower Strength'
   });
-  
+
   // Workouts history logs
   const [recentWorkouts, setRecentWorkouts] = useState<any[]>([]);
 
@@ -281,7 +330,7 @@ export const HomeScreen: React.FC = () => {
           currentSteps = finalSteps;
           setTodaySteps(finalSteps.toLocaleString());
           saveLocalTodaySteps(finalSteps);
-          
+
           currentDistance = `${Math.round(finalSteps * strideLengthKm * 1000)} m`;
           stepsBurned = Math.round(finalSteps * caloriesPerStep);
         }
@@ -290,7 +339,7 @@ export const HomeScreen: React.FC = () => {
         currentSteps = localStepsForToday;
         setTodaySteps(localStepsForToday.toLocaleString());
         saveLocalTodaySteps(localStepsForToday);
-        
+
         currentDistance = `${Math.round(localStepsForToday * strideLengthKm * 1000)} m`;
         stepsBurned = Math.round(localStepsForToday * caloriesPerStep);
       }
@@ -319,7 +368,7 @@ export const HomeScreen: React.FC = () => {
         allRecipes = recipesRes.value.data;
       }
       const mealInfo = getSuggestedMealInfo();
-      let filtered = allRecipes.filter(r => 
+      let filtered = allRecipes.filter(r =>
         r.tags?.some((t: string) => t.toLowerCase() === mealInfo.tag.toLowerCase()) ||
         r.title?.toLowerCase().includes(mealInfo.tag.toLowerCase()) ||
         r.description?.toLowerCase().includes(mealInfo.tag.toLowerCase())
@@ -392,13 +441,13 @@ export const HomeScreen: React.FC = () => {
         const baseDate = new Date(todayStr + 'T12:00:00');
         const dayOfWeek = baseDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
         const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-        
+
         const monday = new Date(baseDate);
         monday.setDate(baseDate.getDate() + distanceToMonday);
-        
+
         const sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
-        
+
         return {
           start: monday.toISOString().split('T')[0],
           end: sunday.toISOString().split('T')[0]
@@ -407,7 +456,7 @@ export const HomeScreen: React.FC = () => {
 
       const { start, end } = getWeekRangeStr();
       const weeklyRes = await api.get(`/steps/history?startDate=${start}&endDate=${end}`);
-      
+
       const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       const targetDay = new Date(todayStr + 'T12:00:00');
       const selectedDayIdx = targetDay.getDay() === 0 ? 6 : targetDay.getDay() - 1;
@@ -421,7 +470,7 @@ export const HomeScreen: React.FC = () => {
           dateStr,
           steps: 0,
           calories: 0,
-          value: 0, 
+          value: 0,
           color: idx === selectedDayIdx ? 'primary' : 'muted',
         };
       });
@@ -442,7 +491,7 @@ export const HomeScreen: React.FC = () => {
         const logDate = item.dateStr;
         // 1. Steps calories (0.045 kcal per step)
         const stepsBurnedVal = item.steps * 0.045;
-        
+
         // 2. Runs calories
         let runsBurnedVal = 0;
         if (runsRes.status === 'fulfilled' && Array.isArray(runsRes.value.data)) {
@@ -450,7 +499,7 @@ export const HomeScreen: React.FC = () => {
             .filter((run: any) => run.startTime && run.startTime.startsWith(logDate))
             .reduce((sum: number, run: any) => sum + (run.caloriesBurned || 0), 0);
         }
-        
+
         // 3. Workouts calories
         let workoutsBurnedVal = 0;
         if (workoutsRes.status === 'fulfilled' && Array.isArray(workoutsRes.value.data)) {
@@ -461,7 +510,7 @@ export const HomeScreen: React.FC = () => {
 
         const totalBurnedVal = Math.round(stepsBurnedVal + runsBurnedVal + workoutsBurnedVal);
         item.calories = totalBurnedVal;
-        
+
         if (totalBurnedVal > 0) {
           // Use 500 Kcal as the active calorie burn target representing 100% height
           item.value = Math.min(100, Math.round((totalBurnedVal / 500) * 100));
@@ -563,7 +612,7 @@ export const HomeScreen: React.FC = () => {
       const performSyncAndFetch = async () => {
         // Sync native steps to backend first
         await pedometerService.syncSteps(api);
-        
+
         if (active) {
           // Fetch the updated dashboard data
           const stepsNum = await fetchDashboardData();
@@ -609,11 +658,11 @@ export const HomeScreen: React.FC = () => {
       if (exercise.category === 'run') {
         // Log a session via /runs
         // distance: approx 15 km/h for cycling, 8 km/h for other running, 5 km/h walking/hiking/etc.
-        let speed = 8.0; 
+        let speed = 8.0;
         if (exercise.id === 'cycling') speed = 15.0;
         else if (exercise.id === 'walking') speed = 5.0;
         else if (exercise.id === 'hiking') speed = 4.5;
-        
+
         await api.post('/runs', {
           activityType: exercise.type, // run, walk, cycling, hiking
           title: `Quick Log ${exercise.name}`,
@@ -630,7 +679,7 @@ export const HomeScreen: React.FC = () => {
           steps: Math.round(durationMinutes * 130),
         });
       }
-      
+
       // Refresh dynamic metrics on home screen after logging activity
       await fetchDashboardData();
     } catch (err) {
@@ -684,7 +733,7 @@ export const HomeScreen: React.FC = () => {
                 <Text style={styles.dateText}>{getFormattedDate()}</Text>
               </View>
             </View>
-            
+
             <TouchableOpacity
               style={styles.calendarButton}
               onPress={() => setIsCalendarVisible(true)}
@@ -697,21 +746,46 @@ export const HomeScreen: React.FC = () => {
           {/* Simplified Calories Section: Food and Burned */}
           <View style={styles.caloriesSection}>
             <View style={styles.simplifiedCalRow}>
-              <View style={styles.simplifiedCalCardFood}>
-                <Flame size={22} color="#E65100" style={{ marginBottom: 6 }} />
-                <Text style={styles.simplifiedCalValueFood}>
-                  {eatenCalories.toLocaleString()}{' '}
-                  <Text style={styles.kcalUnit}>kcal</Text>
-                </Text>
-                <Text style={styles.simplifiedCalLabelFood}>Food Calories</Text>
+              <View style={styles.progressRingCard}>
+                <MiniProgressCircle
+                  percentage={eatenCalories / Math.max(1, targetCalories)}
+                  color="#E65100"
+                  backgroundColor="#FFE6DB"
+                  size={46}
+                  strokeWidth={4.5}
+                >
+                  <Flame size={18} color="#E65100" />
+                </MiniProgressCircle>
+                <View style={styles.progressRingCardTextContainer}>
+                  <Text style={styles.progressRingValue}>
+                    {eatenCalories.toLocaleString()}
+                  </Text>
+                  <Text style={styles.progressRingTarget}>
+                    / {targetCalories} kcal
+                  </Text>
+                  <Text style={styles.progressRingLabel}>Food Eaten</Text>
+                </View>
               </View>
-              <View style={styles.simplifiedCalCardBurned}>
-                <Zap size={22} color="#A21CAF" style={{ marginBottom: 6 }} />
-                <Text style={styles.simplifiedCalValueBurned}>
-                  {burnedCalories.toLocaleString()}{' '}
-                  <Text style={styles.kcalUnit}>kcal</Text>
-                </Text>
-                <Text style={styles.simplifiedCalLabelBurned}>Burned Calories</Text>
+
+              <View style={styles.progressRingCard}>
+                <MiniProgressCircle
+                  percentage={burnedCalories / 500}
+                  color="#A21CAF"
+                  backgroundColor="#F3E8FF"
+                  size={46}
+                  strokeWidth={4.5}
+                >
+                  <Zap size={16} color="#A21CAF" />
+                </MiniProgressCircle>
+                <View style={styles.progressRingCardTextContainer}>
+                  <Text style={styles.progressRingValue}>
+                    {burnedCalories.toLocaleString()}
+                  </Text>
+                  <Text style={styles.progressRingTarget}>
+                    / 500 kcal
+                  </Text>
+                  <Text style={styles.progressRingLabel}>Burned</Text>
+                </View>
               </View>
             </View>
           </View>
@@ -840,7 +914,7 @@ export const HomeScreen: React.FC = () => {
                 <Text style={styles.planSubCount}>{myPlan.daysCount}</Text>
               </View>
             </View>
-            
+
             <View style={styles.nextExercisePill}>
               <Play size={16} color={COLORS.text} fill={COLORS.text} style={{ marginRight: 10 }} />
               <View>
@@ -1030,10 +1104,12 @@ export const HomeScreen: React.FC = () => {
               {/* 7-Column Days Grid */}
               <View style={styles.daysGrid}>
                 {/* Offset spacer cells */}
-                {Array.from({ length: (() => {
-                  const firstDayIndex = new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay();
-                  return firstDayIndex === 0 ? 6 : firstDayIndex - 1;
-                })() }).map((_, idx) => (
+                {Array.from({
+                  length: (() => {
+                    const firstDayIndex = new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay();
+                    return firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+                  })()
+                }).map((_, idx) => (
                   <View key={`empty-${idx}`} style={styles.gridDayCellEmpty} />
                 ))}
 
@@ -1068,7 +1144,7 @@ export const HomeScreen: React.FC = () => {
                   );
                 })}
               </View>
-              
+
               <View style={styles.bottomSheetIndicator} />
             </View>
           </TouchableWithoutFeedback>
@@ -1093,7 +1169,7 @@ export const HomeScreen: React.FC = () => {
               <Text style={styles.durationModalSubtitle}>
                 Choose how long you did this exercise:
               </Text>
-              
+
               <View style={styles.durationOptionsGrid}>
                 {[15, 30, 45, 60].map((mins) => (
                   <TouchableOpacity
@@ -1156,13 +1232,13 @@ export const HomeScreen: React.FC = () => {
                   <Text style={styles.detailProgramName}>
                     {selectedWorkoutSession.programDay?.name || 'Strength Workout'}
                   </Text>
-                  
+
                   <View style={styles.detailMetaRow}>
                     <View style={styles.detailMetaItem}>
                       <Clock size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
                       <Text style={styles.detailMetaText}>{selectedWorkoutSession.duration} mins</Text>
                     </View>
-                    
+
                     {selectedWorkoutSession.rpe && (
                       <View style={styles.detailMetaItem}>
                         <Award size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
@@ -1170,7 +1246,7 @@ export const HomeScreen: React.FC = () => {
                       </View>
                     )}
                   </View>
-                  
+
                   <Text style={styles.detailDate}>
                     Completed on {new Date(selectedWorkoutSession.date + 'T12:00:00').toLocaleDateString('en-US', {
                       weekday: 'long',
@@ -1424,60 +1500,43 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 12,
   },
-  simplifiedCalCardFood: {
+  progressRingCard: {
     flex: 1,
-    backgroundColor: '#FFF6F2',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: '#FFDDD1',
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#E65100',
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    gap: 10,
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
+    shadowOpacity: 0.02,
+    shadowRadius: 8,
     elevation: 1,
   },
-  simplifiedCalCardBurned: {
+  progressRingCardTextContainer: {
     flex: 1,
-    backgroundColor: '#FAF2FA',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: '#F2D8F2',
-    alignItems: 'center',
-    shadowColor: '#A21CAF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 1,
+    justifyContent: 'center',
   },
-  simplifiedCalValueFood: {
-    fontSize: 22,
+  progressRingValue: {
+    fontSize: 16,
     fontWeight: '800',
-    color: '#3E2723',
+    color: COLORS.text,
   },
-  simplifiedCalValueBurned: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#30082E',
-  },
-  kcalUnit: {
-    fontSize: 12,
+  progressRingTarget: {
+    fontSize: 10,
     fontWeight: '600',
-    color: '#8D7B77',
+    color: COLORS.textMuted,
+    marginTop: -2,
   },
-  simplifiedCalLabelFood: {
+  progressRingLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#7D6B67',
-    marginTop: 4,
-  },
-  simplifiedCalLabelBurned: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#735672',
-    marginTop: 4,
+    color: COLORS.textLight,
+    marginTop: 2,
   },
   metricsRow: {
     flexDirection: 'row',
