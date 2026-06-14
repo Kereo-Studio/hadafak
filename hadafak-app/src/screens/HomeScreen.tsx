@@ -697,17 +697,21 @@ export const HomeScreen: React.FC = () => {
           {/* Simplified Calories Section: Food and Burned */}
           <View style={styles.caloriesSection}>
             <View style={styles.simplifiedCalRow}>
-              <View style={styles.simplifiedCalCard}>
-                <Flame size={22} color={COLORS.primary} style={{ marginBottom: 6 }} />
-                <Text style={styles.simplifiedCalValue}>{eatenCalories.toLocaleString()}</Text>
-                <Text style={styles.simplifiedCalLabel}>Food Calories</Text>
-              </View>
-              <View style={[styles.simplifiedCalCard, styles.simplifiedCalCardActive]}>
-                <Zap size={22} color={COLORS.textInverse} style={{ marginBottom: 6 }} />
-                <Text style={[styles.simplifiedCalValue, styles.simplifiedCalValueActive]}>
-                  {burnedCalories.toLocaleString()}
+              <View style={styles.simplifiedCalCardFood}>
+                <Flame size={22} color="#E65100" style={{ marginBottom: 6 }} />
+                <Text style={styles.simplifiedCalValueFood}>
+                  {eatenCalories.toLocaleString()}{' '}
+                  <Text style={styles.kcalUnit}>kcal</Text>
                 </Text>
-                <Text style={styles.simplifiedCalLabelActive}>Burned Calories</Text>
+                <Text style={styles.simplifiedCalLabelFood}>Food Calories</Text>
+              </View>
+              <View style={styles.simplifiedCalCardBurned}>
+                <Zap size={22} color="#A21CAF" style={{ marginBottom: 6 }} />
+                <Text style={styles.simplifiedCalValueBurned}>
+                  {burnedCalories.toLocaleString()}{' '}
+                  <Text style={styles.kcalUnit}>kcal</Text>
+                </Text>
+                <Text style={styles.simplifiedCalLabelBurned}>Burned Calories</Text>
               </View>
             </View>
           </View>
@@ -1420,42 +1424,59 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 12,
   },
-  simplifiedCalCard: {
+  simplifiedCalCardFood: {
     flex: 1,
-    backgroundColor: COLORS.surfaceLight,
+    backgroundColor: '#FFF6F2',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: '#FFDDD1',
     alignItems: 'center',
-    shadowColor: '#5E004A',
+    shadowColor: '#E65100',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 1,
   },
-  simplifiedCalCardActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+  simplifiedCalCardBurned: {
+    flex: 1,
+    backgroundColor: '#FAF2FA',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#F2D8F2',
+    alignItems: 'center',
+    shadowColor: '#A21CAF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 1,
   },
-  simplifiedCalValue: {
+  simplifiedCalValueFood: {
     fontSize: 22,
     fontWeight: '800',
-    color: COLORS.text,
+    color: '#3E2723',
   },
-  simplifiedCalValueActive: {
-    color: COLORS.textInverse,
+  simplifiedCalValueBurned: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#30082E',
   },
-  simplifiedCalLabel: {
-    fontSize: 11,
+  kcalUnit: {
+    fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textLight,
-    marginTop: 4,
+    color: '#8D7B77',
   },
-  simplifiedCalLabelActive: {
+  simplifiedCalLabelFood: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.textInverse,
+    color: '#7D6B67',
+    marginTop: 4,
+  },
+  simplifiedCalLabelBurned: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#735672',
     marginTop: 4,
   },
   metricsRow: {
