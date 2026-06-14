@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import { Exercise, ExerciseDifficulty, ExerciseSource } from './entities/exercise.entity';
 import { MuscleGroup } from './entities/muscle-group.entity';
 import { Equipment } from './entities/equipment.entity';
+import * as fs from 'fs';
+import * as path from 'path';
+import { S3Service } from '../../common/services/s3.service';
 
 @Injectable()
 export class ExternalSyncService {
@@ -16,6 +19,7 @@ export class ExternalSyncService {
     private readonly muscleGroupRepository: Repository<MuscleGroup>,
     @InjectRepository(Equipment)
     private readonly equipmentRepository: Repository<Equipment>,
+    private readonly s3Service: S3Service,
   ) {}
 
   async syncExercises(): Promise<{ synced: number; skipped: number }> {
@@ -208,13 +212,88 @@ export class ExternalSyncService {
       ex.equipment = eq;
       ex.difficulty = ExerciseDifficulty.BEGINNER;
       ex.instructions = raw.instructions || [];
-      ex.gifUrl = raw.id ? `/api/v1/exercises/image/${raw.id}` : undefined;
+      
       ex.source = ExerciseSource.EXERCIDEDB;
       ex.externalId = raw.id || `edb-${name}`;
+
+      // Trigger cache asynchronously in the background so sync isn't blocked,
+      // and default to the proxy url for immediate access.
+      if (raw.id) {
+        this.downloadAndCacheGif(raw.id).catch(err => {
+          this.logger.warn(`Background gif cache failed for ${raw.id}: ${err.message}`);
+        });
+        ex.gifUrl = `/api/v1/exercises/image/${raw.id}`;
+      } else {
+        ex.gifUrl = undefined;
+      }
 
       return ex;
     } catch {
       return null;
+    }
+  }
+
+  public async downloadAndCacheGif(externalId: string): Promise<string | undefined> {
+    const apiKey = process.env.EXERCISEDB_API_KEY;
+    if (!apiKey) {
+      this.logger.warn(`No ExerciseDB API key for caching gif: ${externalId}`);
+      return undefined;
+    }
+
+    try {
+      this.logger.log(`Caching gif for exercise ${externalId}...`);
+      const url = `https://exercisedb.p.rapidapi.com/image?exerciseId=${externalId}&resolution=360`;
+      const response = await fetch(url, {
+        headers: {
+          'X-RapidAPI-Key': apiKey,
+          'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+        },
+      });
+
+      if (!response.ok) {
+        this.logger.warn(`Failed to fetch image from ExerciseDB for caching: ${response.statusText}`);
+        return undefined;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      let gifUrl = '';
+
+      if (this.s3Service.isConfigured()) {
+        const fileObj = {
+          buffer,
+          originalname: `${externalId}.gif`,
+          mimetype: 'image/gif',
+        };
+        gifUrl = await this.s3Service.uploadFile(fileObj, 'exercises');
+        this.logger.log(`Successfully uploaded cached gif to S3: ${gifUrl}`);
+      } else {
+        const uploadDir = path.join(process.cwd(), 'uploads', 'exercises');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const filePath = path.join(uploadDir, `${externalId}.gif`);
+        await fs.promises.writeFile(filePath, buffer);
+        gifUrl = `/uploads/exercises/${externalId}.gif`;
+        this.logger.log(`Successfully saved cached gif locally: ${gifUrl}`);
+      }
+
+      // Update the exercise database record with the new URL
+      try {
+        const exercise = await this.exerciseRepository.findOne({ where: { externalId } });
+        if (exercise) {
+          exercise.gifUrl = gifUrl;
+          await this.exerciseRepository.save(exercise);
+          this.logger.log(`Updated database record for exercise ${externalId} with cached URL.`);
+        }
+      } catch (dbErr) {
+        this.logger.warn(`Failed to update database record for exercise ${externalId}: ${dbErr.message}`);
+      }
+
+      return gifUrl;
+    } catch (err) {
+      this.logger.error(`Error caching gif for exercise ${externalId}: ${err.message}`);
+      return undefined;
     }
   }
 

@@ -2122,11 +2122,16 @@ export const WorkoutsScreen: React.FC = () => {
                   {/* Set log inputs rows */}
                   {ae.sets.map((set) => (
                     <View key={set.setNumber} style={[styles.setInputsRow, set.completed && styles.setRowCompleted]}>
-                      <Text style={[styles.setNumText, { width: '15%' }]}>{set.setNumber}</Text>
+                      <Text style={[styles.setNumText, { width: '15%' }, set.completed && styles.setNumTextCompleted]}>
+                        {set.setNumber}
+                      </Text>
                       
                       <View style={[styles.setInputWrapper, { width: '30%' }]}>
                         <TextInput
-                          style={styles.setInput}
+                          style={[
+                            styles.setInput,
+                            set.completed && styles.setInputCompleted
+                          ]}
                           value={set.weight.toString()}
                           keyboardType="numeric"
                           onChangeText={(v) => handleEditSet(ae.exerciseId, set.setNumber, 'weight', v)}
@@ -2136,7 +2141,10 @@ export const WorkoutsScreen: React.FC = () => {
 
                       <View style={[styles.setInputWrapper, { width: '30%' }]}>
                         <TextInput
-                          style={styles.setInput}
+                          style={[
+                            styles.setInput,
+                            set.completed && styles.setInputCompleted
+                          ]}
                           value={set.reps.toString()}
                           keyboardType="numeric"
                           onChangeText={(v) => handleEditSet(ae.exerciseId, set.setNumber, 'reps', v)}
@@ -3442,11 +3450,10 @@ const styles = StyleSheet.create({
   // Active Exercises Cards
   exerciseCard: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 16,
+    ...SHADOWS.card,
   },
   gifContainer: {
     width: '100%',
@@ -3471,7 +3478,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   exerciseTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     color: COLORS.text,
   },
@@ -3481,7 +3488,7 @@ const styles = StyleSheet.create({
   setRowLabels: {
     flexDirection: 'row',
     marginBottom: 8,
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
   },
   setLabelCol: {
     fontSize: 11,
@@ -3493,40 +3500,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    marginVertical: 3,
   },
   setRowCompleted: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
   },
   setNumText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.text,
+  },
+  setNumTextCompleted: {
+    color: COLORS.success,
   },
   setInputWrapper: {
     alignItems: 'center',
   },
   setInput: {
-    backgroundColor: COLORS.surfaceLight,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#E2E8F0',
     borderRadius: 8,
-    width: 60,
-    height: 32,
+    width: 64,
+    height: 34,
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.text,
   },
+  setInputCompleted: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    color: '#64748B',
+  },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: COLORS.textMuted,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3538,13 +3553,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 14,
-    paddingVertical: 6,
+    paddingVertical: 10,
+    marginTop: 12,
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: 12,
   },
   addSetBtnText: {
     fontSize: 13,
     color: COLORS.primary,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   generalAddExBtn: {
     backgroundColor: COLORS.primary,

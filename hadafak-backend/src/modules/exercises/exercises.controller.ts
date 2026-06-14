@@ -19,6 +19,8 @@ import { ExternalSyncService } from './external-sync.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @ApiTags('Exercises')
 @Controller('exercises')
@@ -101,19 +103,43 @@ export class ExercisesController {
   }
 
   @Get('image/:externalId')
-  @ApiOperation({ summary: 'Proxy exercise image from ExerciseDB to hide API keys' })
+  @ApiOperation({ summary: 'Proxy exercise image from ExerciseDB to hide API keys and cache it' })
   @ApiResponse({ status: 200, description: 'Successfully streamed exercise gif.' })
   async getExerciseImage(
     @Param('externalId') externalId: string,
     @Res() res: Response,
   ) {
-    const apiKey = process.env.EXERCISEDB_API_KEY;
-    if (!apiKey) {
-      res.status(HttpStatus.NOT_FOUND).send('API key not configured');
-      return;
-    }
-
     try {
+      // 1. Check if we already have it cached locally
+      const uploadDir = path.join(process.cwd(), 'uploads', 'exercises');
+      const localPath = path.join(uploadDir, `${externalId}.gif`);
+      if (fs.existsSync(localPath)) {
+        res.setHeader('Content-Type', 'image/gif');
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        return res.sendFile(localPath);
+      }
+
+      // 2. If not, trigger the download & cache logic!
+      const cachedUrl = await this.syncService.downloadAndCacheGif(externalId);
+      if (cachedUrl) {
+        if (cachedUrl.startsWith('http')) {
+          // S3 URL - Redirect the client
+          return res.redirect(cachedUrl);
+        } else {
+          // Local path - Send the file
+          res.setHeader('Content-Type', 'image/gif');
+          res.setHeader('Cache-Control', 'public, max-age=31536000');
+          return res.sendFile(path.join(process.cwd(), cachedUrl));
+        }
+      }
+
+      // 3. Fallback: If caching mechanism fails/is incomplete, fetch directly
+      const apiKey = process.env.EXERCISEDB_API_KEY;
+      if (!apiKey) {
+        res.status(HttpStatus.NOT_FOUND).send('API key not configured');
+        return;
+      }
+
       const response = await fetch(
         `https://exercisedb.p.rapidapi.com/image?exerciseId=${externalId}&resolution=360`,
         {
@@ -133,10 +159,7 @@ export class ExercisesController {
       if (contentType) {
         res.setHeader('Content-Type', contentType);
       }
-      const cacheControl = response.headers.get('cache-control');
-      if (cacheControl) {
-        res.setHeader('Cache-Control', cacheControl);
-      }
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
 
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
