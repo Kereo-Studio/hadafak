@@ -1,6 +1,6 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
-import * as BackgroundFetch from 'expo-background-fetch';
+import { BackgroundTaskResult } from 'expo-background-task';
 import { DeviceEventEmitter } from 'react-native';
 import axios from 'axios';
 import { storage } from './storage';
@@ -102,7 +102,7 @@ TaskManager.defineTask(BACKGROUND_STEP_TASK, async () => {
     const token = await storage.getItem('access_token');
     if (!token) {
       console.log('[Background Step Sync] No user auth token found. Skipping sync.');
-      return BackgroundFetch.BackgroundFetchResult.NoData;
+      return BackgroundTaskResult.Success;
     }
 
     const apiInstance = axios.create({
@@ -116,10 +116,10 @@ TaskManager.defineTask(BACKGROUND_STEP_TASK, async () => {
 
     const success = await pedometerService.syncSteps(apiInstance);
     return success 
-      ? BackgroundFetch.BackgroundFetchResult.NewData 
-      : BackgroundFetch.BackgroundFetchResult.Failed;
+      ? BackgroundTaskResult.Success 
+      : BackgroundTaskResult.Failed;
   } catch (err) {
     console.error('[Background Step Sync] Execution failed:', err);
-    return BackgroundFetch.BackgroundFetchResult.Failed;
+    return BackgroundTaskResult.Failed;
   }
 });

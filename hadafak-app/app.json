@@ -19,7 +19,10 @@
         "NSLocationWhenInUseUsageDescription": "Hadafak uses your location to track your runs and draw your route on the map.",
         "NSLocationAlwaysUsageDescription": "Hadafak uses your location to track your runs and draw your route on the map.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Hadafak requires background location permission to track your runs even when the app is closed.",
-        "UIBackgroundModes": ["location", "fetch"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
       }
     },
     "android": {
@@ -62,7 +65,8 @@
           "locationAlwaysAndWhenInUsePermission": "Hadafak requires background location permission to track your runs even when the app is closed.",
           "isAndroidBackgroundLocationEnabled": true
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "extra": {
       "eas": {
