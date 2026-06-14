@@ -28,19 +28,30 @@ export class ProfilesService {
       await this.userRepository.update(userId, updateData);
     }
 
-    profile.goal = dto.goal;
-    profile.age = dto.age;
-    profile.gender = dto.gender.toLowerCase();
-    profile.weight = dto.weight;
-    profile.height = dto.height;
-    profile.trainingDays = dto.trainingDays;
-    profile.trainingLocation = dto.trainingLocation;
+    if (dto.goal !== undefined) profile.goal = dto.goal;
+    if (dto.age !== undefined) profile.age = dto.age;
+    if (dto.gender !== undefined) profile.gender = dto.gender.toLowerCase();
+    if (dto.weight !== undefined) profile.weight = dto.weight;
+    if (dto.height !== undefined) profile.height = dto.height;
+    if (dto.trainingDays !== undefined) profile.trainingDays = dto.trainingDays;
+    if (dto.trainingLocation !== undefined) profile.trainingLocation = dto.trainingLocation;
+
+    // Use profile (which has merged values) for calculations to avoid undefined crashes
+    const calcSource: CreateProfileDto = {
+      goal: profile.goal || FitnessGoal.STAY_ACTIVE,
+      age: profile.age || 25,
+      gender: profile.gender || 'male',
+      weight: profile.weight || 70,
+      height: profile.height || 175,
+      trainingDays: profile.trainingDays || 3,
+      trainingLocation: profile.trainingLocation || 'gym',
+    };
 
     // Smart calculation of targets if they are not provided
-    profile.dailyCalories = dto.dailyCalories ?? this.calculateCalories(dto);
-    profile.dailyProtein = dto.dailyProtein ?? this.calculateProtein(dto);
-    profile.dailyWater = dto.dailyWater ?? this.calculateWater(dto);
-    profile.dailySteps = dto.dailySteps ?? this.calculateSteps(dto);
+    profile.dailyCalories = dto.dailyCalories ?? profile.dailyCalories ?? this.calculateCalories(calcSource);
+    profile.dailyProtein = dto.dailyProtein ?? profile.dailyProtein ?? this.calculateProtein(calcSource);
+    profile.dailyWater = dto.dailyWater ?? profile.dailyWater ?? this.calculateWater(calcSource);
+    profile.dailySteps = dto.dailySteps ?? profile.dailySteps ?? this.calculateSteps(calcSource);
 
     // Dynamic workout profile updates
     profile.bodyFatPercentage = dto.bodyFatPercentage ?? profile.bodyFatPercentage ?? null;
@@ -50,8 +61,8 @@ export class ProfilesService {
     
     if (dto.equipmentAccess) {
       profile.equipmentAccess = dto.equipmentAccess;
-    } else if (dto.trainingLocation) {
-      profile.equipmentAccess = dto.trainingLocation === 'home' ? EquipmentAccess.HOME : EquipmentAccess.GYM;
+    } else if (profile.trainingLocation) {
+      profile.equipmentAccess = profile.trainingLocation === 'home' ? EquipmentAccess.HOME : EquipmentAccess.GYM;
     }
 
     profile.injuries = dto.injuries ?? profile.injuries ?? [];

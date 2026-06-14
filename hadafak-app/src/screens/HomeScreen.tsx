@@ -45,7 +45,7 @@ import {
   BookOpen,
 } from 'lucide-react-native';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { api } from '../services/api';
+import { api, API_BASE_URL } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -76,6 +76,14 @@ export const HomeScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [athleteName, setAthleteName] = useState('Athlete');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  const getPhotoUri = (url: string | null | undefined) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    const cleanHost = API_BASE_URL.replace('/api/v1', '');
+    return `${cleanHost}${url}`;
+  };
   
   // Steps weekly chart data state
   const [chartData, setChartData] = useState<any[]>([]);
@@ -205,8 +213,25 @@ export const HomeScreen: React.FC = () => {
         api.get('/recipes'),
       ]);
 
-      // 1. Map user greeting
-      if (authRes.status === 'fulfilled' && authRes.value.data) {
+      // 1. Map user greeting and avatar image
+      if (profile && profile.user) {
+        if (profile.user.name) {
+          setAthleteName(profile.user.name);
+        } else if (authRes.status === 'fulfilled' && authRes.value.data && authRes.value.data.name) {
+          setAthleteName(authRes.value.data.name);
+        } else if (authRes.status === 'fulfilled' && authRes.value.data) {
+          const email = authRes.value.data.email || '';
+          const namePart = email.split('@')[0];
+          if (namePart) {
+            setAthleteName(namePart.charAt(0).toUpperCase() + namePart.slice(1));
+          }
+        }
+        if (profile.user.avatarUrl) {
+          setAvatarUrl(profile.user.avatarUrl);
+        } else {
+          setAvatarUrl(null);
+        }
+      } else if (authRes.status === 'fulfilled' && authRes.value.data) {
         const email = authRes.value.data.email || '';
         const namePart = email.split('@')[0];
         if (namePart) {
@@ -641,10 +666,17 @@ export const HomeScreen: React.FC = () => {
           <View style={styles.header}>
             <View style={styles.userInfo}>
               <View style={styles.avatarContainer}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&auto=format&fit=crop' }}
-                  style={styles.avatar}
-                />
+                {avatarUrl ? (
+                  <Image
+                    source={{ uri: getPhotoUri(avatarUrl) }}
+                    style={styles.avatar}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&auto=format&fit=crop' }}
+                    style={styles.avatar}
+                  />
+                )}
                 <View style={styles.activeDot} />
               </View>
               <View style={styles.userText}>
