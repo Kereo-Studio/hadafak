@@ -19,7 +19,7 @@ import { AdaptationEngineModule } from '../adaptation-engine/adaptation-engine.m
     AdaptationEngineModule,
   ],
   providers: [WorkoutsService],
-  controllers: [WorkoutsController, WorkoutPlansController],
+  controllers: [WorkoutPlansController, WorkoutsController],
   exports: [WorkoutsService, TypeOrmModule],
 })
 export class WorkoutsModule {}
