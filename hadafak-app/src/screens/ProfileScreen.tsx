@@ -923,6 +923,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                       onChangeText={setName}
                       placeholder="e.g. John Doe"
                       autoCapitalize="words"
+                      placeholderTextColor={COLORS.textMuted}
                     />
                   </View>
                 </View>
@@ -955,6 +956,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                       <TextInput
                         style={styles.modalTextInput}
                         keyboardType="numeric"
+                        placeholder="e.g. 25"
+                        placeholderTextColor={COLORS.textMuted}
                         value={age}
                         onChangeText={setAge}
                       />
@@ -985,6 +988,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                       <TextInput
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
+                        placeholder="e.g. 70.0"
+                        placeholderTextColor={COLORS.textMuted}
                         value={weight}
                         onChangeText={setWeight}
                       />
@@ -995,6 +1000,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                       <TextInput
                         style={styles.modalTextInput}
                         keyboardType="numeric"
+                        placeholder="e.g. 175"
+                        placeholderTextColor={COLORS.textMuted}
                         value={height}
                         onChangeText={setHeight}
                       />
@@ -1046,12 +1053,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                     </View>
                   </View>
 
-                  <View style={styles.inputGroup}>
+                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Training Days per Week</Text>
                     <TextInput
                       style={styles.modalTextInput}
                       keyboardType="numeric"
                       placeholder="4"
+                      placeholderTextColor={COLORS.textMuted}
                       value={trainingDays}
                       onChangeText={setTrainingDays}
                     />
@@ -1063,6 +1071,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                       <TextInput
                         style={styles.modalTextInput}
                         keyboardType="numeric"
+                        placeholder="e.g. 2000"
+                        placeholderTextColor={COLORS.textMuted}
                         value={dailyCalories}
                         onChangeText={setDailyCalories}
                       />
@@ -1073,6 +1083,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                       <TextInput
                         style={styles.modalTextInput}
                         keyboardType="numeric"
+                        placeholder="e.g. 2500"
+                        placeholderTextColor={COLORS.textMuted}
                         value={dailyWater}
                         onChangeText={setDailyWater}
                       />
@@ -1149,6 +1161,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 75.5"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logWeight}
                         onChangeText={setLogWeight}
                       />
@@ -1160,6 +1173,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 15.2"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logBodyFat}
                         onChangeText={setLogBodyFat}
                       />
@@ -1172,6 +1186,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                       style={styles.modalTextInput}
                       keyboardType="decimal-pad"
                       placeholder="e.g. 35.8"
+                      placeholderTextColor={COLORS.textMuted}
                       value={logSkeletalMuscle}
                       onChangeText={setLogSkeletalMuscle}
                     />
@@ -1207,6 +1222,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 80.5"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logWaist}
                         onChangeText={setLogWaist}
                       />
@@ -1218,6 +1234,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 92.4"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logHips}
                         onChangeText={setLogHips}
                       />
@@ -1231,6 +1248,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 100.2"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logChest}
                         onChangeText={setLogChest}
                       />
@@ -1242,6 +1260,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 118.0"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logShoulders}
                         onChangeText={setLogShoulders}
                       />
@@ -1255,6 +1274,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 36.5"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logLeftBicep}
                         onChangeText={setLogLeftBicep}
                       />
@@ -1266,6 +1286,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 36.8"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logRightBicep}
                         onChangeText={setLogRightBicep}
                       />
@@ -1279,6 +1300,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 56.4"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logLeftThigh}
                         onChangeText={setLogLeftThigh}
                       />
@@ -1290,6 +1312,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         style={styles.modalTextInput}
                         keyboardType="decimal-pad"
                         placeholder="e.g. 56.8"
+                        placeholderTextColor={COLORS.textMuted}
                         value={logRightThigh}
                         onChangeText={setLogRightThigh}
                       />
@@ -1302,6 +1325,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                       style={styles.modalTextInput}
                       keyboardType="decimal-pad"
                       placeholder="e.g. 38.0"
+                      placeholderTextColor={COLORS.textMuted}
                       value={logNeck}
                       onChangeText={setLogNeck}
                     />
