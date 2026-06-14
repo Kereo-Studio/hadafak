@@ -1375,7 +1375,17 @@ export const WorkoutsScreen: React.FC = () => {
       {
         text: 'Discard',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
+          if (activeSession?.id) {
+            try {
+              setLoading(true);
+              await api.delete(`/workouts/${activeSession.id}`);
+            } catch (err) {
+              console.warn('Failed to discard active session on server:', err);
+            } finally {
+              setLoading(false);
+            }
+          }
           setIsWorkoutActive(false);
           setActiveSession(null);
           stopTimer();
