@@ -41,6 +41,8 @@ import {
   X,
   Clock,
   Trash2,
+  Utensils,
+  BookOpen,
 } from 'lucide-react-native';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { api } from '../services/api';
@@ -110,6 +112,24 @@ export const HomeScreen: React.FC = () => {
   const [isDurationModalVisible, setIsDurationModalVisible] = useState(false);
   const [selectedActivityType, setSelectedActivityType] = useState<string | null>(null);
 
+  // Suggested Recipes state
+  const [suggestedRecipes, setSuggestedRecipes] = useState<any[]>([]);
+  const [selectedRecipeDetail, setSelectedRecipeDetail] = useState<any | null>(null);
+  const [isRecipeDetailModalVisible, setIsRecipeDetailModalVisible] = useState(false);
+
+  const getSuggestedMealInfo = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) {
+      return { tag: 'Breakfast', label: 'Breakfast Suggestions', desc: 'Kickstart your morning with these healthy options' };
+    } else if (hour >= 12 && hour < 17) {
+      return { tag: 'Lunch', label: 'Lunch Suggestions', desc: 'Re-fuel your body with balanced midday meals' };
+    } else if (hour >= 17 && hour < 22) {
+      return { tag: 'Dinner', label: 'Dinner Suggestions', desc: 'Unwind and recover with light, high-protein dinners' };
+    } else {
+      return { tag: 'Snack', label: 'Snack Suggestions', desc: 'Quick bites for late night/early morning recovery' };
+    }
+  };
+
   // Completed Workout Detail Modal State
   const [selectedWorkoutSession, setSelectedWorkoutSession] = useState<any | null>(null);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
@@ -176,12 +196,13 @@ export const HomeScreen: React.FC = () => {
 
 
       // Run calls in parallel to ensure high performance
-      const [authRes, stepsRes, nutritionRes, workoutsRes, runsRes] = await Promise.allSettled([
+      const [authRes, stepsRes, nutritionRes, workoutsRes, runsRes, recipesRes] = await Promise.allSettled([
         api.get('/auth/me'),
         api.get(`/steps/today?date=${todayStr}`),
         api.get(`/nutrition/logs/today?date=${todayStr}`),
         api.get('/workouts/history'),
         api.get('/runs'),
+        api.get('/recipes'),
       ]);
 
       // 1. Map user greeting
@@ -266,6 +287,22 @@ export const HomeScreen: React.FC = () => {
         workoutLogs = workoutsRes.value.data;
         setRecentWorkouts(workoutLogs);
       }
+
+      // Map suggested recipes
+      let allRecipes: any[] = [];
+      if (recipesRes.status === 'fulfilled' && Array.isArray(recipesRes.value.data)) {
+        allRecipes = recipesRes.value.data;
+      }
+      const mealInfo = getSuggestedMealInfo();
+      let filtered = allRecipes.filter(r => 
+        r.tags?.some((t: string) => t.toLowerCase() === mealInfo.tag.toLowerCase()) ||
+        r.title?.toLowerCase().includes(mealInfo.tag.toLowerCase()) ||
+        r.description?.toLowerCase().includes(mealInfo.tag.toLowerCase())
+      );
+      if (filtered.length === 0) {
+        filtered = allRecipes.slice(0, 4);
+      }
+      setSuggestedRecipes(filtered);
 
       if (profile && profile.currentProgram) {
         const totalDays = profile.currentProgram.days ? profile.currentProgram.days.length : 0;
@@ -777,17 +814,17 @@ export const HomeScreen: React.FC = () => {
             </View>
           </TouchableOpacity>
 
-          {/* Section: Recent Plan / Workouts completed */}
+          {/* Section: Suggested Recipes */}
           <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
             <Text style={styles.sectionHeader}>
-              {recentWorkouts.length > 0 ? 'Completed Workouts' : 'Recent Plan'}
+              {getSuggestedMealInfo().label}
             </Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllLink}>See All</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Nutrition')}>
+              <Text style={styles.seeAllLink}>See Hub</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.sectionSub}>
-            {new Date(selectedDateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            {getSuggestedMealInfo().desc}
           </Text>
         </View>
 
@@ -796,52 +833,52 @@ export const HomeScreen: React.FC = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.recentPlanScroll}
         >
-          {recentWorkouts.length > 0 ? (
-            recentWorkouts.map((workout, index) => (
+          {suggestedRecipes.length > 0 ? (
+            suggestedRecipes.map((recipe, index) => (
               <TouchableOpacity
-                key={workout.id || index}
-                style={styles.recentItem}
+                key={recipe.id || index}
+                style={styles.recipeCard}
                 onPress={() => {
-                  setSelectedWorkoutSession(workout);
-                  setIsDetailModalVisible(true);
+                  setSelectedRecipeDetail(recipe);
+                  setIsRecipeDetailModalVisible(true);
                 }}
-                activeOpacity={0.8}
+                activeOpacity={0.9}
               >
-                <View style={styles.recentBadge}>
-                  <Dumbbell size={24} color={COLORS.primary} />
+                <View style={styles.recipeCardHeader}>
+                  <View style={styles.recipeCardBadge}>
+                    <Text style={styles.recipeCardBadgeText}>
+                      {recipe.tags && recipe.tags.length > 0 ? recipe.tags[0] : 'Healthy'}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={styles.recentLabel} numberOfLines={1}>
-                  {workout.programDay?.name || `Workout ${index + 1}`}
+                <Text style={styles.recipeCardTitle} numberOfLines={1}>
+                  {recipe.title}
                 </Text>
+                <Text style={styles.recipeCardDesc} numberOfLines={2}>
+                  {recipe.description || 'No description provided.'}
+                </Text>
+                <View style={styles.recipeCardFooter}>
+                  <View style={styles.recipeCardMeta}>
+                    <Flame size={14} color={COLORS.primary} />
+                    <Text style={styles.recipeCardMetaText}>
+                      {Math.round(recipe.calories)} kcal
+                    </Text>
+                  </View>
+                  <View style={styles.recipeCardMeta}>
+                    <Clock size={14} color={COLORS.textMuted} />
+                    <Text style={styles.recipeCardMetaText}>
+                      {recipe.prepTime + recipe.cookTime}m
+                    </Text>
+                  </View>
+                </View>
               </TouchableOpacity>
             ))
           ) : (
-            <>
-              <View style={styles.recentItem}>
-                <View style={styles.recentBadge}>
-                  <Sparkles size={24} color={COLORS.primary} />
-                </View>
-                <Text style={styles.recentLabel}>Special</Text>
-              </View>
-              <View style={styles.recentItem}>
-                <View style={styles.recentBadge}>
-                  <Flame size={24} color={COLORS.primary} />
-                </View>
-                <Text style={styles.recentLabel}>Beach Ready</Text>
-              </View>
-              <View style={styles.recentItem}>
-                <View style={styles.recentBadge}>
-                  <Dumbbell size={24} color={COLORS.primary} />
-                </View>
-                <Text style={styles.recentLabel}>Full-Body</Text>
-              </View>
-              <View style={styles.recentItem}>
-                <View style={styles.recentBadge}>
-                  <Award size={24} color={COLORS.primary} />
-                </View>
-                <Text style={styles.recentLabel}>Challenge</Text>
-              </View>
-            </>
+            <View style={{ paddingHorizontal: 20, paddingVertical: 10 }}>
+              <Text style={{ color: COLORS.textMuted, fontSize: 14, fontStyle: 'italic' }}>
+                No recipes suggested for this time.
+              </Text>
+            </View>
           )}
         </ScrollView>
 
@@ -1135,6 +1172,130 @@ export const HomeScreen: React.FC = () => {
                   })()}
                 </ScrollView>
               ) : null}
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Recipe Detail Modal */}
+      <Modal
+        visible={isRecipeDetailModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsRecipeDetailModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.recipeDetailModalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsRecipeDetailModalVisible(false)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={styles.recipeDetailModalContainer}>
+              {selectedRecipeDetail && (
+                <>
+                  {/* Header */}
+                  <View style={styles.recipeDetailModalHeader}>
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <Text style={styles.recipeDetailModalTitle} numberOfLines={1}>
+                        {selectedRecipeDetail.title}
+                      </Text>
+                      <Text style={styles.recipeDetailModalSubtitle} numberOfLines={1}>
+                        {selectedRecipeDetail.description || 'Healthy Recipe'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setIsRecipeDetailModalVisible(false)}
+                      style={styles.recipeDetailModalClose}
+                    >
+                      <X size={20} color={COLORS.text} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                    {/* Detailed macros strip */}
+                    <View style={styles.recipeDetailMacrosBar}>
+                      <View style={styles.recipeDetailMacroPill}>
+                        <Text style={styles.recipeDetailMacroLabel}>Calories</Text>
+                        <Text style={[styles.recipeDetailMacroValue, { color: COLORS.primary }]}>
+                          {Math.round(selectedRecipeDetail.calories)} kcal
+                        </Text>
+                      </View>
+                      <View style={styles.recipeDetailMacroPill}>
+                        <Text style={styles.recipeDetailMacroLabel}>Protein</Text>
+                        <Text style={styles.recipeDetailMacroValue}>
+                          {selectedRecipeDetail.protein}g
+                        </Text>
+                      </View>
+                      <View style={styles.recipeDetailMacroPill}>
+                        <Text style={styles.recipeDetailMacroLabel}>Carbs</Text>
+                        <Text style={styles.recipeDetailMacroValue}>
+                          {selectedRecipeDetail.carbs}g
+                        </Text>
+                      </View>
+                      <View style={styles.recipeDetailMacroPill}>
+                        <Text style={styles.recipeDetailMacroLabel}>Fat</Text>
+                        <Text style={styles.recipeDetailMacroValue}>
+                          {selectedRecipeDetail.fat}g
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.recipeDetailMetaRow}>
+                      <View style={styles.recipeDetailMetaTag}>
+                        <Clock size={14} color={COLORS.textMuted} />
+                        <Text style={styles.recipeDetailMetaTagText}>
+                          Prep: {selectedRecipeDetail.prepTime} mins
+                        </Text>
+                      </View>
+                      <View style={styles.recipeDetailMetaTag}>
+                        <Utensils size={14} color={COLORS.textMuted} />
+                        <Text style={styles.recipeDetailMetaTagText}>
+                          Cook: {selectedRecipeDetail.cookTime} mins
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Ingredients section */}
+                    <View style={{ marginTop: 18 }}>
+                      <Text style={styles.detailSectionTitle}>Ingredients</Text>
+                      {(!selectedRecipeDetail.ingredients || selectedRecipeDetail.ingredients.length === 0) ? (
+                        <Text style={styles.recipeDetailEmptyText}>No ingredients specified.</Text>
+                      ) : (
+                        selectedRecipeDetail.ingredients.map((ing: any, idx: number) => (
+                          <View key={ing.id || idx} style={styles.recipeDetailIngredientRow}>
+                            <Text style={styles.recipeDetailIngredientName}>
+                              {ing.customName || (ing.food ? ing.food.name : 'Unknown')}
+                            </Text>
+                            <Text style={styles.recipeDetailIngredientAmount}>
+                              {ing.amount} {ing.unit}
+                            </Text>
+                          </View>
+                        ))
+                      )}
+                    </View>
+
+                    {/* Cooking Steps walkthrough section */}
+                    <View style={{ marginTop: 18 }}>
+                      <Text style={styles.detailSectionTitle}>Cooking Steps</Text>
+                      {(!selectedRecipeDetail.instructions || selectedRecipeDetail.instructions.length === 0) ? (
+                        <Text style={styles.recipeDetailEmptyText}>No preparation steps specified.</Text>
+                      ) : (
+                        selectedRecipeDetail.instructions.map((step: string, index: number) => (
+                          <View key={index} style={styles.recipeDetailStepCard}>
+                            <View style={styles.recipeDetailStepNumberBg}>
+                              <Text style={styles.recipeDetailStepNumberText}>{index + 1}</Text>
+                            </View>
+                            <Text style={styles.recipeDetailStepDescText}>{step}</Text>
+                          </View>
+                        ))
+                      )}
+                    </View>
+
+                    {/* Spacer */}
+                    <View style={{ height: 30 }} />
+                  </ScrollView>
+                </>
+              )}
             </View>
           </TouchableWithoutFeedback>
         </TouchableOpacity>
@@ -1927,5 +2088,204 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginTop: 10,
+  },
+  // Recipe Suggestion Styles
+  recipeCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    padding: 16,
+    marginRight: 16,
+    width: 220,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  recipeCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  recipeCardBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: COLORS.primaryLight,
+    marginRight: 8,
+  },
+  recipeCardBadgeText: {
+    fontSize: 10,
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  recipeCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  recipeCardDesc: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginBottom: 12,
+    lineHeight: 15,
+  },
+  recipeCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 8,
+    marginTop: 8,
+  },
+  recipeCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recipeCardMetaText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginLeft: 4,
+  },
+  // Recipe detail modal
+  recipeDetailModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  recipeDetailModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 34,
+    height: '85%',
+  },
+  recipeDetailModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  recipeDetailModalTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: COLORS.text,
+  },
+  recipeDetailModalSubtitle: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  recipeDetailModalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recipeDetailMacrosBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 12,
+    marginVertical: 12,
+  },
+  recipeDetailMacroPill: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  recipeDetailMacroLabel: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontWeight: '700',
+  },
+  recipeDetailMacroValue: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: COLORS.text,
+    marginTop: 2,
+  },
+  recipeDetailMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+    gap: 16,
+  },
+  recipeDetailMetaTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recipeDetailMetaTagText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  recipeDetailIngredientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 6,
+  },
+  recipeDetailIngredientName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  recipeDetailIngredientAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+  },
+  recipeDetailStepCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 8,
+  },
+  recipeDetailStepNumberBg: {
+    backgroundColor: COLORS.primaryLight,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  recipeDetailStepNumberText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.primary,
+  },
+  recipeDetailStepDescText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.text,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  recipeDetailEmptyText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+    paddingVertical: 8,
   },
 });

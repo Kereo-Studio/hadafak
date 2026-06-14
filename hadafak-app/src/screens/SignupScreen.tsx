@@ -27,10 +27,12 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   onNavigateToLogin,
   onSignupSuccess,
 }) => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  const [nameError, setNameError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
@@ -40,10 +42,16 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 
   const validate = () => {
     let isValid = true;
+    setNameError('');
     setEmailError('');
     setPasswordError('');
     setConfirmPasswordError('');
     setGeneralError('');
+
+    if (!name.trim()) {
+      setNameError('Full name is required');
+      isValid = false;
+    }
 
     if (!email) {
       setEmailError('Email is required');
@@ -79,6 +87,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     try {
       // 1. Register user
       await api.post('/auth/register', {
+        name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
       });
@@ -130,6 +139,16 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                 <Text style={styles.errorAlertText}>{generalError}</Text>
               </View>
             ) : null}
+
+            <Input
+              label="Full Name"
+              placeholder="John Doe"
+              iconName="User"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              error={nameError}
+            />
 
             <Input
               label="Email Address"

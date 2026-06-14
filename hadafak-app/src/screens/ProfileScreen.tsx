@@ -26,6 +26,7 @@ import {
   Compass,
   Check,
   ChevronRight,
+  ChevronDown,
   Plus,
   Edit2,
   X,
@@ -58,6 +59,11 @@ interface UserProfile {
   dailyWater: number;
   dailySteps: number;
   currentProgramId?: string;
+  user?: {
+    name?: string;
+    avatarUrl?: string;
+    email?: string;
+  };
   currentProgram?: {
     id: string;
     name: string;
@@ -139,6 +145,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   
   // Edit Profile States
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [name, setName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [activeSection, setActiveSection] = useState<'profile' | 'body' | 'goals' | null>('profile');
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
@@ -183,6 +193,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       if (res.data) {
         setProfile(res.data);
         // Pre-populate editor form values
+        setName(res.data.user?.name || '');
+        setAvatarUrl(res.data.user?.avatarUrl || null);
         setAge(res.data.age?.toString() || '25');
         setWeight(res.data.weight?.toString() || '75');
         setHeight(res.data.height?.toString() || '178');
@@ -387,9 +399,79 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   };
 
   const getPhotoUri = (url: string) => {
+    if (!url) return '';
     if (url.startsWith('http')) return url;
     const cleanHost = API_BASE_URL.replace('/api/v1', '');
     return `${cleanHost}${url}`;
+  };
+
+  const pickAvatar = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Denied', 'You need to grant photo library permissions to change your profile picture.');
+        return;
+      }
+
+      const options: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      };
+
+      const result = await ImagePicker.launchImageLibraryAsync(options);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const localUri = result.assets[0].uri;
+        uploadAvatar(localUri);
+      }
+    } catch (err) {
+      console.error('Failed to pick avatar:', err);
+      Alert.alert('Error', 'Unable to pick profile image.');
+    }
+  };
+
+  const uploadAvatar = async (localUri: string) => {
+    setIsUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const response = await fetch(localUri);
+        const blob = await response.blob();
+        formData.append('file', blob, 'avatar.jpg');
+      } else {
+        formData.append('file', {
+          uri: localUri,
+          name: 'avatar.jpg',
+          type: 'image/jpeg',
+        } as any);
+      }
+
+      const res = await api.post('/profiles/avatar', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setAvatarUrl(res.data.avatarUrl);
+      if (profile) {
+        setProfile({
+          ...profile,
+          user: {
+            ...profile.user,
+            avatarUrl: res.data.avatarUrl,
+          },
+        });
+      }
+      Alert.alert('Success', 'Profile picture updated successfully!');
+    } catch (err) {
+      console.error('Failed to upload avatar:', err);
+      Alert.alert('Error', 'Failed to upload profile picture.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
   useFocusEffect(
@@ -401,9 +483,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   );
 
   const handleSaveProfile = async () => {
+    if (!name.trim()) {
+      Alert.alert('Error', 'Name cannot be empty.');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = {
+        name: name.trim(),
         age: parseInt(age),
         weight: parseFloat(weight),
         height: parseFloat(height),
@@ -511,10 +598,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
           <View style={styles.userProfileCard}>
             <View style={styles.userRow}>
               <View style={styles.avatarWrapper}>
-                <User size={38} color={COLORS.primary} />
+                {profile?.user?.avatarUrl ? (
+                  <Image
+                    source={{ uri: getPhotoUri(profile.user.avatarUrl) }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <User size={38} color={COLORS.primary} />
+                )}
               </View>
               <View style={styles.userInfoCol}>
-                <Text style={styles.userNameText}>Hadafak Athlete</Text>
+                <Text style={styles.userNameText}>{profile?.user?.name || 'Hadafak Athlete'}</Text>
                 <Text style={styles.userGoalTag}>
                   Goal: {profile ? formatGoal(profile.goal) : 'Stay Active'}
                 </Text>
@@ -779,112 +873,211 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             {/* Inputs Scroll container */}
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
               
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Fitness Goal</Text>
-                <View style={styles.goalsOptionsRow}>
-                  {[
-                    { key: 'gain_muscle', label: 'Gain Muscle' },
-                    { key: 'lose_fat', label: 'Lose Fat' },
-                    { key: 'stay_active', label: 'Stay Active' },
-                    { key: 'athletic', label: 'Athletic' },
-                  ].map((item) => (
-                    <TouchableOpacity
-                      key={item.key}
-                      style={[styles.goalChip, goal === item.key && styles.goalChipActive]}
-                      onPress={() => setGoal(item.key)}
-                    >
-                      <Text style={[styles.goalChipText, goal === item.key && styles.goalChipTextActive]}>
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+              {/* SECTION 1: PROFILE & ACCOUNT */}
+              <TouchableOpacity
+                style={styles.accordionHeader}
+                onPress={() => setActiveSection(activeSection === 'profile' ? null : 'profile')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.accordionHeaderLeft}>
+                  <User size={18} color={activeSection === 'profile' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
+                  <Text style={[styles.accordionHeaderText, activeSection === 'profile' && styles.accordionHeaderTextActive]}>
+                    Profile & Account
+                  </Text>
                 </View>
-              </View>
+                {activeSection === 'profile' ? (
+                  <ChevronDown size={18} color={COLORS.primary} />
+                ) : (
+                  <ChevronRight size={18} color={COLORS.textMuted} />
+                )}
+              </TouchableOpacity>
 
-              <View style={styles.gridInputRow}>
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Age</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="numeric"
-                    value={age}
-                    onChangeText={setAge}
-                  />
-                </View>
-
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Gender</Text>
-                  <View style={styles.genderRow}>
-                    <TouchableOpacity
-                      style={[styles.genderCell, gender === 'male' && styles.genderCellActive]}
-                      onPress={() => setGender('male')}
-                    >
-                      <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>Male</Text>
+              {activeSection === 'profile' && (
+                <View style={styles.accordionContent}>
+                  {/* Avatar Upload Container */}
+                  <View style={styles.avatarUploadContainer}>
+                    <TouchableOpacity onPress={pickAvatar} style={styles.modalAvatarWrapper} activeOpacity={0.8}>
+                      {isUploadingAvatar ? (
+                        <ActivityIndicator size="small" color={COLORS.primary} />
+                      ) : avatarUrl ? (
+                        <Image source={{ uri: getPhotoUri(avatarUrl) }} style={styles.modalAvatarImage} />
+                      ) : (
+                        <User size={40} color={COLORS.primary} />
+                      )}
+                      <View style={styles.cameraBadge}>
+                        <Camera size={12} color="#FFFFFF" />
+                      </View>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.genderCell, gender === 'female' && styles.genderCellActive]}
-                      onPress={() => setGender('female')}
-                    >
-                      <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>Female</Text>
+                    <TouchableOpacity onPress={pickAvatar} activeOpacity={0.7}>
+                      <Text style={styles.changePhotoText}>Change Profile Photo</Text>
                     </TouchableOpacity>
                   </View>
-                </View>
-              </View>
 
-              <View style={styles.gridInputRow}>
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Weight (kg)</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="decimal-pad"
-                    value={weight}
-                    onChangeText={setWeight}
-                  />
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Full Name</Text>
+                    <TextInput
+                      style={styles.modalTextInput}
+                      value={name}
+                      onChangeText={setName}
+                      placeholder="e.g. John Doe"
+                      autoCapitalize="words"
+                    />
+                  </View>
                 </View>
+              )}
 
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Height (cm)</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="numeric"
-                    value={height}
-                    onChangeText={setHeight}
-                  />
+              {/* SECTION 2: BODY METRICS */}
+              <TouchableOpacity
+                style={styles.accordionHeader}
+                onPress={() => setActiveSection(activeSection === 'body' ? null : 'body')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.accordionHeaderLeft}>
+                  <Scale size={18} color={activeSection === 'body' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
+                  <Text style={[styles.accordionHeaderText, activeSection === 'body' && styles.accordionHeaderTextActive]}>
+                    Body Metrics
+                  </Text>
                 </View>
-              </View>
+                {activeSection === 'body' ? (
+                  <ChevronDown size={18} color={COLORS.primary} />
+                ) : (
+                  <ChevronRight size={18} color={COLORS.textMuted} />
+                )}
+              </TouchableOpacity>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Training Days per Week</Text>
-                <TextInput
-                  style={styles.modalTextInput}
-                  keyboardType="numeric"
-                  placeholder="4"
-                  value={trainingDays}
-                  onChangeText={setTrainingDays}
-                />
-              </View>
+              {activeSection === 'body' && (
+                <View style={styles.accordionContent}>
+                  <View style={styles.gridInputRow}>
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Age</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="numeric"
+                        value={age}
+                        onChangeText={setAge}
+                      />
+                    </View>
 
-              <View style={styles.gridInputRow}>
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Daily Calorie Target</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="numeric"
-                    value={dailyCalories}
-                    onChangeText={setDailyCalories}
-                  />
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Gender</Text>
+                      <View style={styles.genderRow}>
+                        <TouchableOpacity
+                          style={[styles.genderCell, gender === 'male' && styles.genderCellActive]}
+                          onPress={() => setGender('male')}
+                        >
+                          <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>Male</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.genderCell, gender === 'female' && styles.genderCellActive]}
+                          onPress={() => setGender('female')}
+                        >
+                          <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>Female</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.gridInputRow}>
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Weight (kg)</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="decimal-pad"
+                        value={weight}
+                        onChangeText={setWeight}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Height (cm)</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="numeric"
+                        value={height}
+                        onChangeText={setHeight}
+                      />
+                    </View>
+                  </View>
                 </View>
+              )}
 
-                <View style={[styles.inputGroup, { width: '47%' }]}>
-                  <Text style={styles.inputLabel}>Daily Water Target (ml)</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    keyboardType="numeric"
-                    value={dailyWater}
-                    onChangeText={setDailyWater}
-                  />
+              {/* SECTION 3: GOALS & PREFERENCES */}
+              <TouchableOpacity
+                style={styles.accordionHeader}
+                onPress={() => setActiveSection(activeSection === 'goals' ? null : 'goals')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.accordionHeaderLeft}>
+                  <Target size={18} color={activeSection === 'goals' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
+                  <Text style={[styles.accordionHeaderText, activeSection === 'goals' && styles.accordionHeaderTextActive]}>
+                    Goals & Preferences
+                  </Text>
                 </View>
-              </View>
+                {activeSection === 'goals' ? (
+                  <ChevronDown size={18} color={COLORS.primary} />
+                ) : (
+                  <ChevronRight size={18} color={COLORS.textMuted} />
+                )}
+              </TouchableOpacity>
+
+              {activeSection === 'goals' && (
+                <View style={styles.accordionContent}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Fitness Goal</Text>
+                    <View style={styles.goalsOptionsRow}>
+                      {[
+                        { key: 'gain_muscle', label: 'Gain Muscle' },
+                        { key: 'lose_fat', label: 'Lose Fat' },
+                        { key: 'stay_active', label: 'Stay Active' },
+                        { key: 'athletic', label: 'Athletic' },
+                      ].map((item) => (
+                        <TouchableOpacity
+                          key={item.key}
+                          style={[styles.goalChip, goal === item.key && styles.goalChipActive]}
+                          onPress={() => setGoal(item.key)}
+                        >
+                          <Text style={[styles.goalChipText, goal === item.key && styles.goalChipTextActive]}>
+                            {item.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Training Days per Week</Text>
+                    <TextInput
+                      style={styles.modalTextInput}
+                      keyboardType="numeric"
+                      placeholder="4"
+                      value={trainingDays}
+                      onChangeText={setTrainingDays}
+                    />
+                  </View>
+
+                  <View style={styles.gridInputRow}>
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Daily Calorie Target</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="numeric"
+                        value={dailyCalories}
+                        onChangeText={setDailyCalories}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { width: '47%' }]}>
+                      <Text style={styles.inputLabel}>Daily Water Target (ml)</Text>
+                      <TextInput
+                        style={styles.modalTextInput}
+                        keyboardType="numeric"
+                        value={dailyWater}
+                        onChangeText={setDailyWater}
+                      />
+                    </View>
+                  </View>
+                </View>
+              )}
 
               <TouchableOpacity
                 onPress={handleSaveProfile}
@@ -1836,5 +2029,81 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+  },
+  avatarImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  accordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    marginBottom: 12,
+  },
+  accordionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  accordionHeaderText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  accordionHeaderTextActive: {
+    color: COLORS.primary,
+    fontWeight: '800',
+  },
+  accordionContent: {
+    paddingHorizontal: 6,
+    paddingBottom: 16,
+    marginBottom: 8,
+  },
+  avatarUploadContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 18,
+  },
+  modalAvatarWrapper: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    ...SHADOWS.subtle,
+  },
+  modalAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 38,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: COLORS.primary,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  changePhotoText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginTop: 8,
   },
 });

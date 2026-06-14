@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Profile, FitnessGoal, FitnessLevel, EquipmentAccess } from './entities/profile.entity';
+import { User } from '../users/entities/user.entity';
 import { CreateProfileDto } from './dto/create-profile.dto';
 
 @Injectable()
@@ -9,6 +10,8 @@ export class ProfilesService {
   constructor(
     @InjectRepository(Profile)
     private readonly profileRepository: Repository<Profile>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async createOrUpdate(userId: string, dto: CreateProfileDto): Promise<Profile> {
@@ -16,6 +19,13 @@ export class ProfilesService {
 
     if (!profile) {
       profile = this.profileRepository.create({ userId });
+    }
+
+    if (dto.name !== undefined || dto.avatarUrl !== undefined) {
+      const updateData: any = {};
+      if (dto.name !== undefined) updateData.name = dto.name;
+      if (dto.avatarUrl !== undefined) updateData.avatarUrl = dto.avatarUrl;
+      await this.userRepository.update(userId, updateData);
     }
 
     profile.goal = dto.goal;
@@ -47,13 +57,15 @@ export class ProfilesService {
     profile.injuries = dto.injuries ?? profile.injuries ?? [];
     profile.preferences = dto.preferences ?? profile.preferences ?? null;
 
-    return this.profileRepository.save(profile);
+    await this.profileRepository.save(profile);
+    return this.findByUserId(userId);
   }
 
   async findByUserId(userId: string): Promise<Profile> {
     const profile = await this.profileRepository.findOne({
       where: { userId },
       relations: {
+        user: true,
         currentProgram: {
           days: {
             exercises: {

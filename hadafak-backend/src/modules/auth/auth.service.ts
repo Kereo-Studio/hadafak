@@ -17,7 +17,7 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(dto.password, saltRounds);
-    const user = await this.usersService.create(dto.email, passwordHash);
+    const user = await this.usersService.create(dto.email, passwordHash, dto.name);
     
     const tokens = await this.generateTokens(user.id, user.email);
     return {

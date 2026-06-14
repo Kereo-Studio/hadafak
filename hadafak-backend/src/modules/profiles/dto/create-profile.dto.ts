@@ -100,4 +100,14 @@ export class CreateProfileDto {
   @IsOptional()
   @IsString()
   preferences?: string;
+
+  @ApiProperty({ example: 'John Doe', required: false })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiProperty({ example: '/uploads/avatars/123.jpg', required: false })
+  @IsOptional()
+  @IsString()
+  avatarUrl?: string;
 }

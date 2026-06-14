@@ -55,6 +55,7 @@ web-build/
 !.env.example
 !.env.template
 nuke-config.yml
+task-def.json
 
 # ==============================================================================
 # Logs & Pids
