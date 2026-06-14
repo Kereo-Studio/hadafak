@@ -172,9 +172,9 @@ export class WorkoutsService {
 
         const sessionRpe = dto.rpe || 7;
         let difficultyFeedback = DifficultyFeedback.OK;
-        if (sessionRpe <= 5) {
+        if (sessionRpe >= 1 && sessionRpe <= 3) {
           difficultyFeedback = DifficultyFeedback.EASY;
-        } else if (sessionRpe >= 8) {
+        } else if (sessionRpe >= 7 && sessionRpe <= 10) {
           difficultyFeedback = DifficultyFeedback.HARD;
         }
 

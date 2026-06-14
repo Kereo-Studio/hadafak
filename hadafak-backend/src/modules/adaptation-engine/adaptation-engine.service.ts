@@ -55,7 +55,7 @@ export class AdaptationEngineService {
     if (userLevel === FitnessLevel.ADVANCED) maxAllowedSets = 5;
 
     // 3. Apply Adaptation Rules
-    if (log.skipped || log.difficultyFeedback === DifficultyFeedback.HARD || log.fatigueRating >= 8) {
+    if (log.skipped || log.difficultyFeedback === DifficultyFeedback.HARD || log.fatigueRating >= 7) {
       // --- WORKOUT TOO HARD ---
       // Reduce sets (min 2)
       if (currentSets > 2) {

@@ -138,7 +138,25 @@ export const WorkoutsScreen: React.FC = () => {
   const [isFinishModalVisible, setIsFinishModalVisible] = useState(false);
   const [expandedPreviews, setExpandedPreviews] = useState<Record<string, boolean>>({});
   const [collapsedExercises, setCollapsedExercises] = useState<Record<string, boolean>>({});
-  const [rpe, setRpe] = useState('7');
+  const [rpe, setRpe] = useState('5');
+
+  const getRpeColor = (num: number) => {
+    if (num <= 3) return '#34C759'; // Easy: green
+    if (num <= 6) return '#FF9500'; // Moderate: orange
+    return '#FF3B30'; // Hard: red
+  };
+
+  const getRpeStatusText = (num: number) => {
+    if (num <= 3) return 'Easy';
+    if (num <= 6) return 'Moderate';
+    return 'Hard';
+  };
+
+  const getRpeAdaptationText = (num: number) => {
+    if (num <= 3) return 'Adapts program to be harder';
+    if (num <= 6) return 'Keeps targets the same';
+    return 'Adapts program to be easier';
+  };
 
   const togglePreview = (exerciseId: string) => {
     setExpandedPreviews((prev) => ({
@@ -2388,18 +2406,87 @@ export const WorkoutsScreen: React.FC = () => {
             <Text style={styles.finishModalTitle}>Workout Completed!</Text>
             <Text style={styles.finishModalDesc}>Rate your Rating of Perceived Exertion (RPE) from 1 to 10:</Text>
             
-            <View style={styles.rpeSliderRow}>
-              {[5, 6, 7, 8, 9, 10].map((num) => (
-                <TouchableOpacity
-                  key={num}
-                  style={[styles.rpeCell, rpe === num.toString() && styles.rpeCellSelected]}
-                  onPress={() => setRpe(num.toString())}
-                >
-                  <Text style={[styles.rpeCellText, rpe === num.toString() && styles.rpeCellTextSelected]}>
-                    {num}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Custom Interactive RPE Slider */}
+            <View style={styles.customRpeSliderContainer}>
+              {/* Dynamic feedback badge */}
+              <View style={[styles.rpeStatusBadge, { backgroundColor: getRpeColor(parseInt(rpe)) + '20' }]}>
+                <Text style={[styles.rpeStatusText, { color: getRpeColor(parseInt(rpe)) }]}>
+                  RPE {rpe} • {getRpeStatusText(parseInt(rpe))}
+                </Text>
+              </View>
+              
+              <Text style={styles.rpeAdaptationSub}>
+                {getRpeAdaptationText(parseInt(rpe))}
+              </Text>
+
+              <View style={styles.sliderTrackWrapper}>
+                {/* Background Line */}
+                <View style={styles.sliderLineBg} />
+                {/* Colored Progress Line */}
+                <View 
+                  style={[
+                    styles.sliderLineFill, 
+                    { 
+                      width: `${((parseInt(rpe) - 1) / 9) * 100}%`,
+                      backgroundColor: getRpeColor(parseInt(rpe)) 
+                    }
+                  ]} 
+                />
+
+                {/* Nodes (1 to 10) */}
+                <View style={styles.sliderNodesContainer}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                    const isSelected = rpe === num.toString();
+                    const isPassed = parseInt(rpe) >= num;
+
+                    return (
+                      <TouchableOpacity
+                        key={num}
+                        style={styles.sliderNodeTouchTarget}
+                        onPress={() => setRpe(num.toString())}
+                        activeOpacity={0.8}
+                      >
+                        <View 
+                          style={[
+                            styles.sliderNodeDot,
+                            isPassed && { backgroundColor: getRpeColor(parseInt(rpe)) },
+                            isSelected && {
+                              borderColor: getRpeColor(parseInt(rpe)),
+                              borderWidth: 3.5,
+                              backgroundColor: '#FFFFFF',
+                              transform: [{ scale: 1.35 }],
+                              shadowColor: getRpeColor(parseInt(rpe)),
+                              shadowOffset: { width: 0, height: 3 },
+                              shadowOpacity: 0.35,
+                              shadowRadius: 5,
+                              elevation: 5,
+                            }
+                          ]}
+                        />
+                        <Text 
+                          style={[
+                            styles.sliderNodeText,
+                            isSelected && {
+                              color: getRpeColor(parseInt(rpe)),
+                              fontWeight: '900',
+                              transform: [{ scale: 1.15 }]
+                            }
+                          ]}
+                        >
+                          {num}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Slider Labels (EZ on left, HARD on right) */}
+              <View style={styles.sliderLabelsRow}>
+                <Text style={[styles.sliderLabelText, parseInt(rpe) <= 3 && { color: '#34C759', fontWeight: '800' }]}>Easy</Text>
+                <Text style={[styles.sliderLabelText, (parseInt(rpe) >= 4 && parseInt(rpe) <= 6) && { color: '#FF9500', fontWeight: '800' }]}>Moderate</Text>
+                <Text style={[styles.sliderLabelText, parseInt(rpe) >= 7 && { color: '#FF3B30', fontWeight: '800' }]}>Hard</Text>
+              </View>
             </View>
 
             <View style={styles.finishActionsRow}>
@@ -3837,29 +3924,86 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 16,
   },
-  rpeSliderRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 24,
-  },
-  rpeCell: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: COLORS.primaryLight,
-    justifyContent: 'center',
+  customRpeSliderContainer: {
+    width: '100%',
     alignItems: 'center',
+    marginBottom: 28,
+    paddingHorizontal: 4,
   },
-  rpeCellSelected: {
-    backgroundColor: COLORS.primary,
+  rpeStatusBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 6,
   },
-  rpeCellText: {
+  rpeStatusText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.primary,
+    fontWeight: '800',
   },
-  rpeCellTextSelected: {
-    color: '#FFFFFF',
+  rpeAdaptationSub: {
+    fontSize: 11,
+    color: '#8E8E93',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  sliderTrackWrapper: {
+    width: '100%',
+    height: 48,
+    justifyContent: 'center',
+    position: 'relative',
+    marginVertical: 4,
+  },
+  sliderLineBg: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E5E5EA',
+  },
+  sliderLineFill: {
+    position: 'absolute',
+    left: 10,
+    height: 6,
+    borderRadius: 3,
+  },
+  sliderNodesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    position: 'absolute',
+    paddingHorizontal: 4,
+  },
+  sliderNodeTouchTarget: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 24,
+    height: 48,
+  },
+  sliderNodeDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#C7C7CC',
+  },
+  sliderNodeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#8E8E93',
+    marginTop: 6,
+  },
+  sliderLabelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 10,
+    marginTop: 8,
+  },
+  sliderLabelText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#8E8E93',
   },
   finishActionsRow: {
     flexDirection: 'row',
