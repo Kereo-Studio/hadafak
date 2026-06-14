@@ -26,10 +26,12 @@ import {
   Search,
   X,
   PlusCircle,
+  MinusCircle,
   Timer,
   Award,
   Clock,
   ChevronRight,
+  ChevronDown,
   RefreshCw,
   TrendingUp,
   Edit2,
@@ -135,10 +137,18 @@ export const WorkoutsScreen: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [isFinishModalVisible, setIsFinishModalVisible] = useState(false);
   const [expandedPreviews, setExpandedPreviews] = useState<Record<string, boolean>>({});
+  const [collapsedExercises, setCollapsedExercises] = useState<Record<string, boolean>>({});
   const [rpe, setRpe] = useState('7');
 
   const togglePreview = (exerciseId: string) => {
     setExpandedPreviews((prev) => ({
+      ...prev,
+      [exerciseId]: !prev[exerciseId],
+    }));
+  };
+
+  const toggleCollapse = (exerciseId: string) => {
+    setCollapsedExercises((prev) => ({
       ...prev,
       [exerciseId]: !prev[exerciseId],
     }));
@@ -1218,6 +1228,20 @@ export const WorkoutsScreen: React.FC = () => {
     );
   };
 
+  // Remove last Set row from exercise
+  const handleRemoveSet = (exerciseId: string) => {
+    setActiveExercises(
+      activeExercises.map((ae) => {
+        if (ae.exerciseId !== exerciseId) return ae;
+        if (ae.sets.length <= 1) return ae; // Keep at least one set
+        return {
+          ...ae,
+          sets: ae.sets.slice(0, -1),
+        };
+      })
+    );
+  };
+
   // Edit Set Values
   const handleEditSet = (
     exerciseId: string,
@@ -1456,7 +1480,13 @@ export const WorkoutsScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.appHeader}>
         <Text style={styles.headerTitle}>
-          {activeTab === 'gym' ? 'Gym History' : activeTab === 'runs' ? 'Runs History' : 'Training Plan'}
+          {isWorkoutActive
+            ? 'Active Workout'
+            : activeTab === 'gym'
+            ? 'Gym History'
+            : activeTab === 'runs'
+            ? 'Runs History'
+            : 'Training Plan'}
         </Text>
       </View>
 
@@ -2019,31 +2049,35 @@ export const WorkoutsScreen: React.FC = () => {
           <View>
             {/* Fixed Timer & Stats Panel */}
             <View style={styles.activeTimerCard}>
-              <View style={styles.timerHeaderRow}>
-                <View style={styles.timerBadge}>
-                  <Timer size={20} color={COLORS.primary} style={{ marginRight: 6 }} />
-                  <Text style={styles.timerText}>{formatDuration(workoutDuration)}</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>DURATION</Text>
+                  <Text style={styles.statValueLarge}>{formatDuration(workoutDuration)}</Text>
                 </View>
-                <View style={styles.volumeBadge}>
-                  <TrendingUp size={16} color={COLORS.success} style={{ marginRight: 4 }} />
-                  <Text style={styles.volumeText}>{calculateTotalLoggedVolume()} kg Volume</Text>
+                <View style={styles.statDivider} />
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>TOTAL VOLUME</Text>
+                  <Text style={styles.statValueLarge}>{calculateTotalLoggedVolume()} kg</Text>
                 </View>
               </View>
 
               <View style={styles.activeActionsRow}>
                 <TouchableOpacity
-                  onPress={() => setIsFinishModalVisible(true)}
-                  style={styles.completeBtn}
+                  onPress={handleDiscardWorkout}
+                  style={styles.discardBtn}
+                  activeOpacity={0.7}
                 >
-                  <Check size={16} color="#FFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.completeBtnText}>Finish Workout</Text>
+                  <X size={16} color={COLORS.error} style={{ marginRight: 6 }} />
+                  <Text style={styles.discardBtnText}>Discard</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={handleDiscardWorkout}
-                  style={styles.discardBtn}
+                  onPress={() => setIsFinishModalVisible(true)}
+                  style={styles.completeBtn}
+                  activeOpacity={0.8}
                 >
-                  <X size={16} color={COLORS.error} />
+                  <Check size={16} color="#FFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.completeBtnText}>Finish Workout</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2053,125 +2087,169 @@ export const WorkoutsScreen: React.FC = () => {
               activeExercises.map((ae) => (
                 <View key={ae.exerciseId} style={styles.exerciseCard}>
                   <View style={styles.exerciseHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.exerciseTitle}>{ae.name}</Text>
-                      {ae.source === 'exercicedb' && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                          <Zap size={10} color="#7C3AED" style={{ marginRight: 3 }} />
-                          <Text style={{ fontSize: 10, color: '#7C3AED', fontWeight: '600' }}>ExerciseDB</Text>
-                        </View>
-                      )}
-                      {ae.source === 'wger' && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                          <BookOpen size={10} color="#069667" style={{ marginRight: 3 }} />
-                          <Text style={{ fontSize: 10, color: '#069667', fontWeight: '600' }}>Wger</Text>
-                        </View>
-                      )}
-                      {!ae.gifUrl && ae.source && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
-                          <ImageOff size={10} color={COLORS.textMuted} style={{ marginRight: 3 }} />
-                          <Text style={{ fontSize: 10, color: COLORS.textMuted }}>No preview available for this exercise</Text>
-                        </View>
-                      )}
-                      {ae.gifUrl && (
-                        <TouchableOpacity
-                          onPress={() => togglePreview(ae.exerciseId)}
-                          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}
-                          activeOpacity={0.7}
-                        >
-                          {expandedPreviews[ae.exerciseId] ? (
-                            <>
-                              <EyeOff size={12} color={COLORS.primary} style={{ marginRight: 4 }} />
-                              <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '600' }}>Hide Preview</Text>
-                            </>
-                          ) : (
-                            <>
-                              <Eye size={12} color={COLORS.primary} style={{ marginRight: 4 }} />
-                              <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '600' }}>Show Preview</Text>
-                            </>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => toggleCollapse(ae.exerciseId)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', paddingRight: 8 }}>
+                        {collapsedExercises[ae.exerciseId] ? (
+                          <ChevronRight size={18} color={COLORS.text} style={{ marginRight: 6 }} />
+                        ) : (
+                          <ChevronDown size={18} color={COLORS.text} style={{ marginRight: 6 }} />
+                        )}
+                        <Text style={[styles.exerciseTitle, { flexShrink: 1 }]}>{ae.name}</Text>
+                      </View>
+                      
+                      {collapsedExercises[ae.exerciseId] ? (
+                        <Text style={styles.exerciseSummaryText}>
+                          {ae.sets.length} {ae.sets.length === 1 ? 'set' : 'sets'} • {ae.sets.filter(s => s.completed).length} completed
+                        </Text>
+                      ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                          {ae.source === 'exercicedb' && (
+                            <View style={styles.badgeExerciseDb}>
+                              <Zap size={10} color="#7C3AED" style={{ marginRight: 3 }} />
+                              <Text style={styles.badgeTextExerciseDb}>ExerciseDB</Text>
+                            </View>
                           )}
-                        </TouchableOpacity>
+                          {ae.source === 'wger' && (
+                            <View style={styles.badgeWger}>
+                              <BookOpen size={10} color="#069667" style={{ marginRight: 3 }} />
+                              <Text style={styles.badgeTextWger}>Wger</Text>
+                            </View>
+                          )}
+                          {ae.gifUrl && (
+                            <TouchableOpacity
+                              onPress={() => togglePreview(ae.exerciseId)}
+                              style={styles.previewBtn}
+                              activeOpacity={0.7}
+                            >
+                              {expandedPreviews[ae.exerciseId] ? (
+                                <>
+                                  <EyeOff size={10} color={COLORS.primary} style={{ marginRight: 4 }} />
+                                  <Text style={styles.previewBtnText}>Hide Animation</Text>
+                                </>
+                              ) : (
+                                <>
+                                  <Eye size={10} color={COLORS.primary} style={{ marginRight: 4 }} />
+                                  <Text style={styles.previewBtnText}>Show Animation</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       )}
-                    </View>
+                      
+                      {!collapsedExercises[ae.exerciseId] && !ae.gifUrl && ae.source && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+                          <ImageOff size={10} color={COLORS.textMuted} style={{ marginRight: 3 }} />
+                          <Text style={{ fontSize: 10, color: COLORS.textMuted }}>No preview available</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    
                     <TouchableOpacity
                       onPress={() => handleDeleteExercise(ae.exerciseId)}
                       style={styles.deleteExBtn}
+                      activeOpacity={0.7}
                     >
-                      <Trash2 size={16} color={COLORS.error} />
+                      <Trash2 size={16} color={COLORS.textMuted} />
                     </TouchableOpacity>
                   </View>
 
-                  {ae.gifUrl && expandedPreviews[ae.exerciseId] && (
-                    <View style={styles.gifContainer}>
-                      <Image
-                        source={{ uri: ae.gifUrl.startsWith('/') ? `${API_BASE_URL.replace('/api/v1', '')}${ae.gifUrl}` : ae.gifUrl }}
-                        style={styles.gifImage}
-                        resizeMode="contain"
-                      />
-                    </View>
-                  )}
+                  {!collapsedExercises[ae.exerciseId] && (
+                    <>
+                      {ae.gifUrl && expandedPreviews[ae.exerciseId] && (
+                        <View style={styles.gifContainer}>
+                          <Image
+                            source={{ uri: ae.gifUrl.startsWith('/') ? `${API_BASE_URL.replace('/api/v1', '')}${ae.gifUrl}` : ae.gifUrl }}
+                            style={styles.gifImage}
+                            resizeMode="contain"
+                          />
+                        </View>
+                      )}
 
-                  {/* Header Row for set log columns */}
-                  <View style={styles.setRowLabels}>
-                    <Text style={[styles.setLabelCol, { width: '15%' }]}>Set</Text>
-                    <Text style={[styles.setLabelCol, { width: '30%', textAlign: 'center' }]}>kg</Text>
-                    <Text style={[styles.setLabelCol, { width: '30%', textAlign: 'center' }]}>Reps</Text>
-                    <Text style={[styles.setLabelCol, { width: '25%', textAlign: 'right' }]}>Tick</Text>
-                  </View>
-
-                  {/* Set log inputs rows */}
-                  {ae.sets.map((set) => (
-                    <View key={set.setNumber} style={[styles.setInputsRow, set.completed && styles.setRowCompleted]}>
-                      <Text style={[styles.setNumText, { width: '15%' }, set.completed && styles.setNumTextCompleted]}>
-                        {set.setNumber}
-                      </Text>
-                      
-                      <View style={[styles.setInputWrapper, { width: '30%' }]}>
-                        <TextInput
-                          style={[
-                            styles.setInput,
-                            set.completed && styles.setInputCompleted
-                          ]}
-                          value={set.weight.toString()}
-                          keyboardType="numeric"
-                          onChangeText={(v) => handleEditSet(ae.exerciseId, set.setNumber, 'weight', v)}
-                          editable={!set.completed}
-                        />
+                      {/* Header Row for set log columns */}
+                      <View style={styles.setRowLabels}>
+                        <Text style={[styles.setLabelCol, { width: '12%' }]}>Set</Text>
+                        <Text style={[styles.setLabelCol, { width: '25%', textAlign: 'center' }]}>Previous</Text>
+                        <Text style={[styles.setLabelCol, { width: '25%', textAlign: 'center' }]}>kg</Text>
+                        <Text style={[styles.setLabelCol, { width: '25%', textAlign: 'center' }]}>Reps</Text>
+                        <Text style={[styles.setLabelCol, { width: '13%', textAlign: 'right' }]}>Tick</Text>
                       </View>
 
-                      <View style={[styles.setInputWrapper, { width: '30%' }]}>
-                        <TextInput
-                          style={[
-                            styles.setInput,
-                            set.completed && styles.setInputCompleted
-                          ]}
-                          value={set.reps.toString()}
-                          keyboardType="numeric"
-                          onChangeText={(v) => handleEditSet(ae.exerciseId, set.setNumber, 'reps', v)}
-                          editable={!set.completed}
-                        />
-                      </View>
+                      {/* Set log inputs rows */}
+                      {ae.sets.map((set) => (
+                        <View key={set.setNumber} style={[styles.setInputsRow, set.completed && styles.setRowCompleted]}>
+                          <Text style={[styles.setNumText, { width: '12%' }, set.completed && styles.setNumTextCompleted]}>
+                            {set.setNumber}
+                          </Text>
+                          
+                          <Text style={[styles.setPrevText, { width: '25%', textAlign: 'center' }]}>
+                            —
+                          </Text>
+                          
+                          <View style={[styles.setInputWrapper, { width: '25%' }]}>
+                            <TextInput
+                              style={[
+                                styles.setInput,
+                                set.completed && styles.setInputCompleted
+                              ]}
+                              value={set.weight.toString()}
+                              keyboardType="numeric"
+                              onChangeText={(v) => handleEditSet(ae.exerciseId, set.setNumber, 'weight', v)}
+                              editable={!set.completed}
+                            />
+                          </View>
 
-                      <View style={[{ width: '25%', alignItems: 'flex-end' }]}>
+                          <View style={[styles.setInputWrapper, { width: '25%' }]}>
+                            <TextInput
+                              style={[
+                                styles.setInput,
+                                set.completed && styles.setInputCompleted
+                              ]}
+                              value={set.reps.toString()}
+                              keyboardType="numeric"
+                              onChangeText={(v) => handleEditSet(ae.exerciseId, set.setNumber, 'reps', v)}
+                              editable={!set.completed}
+                            />
+                          </View>
+
+                          <View style={[{ width: '13%', alignItems: 'flex-end' }]}>
+                            <TouchableOpacity
+                              style={[styles.checkbox, set.completed && styles.checkboxChecked]}
+                              onPress={() => handleToggleSetComplete(ae.exerciseId, set.setNumber)}
+                              activeOpacity={0.8}
+                            >
+                              {set.completed && <Check size={12} color="#FFF" />}
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+
+                      {/* Add/Remove set buttons split */}
+                      <View style={styles.splitSetButtonsRow}>
                         <TouchableOpacity
-                          style={[styles.checkbox, set.completed && styles.checkboxChecked]}
-                          onPress={() => handleToggleSetComplete(ae.exerciseId, set.setNumber)}
-                          activeOpacity={0.8}
+                          onPress={() => handleRemoveSet(ae.exerciseId)}
+                          style={[styles.setSplitBtn, styles.setRemoveSplitBtn]}
+                          activeOpacity={0.7}
                         >
-                          {set.completed && <Check size={12} color="#FFF" />}
+                          <MinusCircle size={14} color={COLORS.error} style={{ marginRight: 6 }} />
+                          <Text style={styles.removeSetBtnText}>Remove Set</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => handleAddSet(ae.exerciseId)}
+                          style={[styles.setSplitBtn, styles.setAddSplitBtn]}
+                          activeOpacity={0.7}
+                        >
+                          <PlusCircle size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
+                          <Text style={styles.addSetBtnText}>Add Set</Text>
                         </TouchableOpacity>
                       </View>
-                    </View>
-                  ))}
-
-                  {/* Add set button */}
-                  <TouchableOpacity
-                    onPress={() => handleAddSet(ae.exerciseId)}
-                    style={styles.addSetBtn}
-                  >
-                    <PlusCircle size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
-                    <Text style={styles.addSetBtnText}>Add Set</Text>
-                  </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               ))
             ) : (
@@ -3359,76 +3437,72 @@ const styles = StyleSheet.create({
   },
   // Active Timer Panel
   activeTimerCard: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: 28,
+    backgroundColor: '#0F172A',
+    borderRadius: 24,
     padding: 20,
     marginBottom: 20,
-    alignItems: 'center',
+    ...SHADOWS.card,
   },
-  timerHeaderRow: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
+    alignItems: 'center',
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  timerBadge: {
-    flexDirection: 'row',
+  statBox: {
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    flex: 1,
   },
-  timerText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.primary,
-  },
-  volumeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  volumeText: {
-    fontSize: 14,
+  statLabel: {
+    fontSize: 10,
     fontWeight: '700',
-    color: COLORS.success,
+    color: '#94A3B8',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  statValueLarge: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  statDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#334155',
   },
   activeActionsRow: {
     flexDirection: 'row',
     width: '100%',
     gap: 12,
   },
-  completeBtn: {
+  discardBtn: {
     flex: 1,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: COLORS.primary,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#334155',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  discardBtnText: {
+    color: '#F1F5F9',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  completeBtn: {
+    flex: 2,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: COLORS.success,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
   completeBtnText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
-  },
-  discardBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   emptyActiveCard: {
     alignItems: 'center',
@@ -3474,13 +3548,52 @@ const styles = StyleSheet.create({
   exerciseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 14,
   },
   exerciseTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: COLORS.text,
+  },
+  badgeExerciseDb: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F3FF',
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  badgeTextExerciseDb: {
+    fontSize: 10,
+    color: '#7C3AED',
+    fontWeight: '700',
+  },
+  badgeWger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  badgeTextWger: {
+    fontSize: 10,
+    color: '#047857',
+    fontWeight: '700',
+  },
+  previewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+  },
+  previewBtnText: {
+    fontSize: 10,
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   deleteExBtn: {
     padding: 4,
@@ -3516,6 +3629,11 @@ const styles = StyleSheet.create({
   setNumTextCompleted: {
     color: COLORS.success,
   },
+  setPrevText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
   setInputWrapper: {
     alignItems: 'center',
   },
@@ -3524,12 +3642,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 8,
-    width: 64,
+    width: 60,
     height: 34,
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.text,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   setInputCompleted: {
     backgroundColor: 'transparent',
@@ -3549,28 +3671,52 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.success,
     borderColor: COLORS.success,
   },
-  addSetBtn: {
+  exerciseSummaryText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  splitSetButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
+    justifyContent: 'space-between',
     marginTop: 12,
+    gap: 12,
+  },
+  setSplitBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  setRemoveSplitBtn: {
+    backgroundColor: '#FEF2F2',
+  },
+  setAddSplitBtn: {
     backgroundColor: COLORS.primaryLight,
-    borderRadius: 12,
+  },
+  removeSetBtnText: {
+    fontSize: 12,
+    color: COLORS.error,
+    fontWeight: '700',
   },
   addSetBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.primary,
     fontWeight: '700',
   },
   generalAddExBtn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 26,
-    height: 52,
+    borderRadius: 14,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
     marginTop: 10,
+    marginBottom: 40,
     ...SHADOWS.subtle,
   },
   generalAddExText: {
