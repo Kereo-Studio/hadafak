@@ -139,6 +139,13 @@ export const WorkoutsScreen: React.FC = () => {
   const [expandedPreviews, setExpandedPreviews] = useState<Record<string, boolean>>({});
   const [collapsedExercises, setCollapsedExercises] = useState<Record<string, boolean>>({});
   const [rpe, setRpe] = useState('5');
+  const [sliderWidth, setSliderWidth] = useState(250);
+
+  const handleSliderGesture = (locationX: number) => {
+    const ratio = Math.max(0, Math.min(1, locationX / sliderWidth));
+    const val = Math.round(ratio * 9) + 1; // 1 to 10
+    setRpe(val.toString());
+  };
 
   const getRpeColor = (num: number) => {
     if (num <= 3) return '#34C759'; // Easy: green
@@ -2402,7 +2409,7 @@ export const WorkoutsScreen: React.FC = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.finishModalContent}>
-            <Award size={40} color={COLORS.primary} style={{ marginBottom: 12, opacity: 0.9 }} />
+            <Award size={36} color={COLORS.primary} style={{ marginBottom: 8, opacity: 0.9 }} />
             <Text style={styles.finishModalTitle}>How was your workout?</Text>
             
             <Text style={styles.finishModalSubText}>
@@ -2419,10 +2426,17 @@ export const WorkoutsScreen: React.FC = () => {
               </Text>
             </View>
 
-            {/* Custom Premium Slider Track */}
-            <View style={styles.sliderContainer}>
+            {/* Custom Premium Slider Track - Draggable */}
+            <View 
+              style={styles.sliderContainer}
+              onLayout={(e) => setSliderWidth(e.nativeEvent.layout.width)}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={(evt) => handleSliderGesture(evt.nativeEvent.locationX)}
+              onResponderMove={(evt) => handleSliderGesture(evt.nativeEvent.locationX)}
+            >
               {/* The pill track bar */}
-              <View style={styles.sliderTrackLine}>
+              <View pointerEvents="none" style={styles.sliderTrackLine}>
                 {/* Colored fill */}
                 <View 
                   style={[
@@ -2436,17 +2450,15 @@ export const WorkoutsScreen: React.FC = () => {
               </View>
 
               {/* Steps/Ticks & Floating Thumb */}
-              <View style={styles.sliderNodesRow}>
+              <View pointerEvents="none" style={styles.sliderNodesRow}>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
                   const isSelected = rpe === num.toString();
                   const isPassed = parseInt(rpe) >= num;
 
                   return (
-                    <TouchableOpacity
+                    <View
                       key={num}
                       style={styles.sliderNodeCell}
-                      onPress={() => setRpe(num.toString())}
-                      activeOpacity={0.8}
                     >
                       {isSelected ? (
                         <View style={[styles.sliderThumbFloating, { borderColor: COLORS.primary }]}>
@@ -2462,7 +2474,7 @@ export const WorkoutsScreen: React.FC = () => {
                           ]}
                         />
                       )}
-                    </TouchableOpacity>
+                    </View>
                   );
                 })}
               </View>
