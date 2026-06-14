@@ -643,7 +643,13 @@ export const MapScreen: React.FC = () => {
     Location.requestForegroundPermissionsAsync().then(({ status: perm }) => {
       if (perm === 'granted') {
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(loc => {
-          setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          const pos = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+          setUserLocation(pos);
+          mapRef.current?.animateToRegion({
+            ...pos,
+            latitudeDelta: 0.005,
+            longitudeDelta: 0.005,
+          }, 600);
         }).catch(() => {});
       }
     });

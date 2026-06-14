@@ -69,18 +69,18 @@ export async function runSeeding(dataSource: DataSource) {
 
   console.log('Seeding exercises...');
   const exercisesData = [
-    { displayName: 'Bench Press', muscleGroupName: 'chest', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
-    { displayName: 'Incline Dumbbell Press', muscleGroupName: 'chest', equipmentName: 'dumbbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
-    { displayName: 'Barbell Squat', muscleGroupName: 'quads', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
-    { displayName: 'Romanian Deadlift', muscleGroupName: 'hamstrings', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
-    { displayName: 'Pull-up', muscleGroupName: 'back', equipmentName: 'bodyweight', difficulty: ExerciseDifficulty.INTERMEDIATE },
-    { displayName: 'Barbell Row', muscleGroupName: 'back', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
-    { displayName: 'Overhead Press', muscleGroupName: 'shoulders', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE },
-    { displayName: 'Dumbbell Lateral Raise', muscleGroupName: 'shoulders', equipmentName: 'dumbbell', difficulty: ExerciseDifficulty.BEGINNER },
-    { displayName: 'Bicep Curl', muscleGroupName: 'biceps', equipmentName: 'dumbbell', difficulty: ExerciseDifficulty.BEGINNER },
-    { displayName: 'Tricep Pushdown', muscleGroupName: 'triceps', equipmentName: 'cable', difficulty: ExerciseDifficulty.BEGINNER },
-    { displayName: 'Lying Leg Curl', muscleGroupName: 'hamstrings', equipmentName: 'machine', difficulty: ExerciseDifficulty.BEGINNER },
-    { displayName: 'Leg Extension', muscleGroupName: 'quads', equipmentName: 'machine', difficulty: ExerciseDifficulty.BEGINNER },
+    { displayName: 'Bench Press', muscleGroupName: 'chest', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE, externalId: '0025', gifUrl: '/api/v1/exercises/image/0025' },
+    { displayName: 'Incline Dumbbell Press', muscleGroupName: 'chest', equipmentName: 'dumbbell', difficulty: ExerciseDifficulty.INTERMEDIATE, externalId: '0314', gifUrl: '/api/v1/exercises/image/0314' },
+    { displayName: 'Barbell Squat', muscleGroupName: 'quads', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE, externalId: '0042', gifUrl: '/api/v1/exercises/image/0042' },
+    { displayName: 'Romanian Deadlift', muscleGroupName: 'hamstrings', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE, externalId: '0086', gifUrl: '/api/v1/exercises/image/0086' },
+    { displayName: 'Pull-up', muscleGroupName: 'back', equipmentName: 'bodyweight', difficulty: ExerciseDifficulty.INTERMEDIATE, externalId: '0652', gifUrl: '/api/v1/exercises/image/0652' },
+    { displayName: 'Barbell Row', muscleGroupName: 'back', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE, externalId: '0027', gifUrl: '/api/v1/exercises/image/0027' },
+    { displayName: 'Overhead Press', muscleGroupName: 'shoulders', equipmentName: 'barbell', difficulty: ExerciseDifficulty.INTERMEDIATE, externalId: '0373', gifUrl: '/api/v1/exercises/image/0373' },
+    { displayName: 'Dumbbell Lateral Raise', muscleGroupName: 'shoulders', equipmentName: 'dumbbell', difficulty: ExerciseDifficulty.BEGINNER, externalId: '0335', gifUrl: '/api/v1/exercises/image/0335' },
+    { displayName: 'Bicep Curl', muscleGroupName: 'biceps', equipmentName: 'dumbbell', difficulty: ExerciseDifficulty.BEGINNER, externalId: '1653', gifUrl: '/api/v1/exercises/image/1653' },
+    { displayName: 'Tricep Pushdown', muscleGroupName: 'triceps', equipmentName: 'cable', difficulty: ExerciseDifficulty.BEGINNER, externalId: '0242', gifUrl: '/api/v1/exercises/image/0242' },
+    { displayName: 'Lying Leg Curl', muscleGroupName: 'hamstrings', equipmentName: 'machine', difficulty: ExerciseDifficulty.BEGINNER, externalId: '0394', gifUrl: '/api/v1/exercises/image/0394' },
+    { displayName: 'Leg Extension', muscleGroupName: 'quads', equipmentName: 'machine', difficulty: ExerciseDifficulty.BEGINNER, externalId: '0586', gifUrl: '/api/v1/exercises/image/0586' },
   ];
 
   const exerciseRepository = dataSource.getRepository(Exercise);
@@ -94,6 +94,8 @@ export async function runSeeding(dataSource: DataSource) {
         difficulty: e.difficulty,
         instructions: [`Set up for ${e.displayName}`, `Perform ${e.displayName} with correct form`],
         source: ExerciseSource.INTERNAL,
+        externalId: e.externalId,
+        gifUrl: e.gifUrl,
       });
       return exerciseRepository.save(item);
     })

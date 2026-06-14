@@ -153,6 +153,9 @@ export const HomeScreen: React.FC = () => {
   // Today's details grid indicators
   const [todayCalories, setTodayCalories] = useState('0');
   const [todaySteps, setTodaySteps] = useState('0');
+  const [todayActiveTime, setTodayActiveTime] = useState(0);
+  const [weightProgressTitle, setWeightProgressTitle] = useState('Weight Progress');
+  const [weightProgressValue, setWeightProgressValue] = useState('0.0 kg');
 
   // My Plan state
   const [myPlan, setMyPlan] = useState({
@@ -205,11 +208,23 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  const isFutureDate = (dateStr: string) => {
+    if (!dateStr) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selected = new Date(dateStr + 'T12:00:00');
+    selected.setHours(0, 0, 0, 0);
+    return selected.getTime() > today.getTime();
+  };
+
   // Function to load all dashboard statistics from NestJS APIs
   const fetchDashboardData = async (dateStr?: string) => {
     try {
       const todayStr = dateStr || selectedDateStr;
       setSelectedDateStr(todayStr);
+
+      const realTodayStr = new Date().toISOString().split('T')[0];
+      const isSelectedDateRealToday = todayStr === realTodayStr;
 
       // Ensure user has a profile and program assigned
       let profile: any = null;
@@ -253,13 +268,14 @@ export const HomeScreen: React.FC = () => {
 
 
       // Run calls in parallel to ensure high performance
-      const [authRes, stepsRes, nutritionRes, workoutsRes, runsRes, recipesRes] = await Promise.allSettled([
+      const [authRes, stepsRes, nutritionRes, workoutsRes, runsRes, recipesRes, progressRes] = await Promise.allSettled([
         api.get('/auth/me'),
         api.get(`/steps/today?date=${todayStr}`),
         api.get(`/nutrition/logs/today?date=${todayStr}`),
         api.get('/workouts/history'),
         api.get('/runs'),
         api.get('/recipes'),
+        api.get('/progress/analytics'),
       ]);
 
       // 1. Map user greeting and avatar image
@@ -291,17 +307,19 @@ export const HomeScreen: React.FC = () => {
 
       // Fetch local steps count for today as a baseline to prevent 0 resets
       let localStepsForToday = 0;
-      try {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const now = new Date();
-        const localRes = await Pedometer.getStepCountAsync(startOfToday, now);
-        if (localRes && localRes.steps !== undefined) {
-          localStepsForToday = localRes.steps;
+      if (isSelectedDateRealToday) {
+        try {
+          const startOfToday = new Date();
+          startOfToday.setHours(0, 0, 0, 0);
+          const now = new Date();
+          const localRes = await Pedometer.getStepCountAsync(startOfToday, now);
+          if (localRes && localRes.steps !== undefined) {
+            localStepsForToday = localRes.steps;
+          }
+        } catch (e) {
+          // Fallback to AsyncStorage (Android compatibility)
+          localStepsForToday = await getLocalTodaySteps();
         }
-      } catch (e) {
-        // Fallback to AsyncStorage (Android compatibility)
-        localStepsForToday = await getLocalTodaySteps();
       }
 
       // 2. Map steps & distance
@@ -325,23 +343,32 @@ export const HomeScreen: React.FC = () => {
       if (stepsRes.status === 'fulfilled' && stepsRes.value.data) {
         const data = stepsRes.value.data;
         if (data.totalSteps !== undefined) {
-          // Use whichever is higher (backend or local device reading) to prevent resets to 0
-          const finalSteps = Math.max(data.totalSteps, localStepsForToday);
+          // Use whichever is higher (backend or local device reading) to prevent resets to 0 ONLY if selected date is real today
+          const finalSteps = isSelectedDateRealToday ? Math.max(data.totalSteps, localStepsForToday) : data.totalSteps;
           currentSteps = finalSteps;
           setTodaySteps(finalSteps.toLocaleString());
-          saveLocalTodaySteps(finalSteps);
+          if (isSelectedDateRealToday) {
+            saveLocalTodaySteps(finalSteps);
+          }
 
           currentDistance = `${Math.round(finalSteps * strideLengthKm * 1000)} m`;
           stepsBurned = Math.round(finalSteps * caloriesPerStep);
         }
       } else {
-        // Fallback: Query Pedometer directly if server is offline (e.g. phone is unplugged)
-        currentSteps = localStepsForToday;
-        setTodaySteps(localStepsForToday.toLocaleString());
-        saveLocalTodaySteps(localStepsForToday);
+        // Fallback: Query Pedometer directly if server is offline (e.g. phone is unplugged) ONLY if selected date is real today
+        if (isSelectedDateRealToday) {
+          currentSteps = localStepsForToday;
+          setTodaySteps(localStepsForToday.toLocaleString());
+          saveLocalTodaySteps(localStepsForToday);
 
-        currentDistance = `${Math.round(localStepsForToday * strideLengthKm * 1000)} m`;
-        stepsBurned = Math.round(localStepsForToday * caloriesPerStep);
+          currentDistance = `${Math.round(localStepsForToday * strideLengthKm * 1000)} m`;
+          stepsBurned = Math.round(localStepsForToday * caloriesPerStep);
+        } else {
+          currentSteps = 0;
+          setTodaySteps('0');
+          currentDistance = '0 m';
+          stepsBurned = 0;
+        }
       }
 
       // 3. Map calories burnt & consumed
@@ -378,6 +405,7 @@ export const HomeScreen: React.FC = () => {
       }
       setSuggestedRecipes(filtered);
 
+
       if (profile && profile.currentProgram) {
         const totalDays = profile.currentProgram.days ? profile.currentProgram.days.length : 0;
         let activeDayIdx = 0;
@@ -403,20 +431,22 @@ export const HomeScreen: React.FC = () => {
         });
       }
 
-      // Calculate runs burned today
+      // Calculate runs burned today and active runs duration
       let runsBurned = 0;
+      let runsDurationMinutes = 0;
       if (runsRes.status === 'fulfilled' && Array.isArray(runsRes.value.data)) {
-        runsBurned = runsRes.value.data
-          .filter((run: any) => run.startTime && run.startTime.startsWith(todayStr))
-          .reduce((sum: number, run: any) => sum + (run.caloriesBurned || 0), 0);
+        const todayRuns = runsRes.value.data.filter((run: any) => run.startTime && run.startTime.startsWith(todayStr));
+        runsBurned = todayRuns.reduce((sum: number, run: any) => sum + (run.caloriesBurned || 0), 0);
+        runsDurationMinutes = todayRuns.reduce((sum: number, run: any) => sum + Math.round((run.durationSeconds || 0) / 60), 0);
       }
 
-      // Calculate workouts burned today
+      // Calculate workouts burned today and active workouts duration
       let workoutsBurned = 0;
+      let workoutsDurationMinutes = 0;
       if (workoutsRes.status === 'fulfilled' && Array.isArray(workoutsRes.value.data)) {
-        workoutsBurned = workoutsRes.value.data
-          .filter((w: any) => w.completed && w.date === todayStr)
-          .reduce((sum: number, w: any) => sum + (w.duration ? Math.round(w.duration * 7.5) : 300), 0);
+        const todayWorkouts = workoutsRes.value.data.filter((w: any) => w.completed && w.date === todayStr);
+        workoutsBurned = todayWorkouts.reduce((sum: number, w: any) => sum + (w.duration ? Math.round(w.duration * 7.5) : 300), 0);
+        workoutsDurationMinutes = todayWorkouts.reduce((sum: number, w: any) => sum + (w.duration || 40), 0);
       }
 
       const totalBurned = Math.round(stepsBurned + runsBurned + workoutsBurned);
@@ -426,6 +456,46 @@ export const HomeScreen: React.FC = () => {
       setEatenCalories(consumedKcal);
       setBurnedCalories(totalBurned);
       setNetCalories(Math.max(0, target - consumedKcal + totalBurned));
+      setTodayActiveTime(runsDurationMinutes + workoutsDurationMinutes);
+
+      // Calculate weight change progress
+      let weightChangeText = '0.0 kg';
+      let weightChangeTitle = 'Weight Progress';
+
+      if (progressRes && progressRes.status === 'fulfilled' && progressRes.value.data && progressRes.value.data.hasData) {
+        const { startingWeight, currentWeight, totalWeightChange } = progressRes.value.data;
+        const goal = profile?.goal || 'stay_active';
+        
+        if (goal === 'lose_fat' || goal === 'lose_weight') {
+          weightChangeTitle = 'Mass Lost';
+          const lost = startingWeight - currentWeight;
+          weightChangeText = `${lost.toFixed(1)} kg`;
+        } else if (goal === 'gain_muscle' || goal === 'gain_weight') {
+          weightChangeTitle = 'Mass Gained';
+          const gained = currentWeight - startingWeight;
+          weightChangeText = `${gained.toFixed(1)} kg`;
+        } else {
+          if (totalWeightChange < 0) {
+            weightChangeTitle = 'Mass Lost';
+            weightChangeText = `${Math.abs(totalWeightChange).toFixed(1)} kg`;
+          } else {
+            weightChangeTitle = 'Mass Gained';
+            weightChangeText = `${totalWeightChange.toFixed(1)} kg`;
+          }
+        }
+      } else {
+        const goal = profile?.goal || 'stay_active';
+        if (goal === 'lose_fat' || goal === 'lose_weight') {
+          weightChangeTitle = 'Mass Lost';
+        } else if (goal === 'gain_muscle' || goal === 'gain_weight') {
+          weightChangeTitle = 'Mass Gained';
+        } else {
+          weightChangeTitle = 'Weight Progress';
+        }
+        weightChangeText = '0.0 kg';
+      }
+      setWeightProgressTitle(weightChangeTitle);
+      setWeightProgressValue(weightChangeText);
 
       // 5. Calculate Points dynamically: 1 pt per 10 steps + 200 pts per completed workout
       const calculatedPoints = Math.round(currentSteps / 10) + (workoutLogs.length * 200);
@@ -436,42 +506,35 @@ export const HomeScreen: React.FC = () => {
         points: calculatedPoints > 0 ? calculatedPoints.toLocaleString() : '1248',
       });
 
-      // 6. Fetch weekly logs for Active Calories Burned chart
-      const getWeekRangeStr = () => {
-        const baseDate = new Date(todayStr + 'T12:00:00');
-        const dayOfWeek = baseDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-
-        const monday = new Date(baseDate);
-        monday.setDate(baseDate.getDate() + distanceToMonday);
-
-        const sunday = new Date(monday);
-        sunday.setDate(monday.getDate() + 6);
-
+      // 6. Fetch weekly logs for Active Calories Burned chart (always ending with real-life today)
+      const getHistoryRangeStr = () => {
+        const endObj = new Date(); // Today in real life
+        const startObj = new Date(endObj.getTime() - 6 * 24 * 60 * 60 * 1000);
+        
         return {
-          start: monday.toISOString().split('T')[0],
-          end: sunday.toISOString().split('T')[0]
+          start: startObj.toISOString().split('T')[0],
+          end: endObj.toISOString().split('T')[0]
         };
       };
 
-      const { start, end } = getWeekRangeStr();
+      const { start, end } = getHistoryRangeStr();
       const weeklyRes = await api.get(`/steps/history?startDate=${start}&endDate=${end}`);
 
-      const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const targetDay = new Date(todayStr + 'T12:00:00');
-      const selectedDayIdx = targetDay.getDay() === 0 ? 6 : targetDay.getDay() - 1;
+      const weekdayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const realTodayObj = new Date();
+      const startObj = new Date(realTodayObj.getTime() - 6 * 24 * 60 * 60 * 1000);
 
-      const initialChartData = weekdayNames.map((dayName, idx) => {
-        const d = new Date(start + 'T12:00:00');
-        d.setDate(d.getDate() + idx);
+      const initialChartData = Array.from({ length: 7 }).map((_, idx) => {
+        const d = new Date(startObj.getTime() + idx * 24 * 60 * 60 * 1000);
         const dateStr = d.toISOString().split('T')[0];
+        const dayName = weekdayNamesShort[d.getDay()];
         return {
           day: dayName,
           dateStr,
           steps: 0,
           calories: 0,
           value: 0,
-          color: idx === selectedDayIdx ? 'primary' : 'muted',
+          color: dateStr === todayStr ? 'primary' : 'muted',
         };
       });
 
@@ -663,11 +726,22 @@ export const HomeScreen: React.FC = () => {
         else if (exercise.id === 'walking') speed = 5.0;
         else if (exercise.id === 'hiking') speed = 4.5;
 
+        // Parse selectedDateStr (YYYY-MM-DD) and combine it with local current time
+        const now = new Date();
+        const [year, month, day] = selectedDateStr.split('-').map(Number);
+        
+        // Construct the end time on the selected date using current hour/min/sec
+        const endTimeObj = new Date();
+        endTimeObj.setFullYear(year, month - 1, day);
+        
+        // Calculate start time
+        const startTimeObj = new Date(endTimeObj.getTime() - durationMinutes * 60 * 1000);
+
         await api.post('/runs', {
           activityType: exercise.type, // run, walk, cycling, hiking
           title: `Quick Log ${exercise.name}`,
-          startTime: new Date(Date.now() - durationMinutes * 60 * 1000).toISOString(),
-          endTime: new Date().toISOString(),
+          startTime: startTimeObj.toISOString(),
+          endTime: endTimeObj.toISOString(),
           durationSeconds: durationMinutes * 60,
           distanceKm: parseFloat(((durationMinutes * speed) / 60).toFixed(2)),
           routeCoordinates: [],
@@ -677,6 +751,7 @@ export const HomeScreen: React.FC = () => {
         // approx 130 steps per min for jump rope
         await api.post('/steps/manual', {
           steps: Math.round(durationMinutes * 130),
+          date: selectedDateStr,
         });
       }
 
@@ -858,19 +933,25 @@ export const HomeScreen: React.FC = () => {
           {CARDIO_EXERCISES.map((exercise) => {
             const IconComponent = exercise.icon;
             const isActive = selectedActivity === exercise.id;
+            const isFuture = isFutureDate(selectedDateStr);
             return (
               <TouchableOpacity
                 key={exercise.id}
                 style={[
                   styles.activityCard,
                   isActive && styles.activityCardActive,
+                  isFuture && { opacity: 0.5 },
                 ]}
                 onPress={() => {
+                  if (isFuture) {
+                    Alert.alert('Future Date', 'You cannot log activities for future dates.');
+                    return;
+                  }
                   setSelectedActivity(exercise.id);
                   setSelectedActivityType(exercise.id);
                   setIsDurationModalVisible(true);
                 }}
-                activeOpacity={0.8}
+                activeOpacity={isFuture ? 1 : 0.8}
               >
                 <IconComponent
                   size={24}
@@ -1005,14 +1086,14 @@ export const HomeScreen: React.FC = () => {
           </Text>
 
           <View style={styles.todayInfoContainer}>
-            {/* Calories Card */}
+            {/* Calories Eaten Card */}
             <View style={[styles.infoMiniCard, { width: '48%' }]}>
               <View style={styles.miniHeader}>
-                <Text style={styles.miniTitle}>Calories</Text>
-                <Flame size={20} color={COLORS.primary} />
+                <Text style={styles.miniTitle}>Food Eaten</Text>
+                <Utensils size={20} color={COLORS.primary} />
               </View>
               <Text style={styles.miniValue}>{todayCalories}</Text>
-              <Text style={styles.miniLabel}>Kcal</Text>
+              <Text style={styles.miniLabel}>Kcal eaten</Text>
             </View>
 
             {/* Steps Card */}
@@ -1023,6 +1104,26 @@ export const HomeScreen: React.FC = () => {
               </View>
               <Text style={styles.miniValue}>{todaySteps}</Text>
               <Text style={styles.miniLabel}>Steps</Text>
+            </View>
+
+            {/* Active Time Card */}
+            <View style={[styles.infoMiniCard, { width: '48%' }]}>
+              <View style={styles.miniHeader}>
+                <Text style={styles.miniTitle}>Active Time</Text>
+                <Clock size={20} color={COLORS.primary} />
+              </View>
+              <Text style={styles.miniValue}>{todayActiveTime}</Text>
+              <Text style={styles.miniLabel}>Minutes</Text>
+            </View>
+
+            {/* Mass Progress Card */}
+            <View style={[styles.infoMiniCard, { width: '48%' }]}>
+              <View style={styles.miniHeader}>
+                <Text style={styles.miniTitle}>{weightProgressTitle}</Text>
+                <TrendingUp size={20} color={COLORS.primary} />
+              </View>
+              <Text style={styles.miniValue}>{weightProgressValue}</Text>
+              <Text style={styles.miniLabel}>Total change</Text>
             </View>
           </View>
 
@@ -1788,9 +1889,10 @@ const styles = StyleSheet.create({
   },
   todayInfoContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 24,
+    marginBottom: 8,
   },
   todayGridColLeft: {
     width: '48%',
@@ -1806,6 +1908,7 @@ const styles = StyleSheet.create({
     padding: 16,
     height: 115,
     justifyContent: 'space-between',
+    marginBottom: 16,
   },
   miniHeader: {
     flexDirection: 'row',
