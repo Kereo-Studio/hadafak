@@ -193,7 +193,7 @@ export class ExternalSyncService {
       ex.equipment = eq;
       ex.difficulty = ExerciseDifficulty.BEGINNER;
       ex.instructions = raw.instructions || [];
-      ex.gifUrl = raw.gifUrl || null;
+      ex.gifUrl = raw.id ? `/api/v1/exercises/image/${raw.id}` : undefined;
       ex.source = ExerciseSource.EXERCIDEDB;
       ex.externalId = raw.id || `edb-${name}`;
 

@@ -10,7 +10,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ExercisesService } from './exercises.service';
 import { ExternalSyncService } from './external-sync.service';
@@ -96,6 +98,52 @@ export class ExercisesController {
   @ApiResponse({ status: 200, description: 'Sync completed successfully.' })
   async sync() {
     return this.syncService.syncExercises();
+  }
+
+  @Get('image/:externalId')
+  @ApiOperation({ summary: 'Proxy exercise image from ExerciseDB to hide API keys' })
+  @ApiResponse({ status: 200, description: 'Successfully streamed exercise gif.' })
+  async getExerciseImage(
+    @Param('externalId') externalId: string,
+    @Res() res: Response,
+  ) {
+    const apiKey = process.env.EXERCISEDB_API_KEY;
+    if (!apiKey) {
+      res.status(HttpStatus.NOT_FOUND).send('API key not configured');
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://exercisedb.p.rapidapi.com/image?exerciseId=${externalId}&resolution=360`,
+        {
+          headers: {
+            'X-RapidAPI-Key': apiKey,
+            'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        res.status(response.status).send('Failed to fetch image from external provider');
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType) {
+        res.setHeader('Content-Type', contentType);
+      }
+      const cacheControl = response.headers.get('cache-control');
+      if (cacheControl) {
+        res.setHeader('Cache-Control', cacheControl);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      res.send(buffer);
+    } catch (err) {
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).send(err.message);
+    }
   }
 
   @Delete(':id')

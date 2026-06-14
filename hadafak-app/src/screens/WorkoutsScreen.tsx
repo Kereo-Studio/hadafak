@@ -13,6 +13,7 @@ import {
   Dimensions,
   RefreshControl,
   TouchableWithoutFeedback,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
@@ -37,9 +38,11 @@ import {
   Sparkles,
   Zap,
   ImageOff,
+  Eye,
+  EyeOff,
 } from 'lucide-react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText, G } from 'react-native-svg';
-import { api } from '../services/api';
+import { api, API_BASE_URL } from '../services/api';
 import { programService } from '../services/programService';
 
 const { width } = Dimensions.get('window');
@@ -131,7 +134,15 @@ export const WorkoutsScreen: React.FC = () => {
   const [exerciseResults, setExerciseResults] = useState<Exercise[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isFinishModalVisible, setIsFinishModalVisible] = useState(false);
+  const [expandedPreviews, setExpandedPreviews] = useState<Record<string, boolean>>({});
   const [rpe, setRpe] = useState('7');
+
+  const togglePreview = (exerciseId: string) => {
+    setExpandedPreviews((prev) => ({
+      ...prev,
+      [exerciseId]: !prev[exerciseId],
+    }));
+  };
 
   // Completed Workout Detail Modal State
   const [selectedWorkoutSession, setSelectedWorkoutSession] = useState<WorkoutHistoryItem | null>(null);
@@ -2062,6 +2073,25 @@ export const WorkoutsScreen: React.FC = () => {
                           <Text style={{ fontSize: 10, color: COLORS.textMuted }}>No preview available for this exercise</Text>
                         </View>
                       )}
+                      {ae.gifUrl && (
+                        <TouchableOpacity
+                          onPress={() => togglePreview(ae.exerciseId)}
+                          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}
+                          activeOpacity={0.7}
+                        >
+                          {expandedPreviews[ae.exerciseId] ? (
+                            <>
+                              <EyeOff size={12} color={COLORS.primary} style={{ marginRight: 4 }} />
+                              <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '600' }}>Hide Preview</Text>
+                            </>
+                          ) : (
+                            <>
+                              <Eye size={12} color={COLORS.primary} style={{ marginRight: 4 }} />
+                              <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '600' }}>Show Preview</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      )}
                     </View>
                     <TouchableOpacity
                       onPress={() => handleDeleteExercise(ae.exerciseId)}
@@ -2070,6 +2100,16 @@ export const WorkoutsScreen: React.FC = () => {
                       <Trash2 size={16} color={COLORS.error} />
                     </TouchableOpacity>
                   </View>
+
+                  {ae.gifUrl && expandedPreviews[ae.exerciseId] && (
+                    <View style={styles.gifContainer}>
+                      <Image
+                        source={{ uri: ae.gifUrl.startsWith('/') ? `${API_BASE_URL.replace('/api/v1', '')}${ae.gifUrl}` : ae.gifUrl }}
+                        style={styles.gifImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
 
                   {/* Header Row for set log columns */}
                   <View style={styles.setRowLabels}>
@@ -3407,6 +3447,22 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 18,
     marginBottom: 16,
+  },
+  gifContainer: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  gifImage: {
+    width: '100%',
+    height: '100%',
   },
   exerciseHeader: {
     flexDirection: 'row',

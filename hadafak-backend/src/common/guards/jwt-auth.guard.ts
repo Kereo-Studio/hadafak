@@ -17,6 +17,12 @@ export class JwtAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
+    
+    // Bypass JWT authentication for ExerciseDB image proxy endpoint
+    if (request.path && request.path.includes('/exercises/image/')) {
+      return true;
+    }
+
     const token = this.extractTokenFromHeader(request);
     if (!token) {
       throw new UnauthorizedException('Access token missing');
