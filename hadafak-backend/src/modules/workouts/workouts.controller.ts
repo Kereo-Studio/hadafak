@@ -1,12 +1,9 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Delete, Patch } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { WorkoutsService } from './workouts.service';
 import { LogWorkoutDto } from './dto/log-workout.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { UpdateWorkoutPlanDto } from './dto/update-workout-plan.dto';
-import { AddExerciseToPlanDto } from './dto/add-exercise-to-plan.dto';
-import { ReorderExercisesDto } from './dto/reorder-exercises.dto';
 
 @ApiTags('Workouts')
 @Controller('workouts')
@@ -70,7 +67,7 @@ export class WorkoutsController {
   }
 
   @Get('stats/progression/:exerciseId')
-  @ApiOperation({ summary: 'Get progression statistics (estimated 1RM and volume) for a specific exercise over time' })
+  @ApiOperation({ summary: 'Get progression statistics (1RM and volume) for a specific exercise over time' })
   @ApiResponse({ status: 200, description: 'Exercise progression metrics list.' })
   async getProgressionStats(
     @CurrentUser('sub') userId: string,
@@ -86,73 +83,14 @@ export class WorkoutsController {
     return this.workoutsService.findUserHistory(userId);
   }
 
-  @Get('plans')
-  @ApiOperation({ summary: 'Get all workout plans for the current user' })
-  @ApiResponse({ status: 200, description: 'List of workout plans.' })
-  async getPlans(@CurrentUser('sub') userId: string) {
-    return this.workoutsService.findAllWorkoutPlans(userId);
-  }
-
   @Get(':id')
-  @ApiOperation({ summary: 'Retrieve specific workout plan or logged session by ID' })
-  @ApiResponse({ status: 200, description: 'Workout plan or session details.' })
+  @ApiOperation({ summary: 'Retrieve a specific workout session by ID' })
+  @ApiResponse({ status: 200, description: 'Workout session details.' })
   @ApiResponse({ status: 404, description: 'Not found.' })
   async getById(
     @CurrentUser('sub') userId: string,
     @Param('id') id: string,
   ) {
-    try {
-      const plan = await this.workoutsService.findWorkoutPlanById(id);
-      if (plan) return plan;
-    } catch (err) {
-      // Fall back to finding logged session if plan not found
-    }
     return this.workoutsService.findSessionById(id, userId);
-  }
-
-  @Patch(':id')
-  @ApiOperation({ summary: 'Update a workout plan' })
-  @ApiResponse({ status: 200, description: 'Plan successfully updated.' })
-  @ApiResponse({ status: 404, description: 'Plan not found.' })
-  async updatePlan(
-    @CurrentUser('sub') userId: string,
-    @Param('id') id: string,
-    @Body() dto: UpdateWorkoutPlanDto,
-  ) {
-    return this.workoutsService.updateWorkoutPlan(id, userId, dto);
-  }
-
-  @Post(':id/exercises')
-  @ApiOperation({ summary: 'Add an exercise to a workout plan' })
-  @ApiResponse({ status: 201, description: 'Exercise added successfully.' })
-  async addExercise(
-    @CurrentUser('sub') userId: string,
-    @Param('id') planId: string,
-    @Body() dto: AddExerciseToPlanDto,
-  ) {
-    return this.workoutsService.addExerciseToPlan(planId, userId, dto);
-  }
-
-  @Patch(':id/reorder')
-  @ApiOperation({ summary: 'Reorder exercises in a workout plan' })
-  @ApiResponse({ status: 200, description: 'Plan successfully reordered.' })
-  async reorder(
-    @CurrentUser('sub') userId: string,
-    @Param('id') planId: string,
-    @Body() dto: ReorderExercisesDto,
-  ) {
-    return this.workoutsService.reorderExercises(planId, userId, dto.workoutExerciseIds);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete a workout session by ID' })
-  @ApiResponse({ status: 200, description: 'Session deleted successfully.' })
-  @ApiResponse({ status: 404, description: 'Session not found.' })
-  async delete(
-    @CurrentUser('sub') userId: string,
-    @Param('id') id: string,
-  ) {
-    await this.workoutsService.deleteSession(id, userId);
-    return { success: true };
   }
 }

@@ -29,6 +29,15 @@ export class ExercisesService {
     this.cache.clear();
   }
 
+  private evictExpiredCache() {
+    const now = Date.now();
+    for (const [key, cached] of this.cache.entries()) {
+      if (cached.expiresAt <= now) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
   async findOrCreateMuscleGroup(name: string): Promise<MuscleGroup> {
     const normalized = name.trim().toLowerCase();
     let mg = await this.muscleGroupRepository.findOne({ where: { name: normalized } });
@@ -77,6 +86,8 @@ export class ExercisesService {
         this.logger.warn(`Failed to dynamically sync exercises for query "${query.q}": ${err.message}`);
       }
     }
+
+    this.evictExpiredCache();
 
     // Build Cache Key
     const cacheKey = JSON.stringify({ ...query, page, limit });

@@ -2,7 +2,6 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PerformanceLog } from './entities/performance-log.entity';
 import { PerformanceTrackingService } from './performance-tracking.service';
-import { PerformanceTrackingController } from './performance-tracking.controller';
 import { AdaptationEngineModule } from '../adaptation-engine/adaptation-engine.module';
 import { AuthModule } from '../auth/auth.module';
 
@@ -13,7 +12,7 @@ import { AuthModule } from '../auth/auth.module';
     AuthModule,
   ],
   providers: [PerformanceTrackingService],
-  controllers: [PerformanceTrackingController],
+  controllers: [],
   exports: [PerformanceTrackingService],
 })
 export class PerformanceTrackingModule {}

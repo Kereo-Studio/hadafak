@@ -22,7 +22,7 @@ export class ExternalSyncService {
     let exerciseDbRaw: any[] = [];
     let wgerRaw: any[] = [];
 
-    // 1. Fetch/Simulate ExerciseDB
+    // 1. Fetch ExerciseDB
     try {
       const apiKey = process.env.EXERCISEDB_API_KEY;
       if (apiKey) {
@@ -38,15 +38,10 @@ export class ExternalSyncService {
         }
       }
     } catch (err) {
-      this.logger.warn(`ExerciseDB API fetch failed: ${err.message}. Falling back to mock.`);
+      this.logger.warn(`ExerciseDB API fetch failed: ${err.message}.`);
     }
 
-    if (exerciseDbRaw.length === 0) {
-      this.logger.log('Simulating ExerciseDB responses...');
-      exerciseDbRaw = this.getMockExerciseDbData();
-    }
-
-    // 2. Fetch/Simulate Wger
+    // 2. Fetch Wger
     try {
       const wgerUrl = process.env.WGER_API_URL || 'https://wger.de/api/v2/exerciseinfo/?language=2&limit=50';
       this.logger.log('Fetching live exercises from Wger...');
@@ -62,12 +57,7 @@ export class ExternalSyncService {
         this.logger.warn(`Wger API responded with status ${res.status}`);
       }
     } catch (err) {
-      this.logger.warn(`Wger API fetch failed: ${err.message}. Falling back to mock.`);
-    }
-
-    if (wgerRaw.length === 0) {
-      this.logger.log('Simulating Wger responses...');
-      wgerRaw = this.getMockWgerData();
+      this.logger.warn(`Wger API fetch failed: ${err.message}.`);
     }
 
     // Combine and process
@@ -360,22 +350,5 @@ export class ExternalSyncService {
       this.logger.log(`Dynamic query sync for "${q}" completed: Synced ${syncedCount} new exercises.`);
     }
     return { synced: syncedCount };
-  }
-
-  private getMockExerciseDbData() {
-    return [
-      { id: 'db-1', name: 'Barbell Bench Press', target: 'chest', equipment: 'barbell', instructions: ['Lie on bench', 'Lower barbell to chest', 'Push up'] },
-      { id: 'db-2', name: 'Incline Bench Press', target: 'chest', equipment: 'barbell', instructions: ['Lie on incline bench', 'Lower barbell', 'Press up'] },
-      { id: 'db-3', name: 'Barbell Squat', target: 'quads', equipment: 'barbell', instructions: ['Squat down', 'Drive back up'] },
-      { id: 'db-4', name: 'Leg Press', target: 'quads', equipment: 'machine', instructions: ['Push platform away', 'Lower slowly'] },
-    ];
-  }
-
-  private getMockWgerData() {
-    return [
-      { id: 101, name: 'Flat Bench Press', category: { name: 'chest' }, equipment: [{ name: 'barbell' }], description: 'Flat bench barbell press.' },
-      { id: 102, name: 'Lat Pulldown', category: { name: 'back' }, equipment: [{ name: 'machine' }], description: 'Cable pull down to chest.' },
-      { id: 103, name: 'Dumbbell Bicep Curl', category: { name: 'arms' }, equipment: [{ name: 'dumbbell' }], description: 'Curl dumbbell up.' },
-    ];
   }
 }

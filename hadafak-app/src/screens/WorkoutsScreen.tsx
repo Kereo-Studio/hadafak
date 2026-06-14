@@ -35,17 +35,34 @@ import {
   Plus,
   BookOpen,
   Sparkles,
+  Zap,
+  ImageOff,
 } from 'lucide-react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText, G } from 'react-native-svg';
 import { api } from '../services/api';
+import { programService } from '../services/programService';
 
 const { width } = Dimensions.get('window');
 
 interface Exercise {
   id: string;
   name: string;
-  muscleGroup: string;
+  displayName?: string;
+  muscleGroup: string | { id: string; name: string };
+  source?: string;
+  gifUrl?: string | null;
 }
+
+const FALLBACK_EXERCISES: Exercise[] = [
+  { id: 'e1', name: 'Barbell Bench Press', muscleGroup: 'Chest' },
+  { id: 'e2', name: 'Dumbbell Incline Press', muscleGroup: 'Chest' },
+  { id: 'e3', name: 'Barbell Squat', muscleGroup: 'Quadriceps' },
+  { id: 'e4', name: 'Romanian Deadlift', muscleGroup: 'Hamstrings' },
+  { id: 'e5', name: 'Pull-up', muscleGroup: 'Lats' },
+  { id: 'e6', name: 'Dumbbell Shoulder Press', muscleGroup: 'Shoulders' },
+  { id: 'e7', name: 'Bicep Dumbbell Curl', muscleGroup: 'Biceps' },
+  { id: 'e8', name: 'Cable Tricep Pushdown', muscleGroup: 'Triceps' },
+];
 
 interface SetLog {
   setNumber: number;
@@ -57,6 +74,8 @@ interface SetLog {
 interface ActiveExercise {
   exerciseId: string;
   name: string;
+  source?: string;
+  gifUrl?: string | null;
   sets: SetLog[];
 }
 
@@ -360,18 +379,6 @@ export const WorkoutsScreen: React.FC = () => {
   const [selectedCatalogExercise, setSelectedCatalogExercise] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-
-  const FALLBACK_EXERCISES: Exercise[] = [
-    { id: 'e1', name: 'Barbell Bench Press', muscleGroup: 'Chest' },
-    { id: 'e2', name: 'Dumbbell Incline Press', muscleGroup: 'Chest' },
-    { id: 'e3', name: 'Barbell Squat', muscleGroup: 'Quadriceps' },
-    { id: 'e4', name: 'Romanian Deadlift', muscleGroup: 'Hamstrings' },
-    { id: 'e5', name: 'Pull-Ups', muscleGroup: 'Lats' },
-    { id: 'e6', name: 'Dumbbell Shoulder Press', muscleGroup: 'Shoulders' },
-    { id: 'e7', name: 'Bicep Dumbbell Curl', muscleGroup: 'Biceps' },
-    { id: 'e8', name: 'Cable Tricep Pushdown', muscleGroup: 'Triceps' },
-  ];
-
   const fetchWorkoutData = async () => {
     try {
       const [historyRes, volumeRes, activeRes, runsRes] = await Promise.allSettled([
@@ -410,7 +417,9 @@ export const WorkoutsScreen: React.FC = () => {
           setActiveExercises(
             logs.map((log: any) => ({
               exerciseId: log.exerciseId,
-              name: log.exercise?.name || 'Exercise',
+              name: log.exercise?.displayName || log.exercise?.name || 'Exercise',
+              source: log.exercise?.source,
+              gifUrl: log.exercise?.gifUrl,
               sets: (log.sets || []).map((s: any, idx: number) => ({
                 setNumber: idx + 1,
                 reps: s.reps,
@@ -448,7 +457,9 @@ export const WorkoutsScreen: React.FC = () => {
                   }));
                   return {
                     exerciseId: pde.exerciseId,
-                    name: pde.exercise?.name || 'Exercise',
+                    name: pde.exercise?.displayName || pde.exercise?.name || 'Exercise',
+                    source: pde.exercise?.source,
+                    gifUrl: pde.exercise?.gifUrl,
                     sets,
                   };
                 });
@@ -507,16 +518,7 @@ export const WorkoutsScreen: React.FC = () => {
 
   // Program progression generation and manual plan editing handlers
   const handleRegenerateProgram = async () => {
-    setIsRegenerating(true);
-    try {
-      await api.post('/programs/generate');
-      await fetchWorkoutData();
-      Alert.alert('Success', 'Your personalized training program has been re-generated!');
-    } catch (err) {
-      Alert.alert('Error', 'Could not re-generate program.');
-    } finally {
-      setIsRegenerating(false);
-    }
+    await programService.regenerateProgram(setIsRegenerating, fetchWorkoutData);
   };
 
   const handleOpenProgramSelector = async () => {
@@ -1165,7 +1167,9 @@ export const WorkoutsScreen: React.FC = () => {
 
     const newActiveEx: ActiveExercise = {
       exerciseId: exercise.id,
-      name: exercise.name,
+      name: (exercise as any).displayName || exercise.name,
+      source: (exercise as any).source,
+      gifUrl: (exercise as any).gifUrl,
       sets: [
         {
           setNumber: 1,
@@ -2038,7 +2042,27 @@ export const WorkoutsScreen: React.FC = () => {
               activeExercises.map((ae) => (
                 <View key={ae.exerciseId} style={styles.exerciseCard}>
                   <View style={styles.exerciseHeader}>
-                    <Text style={styles.exerciseTitle}>{ae.name}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.exerciseTitle}>{ae.name}</Text>
+                      {ae.source === 'exercicedb' && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                          <Zap size={10} color="#7C3AED" style={{ marginRight: 3 }} />
+                          <Text style={{ fontSize: 10, color: '#7C3AED', fontWeight: '600' }}>ExerciseDB</Text>
+                        </View>
+                      )}
+                      {ae.source === 'wger' && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                          <BookOpen size={10} color="#069667" style={{ marginRight: 3 }} />
+                          <Text style={{ fontSize: 10, color: '#069667', fontWeight: '600' }}>Wger</Text>
+                        </View>
+                      )}
+                      {!ae.gifUrl && ae.source && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                          <ImageOff size={10} color={COLORS.textMuted} style={{ marginRight: 3 }} />
+                          <Text style={{ fontSize: 10, color: COLORS.textMuted }}>No preview available for this exercise</Text>
+                        </View>
+                      )}
+                    </View>
                     <TouchableOpacity
                       onPress={() => handleDeleteExercise(ae.exerciseId)}
                       style={styles.deleteExBtn}
@@ -2182,9 +2206,25 @@ export const WorkoutsScreen: React.FC = () => {
                     style={styles.exerciseResultRow}
                     activeOpacity={0.7}
                   >
-                    <View>
-                      <Text style={styles.execResultName}>{item.name}</Text>
-                      <Text style={styles.execResultMuscle}>{item.muscleGroup}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.execResultName}>{item.displayName || item.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <Text style={styles.execResultMuscle}>
+                          {typeof item.muscleGroup === 'object' ? item.muscleGroup?.name : item.muscleGroup}
+                        </Text>
+                        {(item as any).source === 'exercicedb' && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#7C3AED22', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                            <Zap size={9} color="#7C3AED" style={{ marginRight: 2 }} />
+                            <Text style={{ fontSize: 9, color: '#7C3AED', fontWeight: '600' }}>ExerciseDB</Text>
+                          </View>
+                        )}
+                        {(item as any).source === 'wger' && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#06966722', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                            <BookOpen size={9} color="#069667" style={{ marginRight: 2 }} />
+                            <Text style={{ fontSize: 9, color: '#069667', fontWeight: '600' }}>Wger</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                     <ChevronRight size={18} color={COLORS.textMuted} />
                   </TouchableOpacity>
@@ -2781,10 +2821,10 @@ export const WorkoutsScreen: React.FC = () => {
                         <Text style={styles.catalogSearchName}>{item.displayName || item.name}</Text>
                         <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
                           <View style={{ backgroundColor: COLORS.surfaceLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 10, color: COLORS.textMuted }}>{item.muscleGroup}</Text>
+                            <Text style={{ fontSize: 10, color: COLORS.textMuted }}>{typeof item.muscleGroup === 'object' ? item.muscleGroup?.name : item.muscleGroup}</Text>
                           </View>
                           <View style={{ backgroundColor: COLORS.surfaceLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 10, color: COLORS.textMuted }}>{item.equipment}</Text>
+                            <Text style={{ fontSize: 10, color: COLORS.textMuted }}>{typeof item.equipment === 'object' ? item.equipment?.name : item.equipment}</Text>
                           </View>
                           <View style={{ backgroundColor: COLORS.primaryLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                             <Text style={{ fontSize: 10, color: COLORS.primary }}>{item.difficulty}</Text>
@@ -3042,8 +3082,8 @@ export const WorkoutsScreen: React.FC = () => {
                     onPress={() => handleConfirmAddExerciseToPlan(item)}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.catalogSearchName}>{item.name}</Text>
-                      <Text style={styles.catalogSearchGroup}>{item.muscleGroup}</Text>
+                      <Text style={styles.catalogSearchName}>{item.displayName || item.name}</Text>
+                      <Text style={styles.catalogSearchGroup}>{typeof item.muscleGroup === 'object' ? item.muscleGroup?.name : item.muscleGroup}</Text>
                     </View>
                     <Plus size={16} color={COLORS.primary} />
                   </TouchableOpacity>

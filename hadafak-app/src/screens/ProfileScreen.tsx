@@ -38,6 +38,7 @@ import {
 } from 'lucide-react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText, G } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
+import { programService } from '../services/programService';
 import { pedometerService } from '../utils/pedometerService';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -238,17 +239,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   };
 
   const handleRegenerateProgram = async () => {
-    setIsRegenerating(true);
-    try {
-      await api.post('/programs/generate');
-      await fetchProfile();
-      Alert.alert('Success', 'Your personalized training program has been re-generated!');
-    } catch (err) {
-      console.warn('Failed to regenerate program:', err);
-      Alert.alert('Error', 'Could not re-generate program. Please try again.');
-    } finally {
-      setIsRegenerating(false);
-    }
+    await programService.regenerateProgram(setIsRegenerating, fetchProfile);
   };
 
   const handleSaveMetrics = async () => {

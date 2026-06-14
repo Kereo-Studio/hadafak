@@ -9,12 +9,14 @@ import { WorkoutsController } from './workouts.controller';
 import { WorkoutPlansController } from './workout-plans.controller';
 import { AuthModule } from '../auth/auth.module';
 import { ExercisesModule } from '../exercises/exercises.module';
+import { AdaptationEngineModule } from '../adaptation-engine/adaptation-engine.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([WorkoutSession, ExerciseLog, WorkoutPlan, WorkoutExercise]),
     AuthModule,
     ExercisesModule,
+    AdaptationEngineModule,
   ],
   providers: [WorkoutsService],
   controllers: [WorkoutsController, WorkoutPlansController],

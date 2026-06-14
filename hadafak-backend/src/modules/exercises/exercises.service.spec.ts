@@ -6,14 +6,20 @@ import { MuscleGroup } from './entities/muscle-group.entity';
 import { Equipment } from './entities/equipment.entity';
 import { normalizeExerciseName } from './utils/normalize';
 import { ConflictException } from '@nestjs/common';
+import { ExternalSyncService } from './external-sync.service';
 
 describe('ExercisesService', () => {
   let service: ExercisesService;
   let exerciseRepoMock: any;
   let muscleGroupRepoMock: any;
   let equipmentRepoMock: any;
+  let externalSyncServiceMock: any;
 
   beforeEach(async () => {
+    externalSyncServiceMock = {
+      syncExercisesForQuery: jest.fn(),
+    };
+
     exerciseRepoMock = {
       findOne: jest.fn(),
       create: jest.fn(),
@@ -55,6 +61,10 @@ describe('ExercisesService', () => {
         {
           provide: getRepositoryToken(Equipment),
           useValue: equipmentRepoMock,
+        },
+        {
+          provide: ExternalSyncService,
+          useValue: externalSyncServiceMock,
         },
       ],
     }).compile();

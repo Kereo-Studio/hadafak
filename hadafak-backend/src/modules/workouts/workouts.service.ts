@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorkoutSession } from './entities/workout-session.entity';
@@ -10,9 +10,13 @@ import { CreateWorkoutPlanDto } from './dto/create-workout-plan.dto';
 import { UpdateWorkoutPlanDto } from './dto/update-workout-plan.dto';
 import { AddExerciseToPlanDto } from './dto/add-exercise-to-plan.dto';
 import { ExercisesService } from '../exercises/exercises.service';
+import { AdaptationEngineService } from '../adaptation-engine/adaptation-engine.service';
+import { DifficultyFeedback, PerformanceLog } from '../performance-tracking/entities/performance-log.entity';
 
 @Injectable()
 export class WorkoutsService {
+  private readonly logger = new Logger(WorkoutsService.name);
+
   constructor(
     @InjectRepository(WorkoutSession)
     private readonly workoutSessionRepository: Repository<WorkoutSession>,
@@ -23,6 +27,7 @@ export class WorkoutsService {
     @InjectRepository(WorkoutExercise)
     private readonly workoutExerciseRepository: Repository<WorkoutExercise>,
     private readonly exercisesService: ExercisesService,
+    private readonly adaptationEngineService: AdaptationEngineService,
   ) {}
 
   // ==========================================
@@ -155,6 +160,74 @@ export class WorkoutsService {
         });
       }));
       await this.exerciseLogRepository.save(logs);
+
+      // Trigger adaptation engine when session is completed
+      // Adjusts sets/reps/weight on the user's workout plan based on performance
+      if (dto.completed) {
+        const plans = await this.workoutPlanRepository.find({
+          where: { userId },
+          relations: { workoutExercises: true },
+          order: { createdAt: 'DESC' },
+        });
+
+        const sessionRpe = dto.rpe || 7;
+        let difficultyFeedback = DifficultyFeedback.OK;
+        if (sessionRpe <= 5) {
+          difficultyFeedback = DifficultyFeedback.EASY;
+        } else if (sessionRpe >= 8) {
+          difficultyFeedback = DifficultyFeedback.HARD;
+        }
+
+        for (const log of logs) {
+          try {
+            // Find target plan containing the exercise. If none, default to the latest plan.
+            let targetPlan = plans.find(p => p.workoutExercises.some(we => we.exerciseId === log.exerciseId));
+            if (!targetPlan && plans.length > 0) {
+              targetPlan = plans[0];
+            }
+
+            if (!targetPlan) {
+              continue; // No plan found for user to adapt
+            }
+
+            const workoutExercise = targetPlan.workoutExercises.find(we => we.exerciseId === log.exerciseId);
+            const plannedSets = workoutExercise ? workoutExercise.sets : 3;
+            let plannedReps = 10 * plannedSets;
+            if (workoutExercise && workoutExercise.reps) {
+              const parts = String(workoutExercise.reps).split('-');
+              if (parts.length > 1) {
+                plannedReps = Math.round((parseInt(parts[0], 10) + parseInt(parts[1], 10)) / 2) * plannedSets;
+              } else {
+                plannedReps = (parseInt(workoutExercise.reps, 10) || 10) * plannedSets;
+              }
+            }
+
+            const validSets = (log.sets || []).filter(s => s.reps > 0);
+            const completedSets = validSets.length;
+            const completedReps = validSets.reduce((sum, s) => sum + s.reps, 0);
+            const weightUsed = validSets.length > 0 ? Math.max(...validSets.map(s => s.weight)) : 0;
+
+            const mockPerfLog = {
+              workoutId: targetPlan.id,
+              exerciseId: log.exerciseId,
+              plannedSets,
+              completedSets,
+              plannedReps,
+              completedReps,
+              weightUsed,
+              fatigueRating: sessionRpe,
+              difficultyFeedback,
+              skipped: completedSets === 0,
+              date: dto.date || new Date().toISOString().split('T')[0],
+            } as PerformanceLog;
+
+            await this.adaptationEngineService.adaptFromPerformance(userId, mockPerfLog);
+          } catch (adaptErr) {
+            // Never let adaptation failures abort the workout save
+            this.logger.warn(`Adaptation engine failed for exercise ${log.exerciseId}: ${adaptErr.message}`);
+          }
+        }
+      }
     }
 
     return this.findSessionById(session.id, userId);
