@@ -5,10 +5,18 @@ import { Platform } from 'react-native';
 
 // Replace with your development machine's actual LAN IP address so physical devices can connect
 const getBaseUrl = () => {
-  return process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  // If running on Android emulator, use 10.0.2.2 to connect to local host machine
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:3000/api/v1';
+  }
+  return 'http://localhost:3000/api/v1';
 };
 
 export const API_BASE_URL = getBaseUrl();
+console.log('[API] Base URL configured to:', API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
