@@ -1242,7 +1242,7 @@ export const NutritionScreen: React.FC = () => {
           /* AI Recipes Hub view */
           <View style={styles.recipesContent}>
             <View style={styles.contentPadding}>
-              {/* Header / Intro Card with Search and AI builder button */}
+              {/* Header / Intro Card with AI builder button */}
               <View style={styles.recipesIntroCard}>
                 <View style={styles.recipesIntroHeader}>
                   <View style={{ flex: 1, marginRight: 8 }}>
@@ -1258,41 +1258,41 @@ export const NutritionScreen: React.FC = () => {
                     <Text style={styles.fridgeOpenText}>Open Fridge</Text>
                   </TouchableOpacity>
                 </View>
+              </View>
 
-                {/* Search Bar */}
-                <View style={styles.recipesSearchRow}>
-                  <View style={styles.recipesSearchInputWrapper}>
-                    <Search size={18} color={COLORS.textMuted} style={styles.searchIcon} />
-                    <TextInput
-                      style={styles.recipesSearchInput}
-                      placeholder="Search database healthy recipes..."
-                      placeholderTextColor={COLORS.textMuted}
-                      value={recipesQuery}
-                      onChangeText={setRecipesQuery}
-                    />
-                    {recipesQuery.length > 0 && (
-                      <TouchableOpacity onPress={() => setRecipesQuery('')}>
-                        <X size={16} color={COLORS.textMuted} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Separate Favorites Heart Toggle */}
-                  <TouchableOpacity
-                    style={[
-                      styles.favoritesToggleBtn,
-                      selectedRecipeTag === 'Favorites' && styles.favoritesToggleBtnActive
-                    ]}
-                    onPress={() => setSelectedRecipeTag(selectedRecipeTag === 'Favorites' ? '' : 'Favorites')}
-                    activeOpacity={0.8}
-                  >
-                    <Heart
-                      size={18}
-                      color={selectedRecipeTag === 'Favorites' ? '#FFFFFF' : '#EF4444'}
-                      fill={selectedRecipeTag === 'Favorites' ? '#FFFFFF' : 'transparent'}
-                    />
-                  </TouchableOpacity>
+              {/* Search Bar & Favorites Toggle Row */}
+              <View style={[styles.recipesSearchRow, { marginBottom: 16 }]}>
+                <View style={styles.recipesSearchInputWrapper}>
+                  <Search size={18} color={COLORS.textMuted} style={styles.searchIcon} />
+                  <TextInput
+                    style={styles.recipesSearchInput}
+                    placeholder="Search database healthy recipes..."
+                    placeholderTextColor={COLORS.textMuted}
+                    value={recipesQuery}
+                    onChangeText={setRecipesQuery}
+                  />
+                  {recipesQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setRecipesQuery('')}>
+                      <X size={16} color={COLORS.textMuted} />
+                    </TouchableOpacity>
+                  )}
                 </View>
+
+                {/* Separate Favorites Heart Toggle */}
+                <TouchableOpacity
+                  style={[
+                    styles.favoritesToggleBtn,
+                    selectedRecipeTag === 'Favorites' && styles.favoritesToggleBtnActive
+                  ]}
+                  onPress={() => setSelectedRecipeTag(selectedRecipeTag === 'Favorites' ? '' : 'Favorites')}
+                  activeOpacity={0.8}
+                >
+                  <Heart
+                    size={18}
+                    color={selectedRecipeTag === 'Favorites' ? '#FFFFFF' : '#EF4444'}
+                    fill={selectedRecipeTag === 'Favorites' ? '#FFFFFF' : 'transparent'}
+                  />
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -2667,17 +2667,17 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#111111',
+    backgroundColor: COLORS.surfaceLight,
     borderRadius: 14,
     paddingHorizontal: 12,
     height: 44,
     borderWidth: 1,
-    borderColor: '#222222',
+    borderColor: COLORS.border,
   },
   recipesSearchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#FFFFFF',
+    color: COLORS.text,
     marginLeft: 8,
   },
 
@@ -2693,11 +2693,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#111111',
+    backgroundColor: COLORS.surfaceLight,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#222222',
+    borderColor: COLORS.border,
   },
   favoritesToggleBtnActive: {
     backgroundColor: '#EF4444',

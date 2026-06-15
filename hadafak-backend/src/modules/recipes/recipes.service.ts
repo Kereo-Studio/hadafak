@@ -96,6 +96,7 @@ export class RecipesService {
       throw new NotFoundException(`Recipe with ID ${id} not found`);
     }
 
+    this.populateDynamicTags(recipe);
     return recipe;
   }
 
@@ -127,6 +128,8 @@ export class RecipesService {
     }
 
     const recipes = await queryBuilder.getMany();
+
+    recipes.forEach((r) => this.populateDynamicTags(r));
 
     // In-memory filter for complex arrays/decimal attributes to prevent TypeORM decimal cast bugs
     return recipes.filter((r) => {
@@ -275,5 +278,59 @@ export class RecipesService {
         fat: Math.round(Number(match.fat) * suggestedAmount * 10) / 10,
       },
     };
+  }
+
+  private populateDynamicTags(recipe: Recipe): void {
+    if (!recipe.tags) {
+      recipe.tags = [];
+    }
+
+    const title = (recipe.title || '').toLowerCase();
+    const desc = (recipe.description || '').toLowerCase();
+
+    const calories = Number(recipe.calories) || 0;
+    const protein = Number(recipe.protein) || 0;
+    const carbs = Number(recipe.carbs) || 0;
+    const fat = Number(recipe.fat) || 0;
+
+    // 1. High-Protein: protein >= 25g OR protein calories make up >= 25% of total calories
+    const isHighProtein = protein >= 25 || (calories > 0 && (protein * 4) / calories >= 0.25);
+    if (isHighProtein && !recipe.tags.some(t => t.toLowerCase() === 'high-protein')) {
+      recipe.tags.push('High-Protein');
+    }
+
+    // 2. Low-Carb: carbs <= 20g
+    const isLowCarb = carbs <= 20;
+    if (isLowCarb && !recipe.tags.some(t => t.toLowerCase() === 'low-carb')) {
+      recipe.tags.push('Low-Carb');
+    }
+
+    // 3. Keto: carbs <= 10g and fat >= 15g
+    const isKeto = carbs <= 10 && fat >= 15;
+    if (isKeto && !recipe.tags.some(t => t.toLowerCase() === 'keto')) {
+      recipe.tags.push('Keto');
+    }
+
+    // 4. Vegan: check ingredients/title/description for non-vegan keywords
+    const nonVeganKeywords = [
+      'chicken', 'beef', 'meat', 'pork', 'fish', 'turkey', 'egg', 'eggs', 'milk', 
+      'cheese', 'butter', 'whey', 'yogurt', 'cream', 'steak', 'bacon', 'salmon',
+      'tuna', 'shrimp', 'seafood', 'honey', 'gelatin', 'lamb', 'sausage', 'pepperoni'
+    ];
+    const isNonVegan = nonVeganKeywords.some(kw => title.includes(kw) || desc.includes(kw));
+    if (!isNonVegan && !recipe.tags.some(t => t.toLowerCase() === 'vegan')) {
+      recipe.tags.push('Vegan');
+    }
+
+    // 5. High-Fiber: check for fiber-rich ingredients in title/description
+    const highFiberKeywords = [
+      'oat', 'oats', 'fiber', 'broccoli', 'bean', 'beans', 'chickpea', 'chickpeas', 
+      'lentil', 'lentils', 'avocado', 'seed', 'seeds', 'chia', 'flax', 'berry', 
+      'berries', 'whole wheat', 'brown rice', 'spinach', 'kale', 'quinoa', 'almond', 'nuts'
+    ];
+    const isHighFiber = highFiberKeywords.some(kw => title.includes(kw) || desc.includes(kw));
+    if (isHighFiber && !recipe.tags.some(t => t.toLowerCase() === 'high-fiber')) {
+      recipe.tags.push('High-Fiber');
+    }
   }
 }
