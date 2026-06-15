@@ -20,3 +20,13 @@ This document is the source of truth for the modules, features, and implementati
 *   **Framework**: NestJS (TypeScript)
 *   **Database**: PostgreSQL + TypeORM
 *   **Docs**: Swagger (OpenAPI) at `/docs`
+curl -X POST http://hadafak-production-alb-792020520.eu-central-1.elb.amazonaws.com/api/v11/recipe-import/import \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwODNlNjVmZS05NjdiLTQ2NTMtYjMyNS1iZjgyNmFmMzk0NmIiLCJlbWFpbCI6Im1AZ21haWwuY29tIiwiaWF0IjoxNzgxNTQzMDU0LCJleHAiOjE3ODE1NDM5NTR9.0TfffBhNm2wr4TouvZmK1fJ37xvUCakce6v2YgRbbvA
+  -d '{
+    "provider": "TheMealDB",
+    "limit": 10,
+    "query": "chicken",
+    "skipDuplicates": true,
+    "similarityThreshold": 0.75
+  }'

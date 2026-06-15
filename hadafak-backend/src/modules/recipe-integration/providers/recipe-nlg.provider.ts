@@ -13,6 +13,7 @@ export class RecipeNlgProvider implements RecipeProvider {
     limit: number;
     offset: number;
     filePath?: string;
+    query?: string;
   }): Promise<ExternalRecipe[]> {
     const results: ExternalRecipe[] = [];
 
@@ -38,13 +39,23 @@ export class RecipeNlgProvider implements RecipeProvider {
           continue;
         }
 
-        if (skipped < options.offset) {
-          skipped++;
-          continue;
-        }
-
         const parsed = this.parseCsvLine(line);
         if (parsed) {
+          if (options.query) {
+            const q = options.query.toLowerCase();
+            const titleMatch = parsed.title.toLowerCase().includes(q);
+            const tagMatch = parsed.tags.some(t => t.toLowerCase().includes(q));
+            const descMatch = parsed.description?.toLowerCase().includes(q);
+            if (!titleMatch && !tagMatch && !descMatch) {
+              continue;
+            }
+          }
+
+          if (skipped < options.offset) {
+            skipped++;
+            continue;
+          }
+
           results.push(parsed);
         }
 
