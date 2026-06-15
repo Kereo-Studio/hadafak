@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Alert, Platform, Dimensions,
+  ScrollView, Platform, Dimensions,
   Animated, PanResponder, TextInput, ActivityIndicator, KeyboardAvoidingView, Modal,
   DeviceEventEmitter,
 } from 'react-native';
+import { useAlert } from '../components/CustomAlert';
 import MapView, { Polyline, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -164,6 +165,7 @@ const getGhostDistanceAtTime = (
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export const MapScreen: React.FC = () => {
+  const { showAlert } = useAlert();
   // Map Styling Theme State
   const [selectedTheme, setSelectedTheme] = useState<MapThemeKey>('aubergine');
   const [showThemeSelector, setShowThemeSelector] = useState(false);
@@ -372,7 +374,13 @@ export const MapScreen: React.FC = () => {
     try {
       const servicesEnabled = await Location.hasServicesEnabledAsync();
       if (!servicesEnabled) {
-        Alert.alert('Location Services Disabled', 'Please enable GPS/Location services on your device to start tracking.');
+        showAlert({
+          title: 'Location Services Disabled',
+          message: 'Please enable GPS/Location services on your device to start tracking.',
+          why: 'GPS is required to track your run distance, speed, and mapping path in real time.',
+          actionGuide: 'Go to your device quick-settings or Privacy settings to turn on Location Services/GPS.',
+          type: 'warning',
+        });
         return false;
       }
     } catch (err) {
@@ -388,7 +396,13 @@ export const MapScreen: React.FC = () => {
     }
 
     if (fgPermStatus !== 'granted') {
-      Alert.alert('Permission Denied', 'GPS tracking requires location authorization.');
+      showAlert({
+        title: 'Permission Denied',
+        message: 'GPS tracking requires location authorization.',
+        why: 'The operating system blocks coordinates retrieval without permission.',
+        actionGuide: 'Please allow Location permissions for Hadafak in your phone system settings.',
+        type: 'warning',
+      });
       return false;
     }
 
@@ -401,11 +415,14 @@ export const MapScreen: React.FC = () => {
     }
 
     if (!isBackgroundGranted) {
-      Alert.alert(
-        'Foreground-Only Tracking',
-        'Hadafak is not allowed to access location in the background. Tracking will pause if you close the app. To enable background tracking, select "Allow all the time" in Settings.',
-        [{ text: 'Continue' }]
-      );
+      showAlert({
+        title: 'Foreground-Only Tracking',
+        message: 'Hadafak is not allowed to access location in the background.',
+        why: 'Without background permissions, location tracking pauses when the screen turns off or another app is opened.',
+        actionGuide: 'To track continuously, go to settings and select "Allow all the time" for location permissions.',
+        type: 'warning',
+        buttons: [{ text: 'Continue' }],
+      });
     }
 
     try {
@@ -447,7 +464,13 @@ export const MapScreen: React.FC = () => {
       return true;
     } catch (err) {
       console.error('Failed to start location updates:', err);
-      Alert.alert('Error', 'Unable to start location tracking. Please check permissions.');
+      showAlert({
+        title: 'Tracking Error',
+        message: 'Unable to start location tracking.',
+        why: 'A failure occurred in the GPS listener or background location worker.',
+        actionGuide: 'Please toggle your location permissions off and on again or restart the application.',
+        type: 'error',
+      });
       return false;
     }
   };
@@ -546,38 +569,45 @@ export const MapScreen: React.FC = () => {
   };
 
   const handleStop = () => {
-    Alert.alert('Save Workout', 'Are you finished with your run?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: resetRun },
-      {
-        text: 'Save Run',
-        onPress: async () => {
-          stopTimer();
-          await stopLocationWatch();
-          setStatus('idle');
+    showAlert({
+      title: 'Save Workout',
+      message: 'Are you finished with your run?',
+      why: 'This will end your location tracking session.',
+      actionGuide: 'Choose "Save Run" to record your progress, "Discard" to delete the path, or "Cancel" to continue tracking.',
+      type: 'info',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: resetRun },
+        {
+          text: 'Save Run',
+          onPress: async () => {
+            stopTimer();
+            await stopLocationWatch();
+            setStatus('idle');
 
-          const distKm = Math.round((distanceM / 1000) * 100) / 100;
-          const avgP = formatPace(distKm, elapsed);
-          const cal = Math.round(distKm * 70);
+            const distKm = Math.round((distanceM / 1000) * 100) / 100;
+            const avgP = formatPace(distKm, elapsed);
+            const cal = Math.round(distKm * 70);
 
-          const hour = new Date().getHours();
-          let defaultTitle = 'Morning Jog 🏃‍♂️';
-          if (hour >= 12 && hour < 17) defaultTitle = 'Afternoon Run 🏃‍♀️';
-          else if (hour >= 17 && hour < 21) defaultTitle = 'Evening Run 🌆';
-          else if (hour >= 21 || hour < 6) defaultTitle = 'Night Run 🌙';
+            const hour = new Date().getHours();
+            let defaultTitle = 'Morning Jog 🏃‍♂️';
+            if (hour >= 12 && hour < 17) defaultTitle = 'Afternoon Run 🏃‍♀️';
+            else if (hour >= 17 && hour < 21) defaultTitle = 'Evening Run 🌆';
+            else if (hour >= 21 || hour < 6) defaultTitle = 'Night Run 🌙';
 
-          setCustomRunTitle(defaultTitle);
-          setSummaryData({
-            distanceKm: distKm,
-            durationSeconds: elapsed,
-            avgPace: avgP,
-            calories: cal,
-            routeCoordinates: [...trackPoints],
-          });
-          setShowSummaryModal(true);
+            setCustomRunTitle(defaultTitle);
+            setSummaryData({
+              distanceKm: distKm,
+              durationSeconds: elapsed,
+              avgPace: avgP,
+              calories: cal,
+              routeCoordinates: [...trackPoints],
+            });
+            setShowSummaryModal(true);
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const resetRun = async () => {
@@ -615,9 +645,21 @@ export const MapScreen: React.FC = () => {
         distanceKm: summaryData.distanceKm,
         routeCoordinates: summaryData.routeCoordinates,
       });
-      Alert.alert('Saved!', 'Your run has been recorded in your history.');
+      showAlert({
+        title: 'Run Saved',
+        message: 'Your run has been recorded in your history.',
+        why: 'The details and GPS track points have been synced to the server database.',
+        actionGuide: 'Tap OK to view your refreshed activity profile.',
+        type: 'success',
+      });
     } catch {
-      Alert.alert('Saved Locally', 'Saved offline. It will sync automatically.');
+      showAlert({
+        title: 'Saved Locally',
+        message: 'Saved offline. It will sync automatically.',
+        why: 'A temporary loss of network connectivity prevented instant upload.',
+        actionGuide: 'The run will be uploaded automatically once connection is restored.',
+        type: 'info',
+      });
     } finally {
       setSavingRun(false);
       setShowSummaryModal(false);

@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Alert,
   Dimensions,
   Modal,
   Image,
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { useAlert } from '../components/CustomAlert';
 import { COLORS, SHADOWS } from '../theme/colors';
 import {
   Award,
@@ -42,6 +42,7 @@ import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText, G
 import { api, API_BASE_URL } from '../services/api';
 import { programService } from '../services/programService';
 import { pedometerService } from '../utils/pedometerService';
+import { StateFeedback } from '../components/StateFeedback';
 import * as ImagePicker from 'expo-image-picker';
 
 const { width } = Dimensions.get('window');
@@ -89,6 +90,7 @@ interface ProfileScreenProps {
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
+  const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
@@ -100,20 +102,29 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const [weightUnit, setWeightUnit] = useState('kg');
 
   const handleClearCache = () => {
-    Alert.alert(
-      'Clear Cache',
-      'Are you sure you want to clear the app cache? This will reset offline templates.',
-      [
+    showAlert({
+      title: 'Clear Cache',
+      message: 'Are you sure you want to clear the app cache? This will reset offline templates.',
+      why: 'This removes downloaded workout exercises and sync checkpoints stored locally.',
+      actionGuide: 'Tap "Clear" to confirm cache reset, or "Cancel" to abort.',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear',
           style: 'destructive',
           onPress: () => {
-            Alert.alert('Cache Cleared', 'App cache has been reset.');
+            showAlert({
+              title: 'Cache Cleared',
+              message: 'App cache has been reset.',
+              why: 'Offline templates and local data caches were removed.',
+              actionGuide: 'Tap OK to return to settings.',
+              type: 'success',
+            });
           }
         }
       ]
-    );
+    });
   };
 
   const [isSyncingSteps, setIsSyncingSteps] = useState(false);
@@ -121,15 +132,33 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const handleForceSyncSteps = async () => {
     try {
       setIsSyncingSteps(true);
-      const success = await pedometerService.syncSteps(api);
+      const success = await pedometerService.syncSteps(api, showAlert);
       if (success) {
-        Alert.alert('Success', 'Steps synced successfully with your phone sensors.');
+        showAlert({
+          title: 'Steps Synced',
+          message: 'Steps synced successfully with your phone sensors.',
+          why: 'The local pedometer count has been uploaded to the dashboard database.',
+          actionGuide: 'Check your daily steps progress on the Home screen dashboard.',
+          type: 'success',
+        });
       } else {
-        Alert.alert('Not Supported', 'Steps tracking is not available on this device/simulator, or permission was denied.');
+        showAlert({
+          title: 'Sync Not Supported',
+          message: 'Steps tracking is not available on this device/simulator.',
+          why: 'The physical device lacks pedometer sensors or permission for activity tracking was denied.',
+          actionGuide: 'Enable physical activity permissions in your system settings or log steps manually.',
+          type: 'warning',
+        });
       }
     } catch (e) {
       console.warn('Manual sync failed:', e);
-      Alert.alert('Error', 'Sync failed. Please check your connection and step sensor settings.');
+      showAlert({
+        title: 'Sync Failed',
+        message: 'Unable to connect to the step tracking sensor.',
+        why: 'Network connection was interrupted or sensor services did not respond.',
+        actionGuide: 'Verify your internet connection and check if device sensors are enabled.',
+        type: 'error',
+      });
     } finally {
       setIsSyncingSteps(false);
     }
@@ -140,7 +169,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       setIsSettingsModalVisible(false);
       onLogout();
     } else {
-      Alert.alert('Logout Error', 'Unable to perform logout at this time.');
+      showAlert({
+        title: 'Logout Failed',
+        message: 'Unable to perform logout at this time.',
+        why: 'The authorization token could not be revoked on the server or the logout callback was not registered.',
+        actionGuide: 'Try closing and restarting the app, then select logout again.',
+        type: 'error',
+      });
     }
   };
   
@@ -253,12 +288,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   };
 
   const handleRegenerateProgram = async () => {
-    await programService.regenerateProgram(setIsRegenerating, fetchProfile);
+    await programService.regenerateProgram(setIsRegenerating, fetchProfile, showAlert);
   };
 
   const handleSaveMetrics = async () => {
     if (!logWeight || isNaN(parseFloat(logWeight))) {
-      Alert.alert('Error', 'Please enter a valid weight.');
+      showAlert({
+        title: 'Invalid Input',
+        message: 'Please enter a valid weight.',
+        why: 'The weight metric must be a numeric value representing your current weight in kilograms.',
+        actionGuide: 'Please enter a valid number (e.g. 78.5) and try saving again.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -281,7 +322,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       if (logHips) payload.hips = parseFloat(logHips);
 
       await api.post('/progress/metrics', payload);
-      Alert.alert('Success', 'Metrics logged successfully!');
+      showAlert({
+        title: 'Metrics Saved',
+        message: 'Your body metrics have been logged successfully.',
+        why: 'The system has saved your current weight, body fat, and muscle mass to compute analytics progression.',
+        actionGuide: 'Review your progress graph on the Analytics panel.',
+        type: 'success',
+      });
       
       // Reset inputs
       setLogWeight('');
@@ -302,33 +349,29 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       await fetchProfile();
     } catch (err) {
       console.error('Failed to log metrics:', err);
-      Alert.alert('Error', 'Unable to log metrics.');
+      showAlert({
+        title: 'Failed to Save Metrics',
+        message: 'Unable to log metrics.',
+        why: 'A network communication error or database storage mismatch occurred.',
+        actionGuide: 'Check your internet connection and try submitting the form again.',
+        type: 'error',
+      });
     } finally {
       setIsSavingMetrics(false);
     }
   };
 
   const handleDeletePhoto = async (photoId: string) => {
-    Alert.alert(
-      'Delete Photo',
-      'Are you sure you want to delete this progress photo?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/progress/photos/${photoId}`);
-              Alert.alert('Success', 'Progress photo deleted.');
-              fetchPhotos();
-            } catch (err) {
-              Alert.alert('Error', 'Failed to delete photo.');
-            }
-          },
-        },
-      ]
-    );
+    try {
+      await api.delete(`/progress/photos/${photoId}`);
+      fetchPhotos();
+    } catch (err) {
+      showAlert({
+        title: 'Delete Failed',
+        message: 'Failed to delete photo.',
+        type: 'error',
+      });
+    }
   };
 
   const pickImage = async (angle: 'front' | 'side' | 'back', useCamera = false) => {
@@ -341,7 +384,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       }
 
       if (!permissionResult.granted) {
-        Alert.alert('Permission Denied', `You need to grant ${useCamera ? 'camera' : 'photo library'} permissions to upload progress photos.`);
+        showAlert({
+          title: 'Permission Denied',
+          message: `You need to grant ${useCamera ? 'camera' : 'photo library'} permissions to upload progress photos.`,
+          why: 'The operating system security policy blocks access to local files or hardware capture without explicit user authorization.',
+          actionGuide: 'Open your mobile settings, find Hadafak app, and allow access to camera/photos.',
+          type: 'warning',
+        });
         return;
       }
 
@@ -361,7 +410,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       }
     } catch (err) {
       console.error('Failed to pick image:', err);
-      Alert.alert('Error', 'Unable to pick or take image.');
+      showAlert({
+        title: 'Image Selection Failed',
+        message: 'Unable to pick or take image.',
+        why: 'The system image picker encountered an error or was closed unexpectedly.',
+        actionGuide: 'Please try selecting the image again.',
+        type: 'error',
+      });
     }
   };
 
@@ -389,12 +444,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
         },
       });
 
-      Alert.alert('Success', `${angle.toUpperCase()} photo uploaded successfully!`);
+      showAlert({
+        title: 'Photo Uploaded',
+        message: `${angle.toUpperCase()} photo uploaded successfully!`,
+        why: 'The image asset was processed and stored securely on our servers to track visual progression.',
+        actionGuide: 'You can now view this progress photo under the visual progression list.',
+        type: 'success',
+      });
       fetchPhotos();
       fetchAnalytics();
     } catch (err) {
       console.error('Failed to upload photo:', err);
-      Alert.alert('Error', 'Failed to upload photo.');
+      showAlert({
+        title: 'Upload Failed',
+        message: 'Failed to upload photo.',
+        why: 'A network upload error occurred or the file format is invalid.',
+        actionGuide: 'Verify your internet connection speed and try uploading the photo again.',
+        type: 'error',
+      });
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -412,7 +479,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
-        Alert.alert('Permission Denied', 'You need to grant photo library permissions to change your profile picture.');
+        showAlert({
+          title: 'Permission Denied',
+          message: 'You need to grant photo library permissions to change your profile picture.',
+          why: 'The operating system prevents the application from viewing your photo gallery without explicit access permission.',
+          actionGuide: 'Please open your phone settings, look for Hadafak app, and toggle "Photos" access to permitted.',
+          type: 'warning',
+        });
         return;
       }
 
@@ -431,7 +504,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       }
     } catch (err) {
       console.error('Failed to pick avatar:', err);
-      Alert.alert('Error', 'Unable to pick profile image.');
+      showAlert({
+        title: 'Selection Failed',
+        message: 'Unable to pick profile image.',
+        why: 'The system image picker failed to initialize or was cancelled by the user.',
+        actionGuide: 'Please open your photos again and select a valid JPEG/PNG image.',
+        type: 'error',
+      });
     }
   };
 
@@ -467,10 +546,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
           },
         });
       }
-      Alert.alert('Success', 'Profile picture updated successfully!');
+      showAlert({
+        title: 'Avatar Updated',
+        message: 'Profile picture updated successfully!',
+        why: 'The image was uploaded to our storage buckets and mapped to your account avatar.',
+        actionGuide: 'Your new photo will now be visible across all sections of the app.',
+        type: 'success',
+      });
     } catch (err) {
       console.error('Failed to upload avatar:', err);
-      Alert.alert('Error', 'Failed to upload profile picture.');
+      showAlert({
+        title: 'Upload Failed',
+        message: 'Failed to upload profile picture.',
+        why: 'A temporary network interruption occurred while sending the file.',
+        actionGuide: 'Verify your internet signal and try uploading the picture again.',
+        type: 'error',
+      });
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -486,7 +577,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
   const handleSaveProfile = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Name cannot be empty.');
+      showAlert({
+        title: 'Invalid Name',
+        message: 'Name cannot be empty.',
+        why: 'Your account requires a display name to personalize headers, goals, and training templates.',
+        actionGuide: 'Please enter a name in the text field to save.',
+        type: 'warning',
+      });
       return;
     }
     setIsSaving(true);
@@ -507,9 +604,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       const res = await api.post('/profiles', payload);
       setProfile(res.data);
       setIsEditModalVisible(false);
-      Alert.alert('Success', 'Profile settings updated successfully!');
+      showAlert({
+        title: 'Profile Updated',
+        message: 'Profile settings updated successfully!',
+        why: 'Your age, height, weight, activity frequency, and calorie targets have been successfully saved to your database profile.',
+        actionGuide: 'Review your personalized recommendations on the Home tab.',
+        type: 'success',
+      });
     } catch (error) {
-      Alert.alert('Error', 'Unable to save profile configuration.');
+      showAlert({
+        title: 'Save Failed',
+        message: 'Unable to save profile configuration.',
+        why: 'A network error occurred or the database server rejected the configuration parameters.',
+        actionGuide: 'Ensure that all metrics contain valid positive numbers and try saving again.',
+        type: 'error',
+      });
     } finally {
       setIsSaving(false);
     }
@@ -576,7 +685,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <StateFeedback
+          type="loading"
+          title="Loading Profile Settings..."
+          description="Fetching your biometrics, weight trends, and progression photos."
+        />
       </SafeAreaView>
     );
   }
@@ -785,15 +898,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                     <TouchableOpacity
                       style={styles.photoPlaceholder}
                       onPress={() => {
-                        Alert.alert(
-                          'Upload Progress Photo',
-                          `Select source for your ${angle} profile photo:`,
-                          [
+                        showAlert({
+                          title: 'Upload Progress Photo',
+                          message: `Select source for your ${angle} profile photo:`,
+                          why: 'A photo upload helps track body metrics and muscle definition visually over time.',
+                          actionGuide: 'Choose "Camera" to take a live photo, or "Photo Library" to pick an existing image.',
+                          type: 'info',
+                          buttons: [
                             { text: 'Cancel', style: 'cancel' },
                             { text: 'Camera', onPress: () => pickImage(angle, true) },
                             { text: 'Photo Library', onPress: () => pickImage(angle, false) },
-                          ]
-                        );
+                          ],
+                        });
                       }}
                     >
                       <Camera size={22} color={COLORS.primary} />

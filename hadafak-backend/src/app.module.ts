@@ -12,6 +12,7 @@ import { WorkoutsModule } from './modules/workouts/workouts.module';
 import { NutritionModule } from './modules/nutrition/nutrition.module';
 import { StepsModule } from './modules/steps/steps.module';
 import { RecipesModule } from './modules/recipes/recipes.module';
+import { RecipeIntegrationModule } from './modules/recipe-integration/recipe-integration.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { RunsModule } from './modules/runs/runs.module';
 import { PerformanceTrackingModule } from './modules/performance-tracking/performance-tracking.module';
@@ -55,6 +56,7 @@ import { HealthController } from './health.controller';
     NutritionModule,
     StepsModule,
     RecipesModule,
+    RecipeIntegrationModule,
     ProgressModule,
     RunsModule,
     PerformanceTrackingModule,

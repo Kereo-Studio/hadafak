@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Alert, Dimensions,
+  ScrollView, Dimensions,
   Animated, PanResponder, TextInput, ActivityIndicator, Modal,
 } from 'react-native';
+import { useAlert } from '../components/CustomAlert';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -127,6 +128,7 @@ const getGhostDistanceAtTime = (
 };
 
 export const MapScreen: React.FC = () => {
+  const { showAlert } = useAlert();
   const [selectedTheme, setSelectedTheme] = useState<MapThemeKey>('aubergine');
   const [showThemeSelector, setShowThemeSelector] = useState(false);
 
@@ -314,38 +316,45 @@ export const MapScreen: React.FC = () => {
   };
 
   const handleStop = () => {
-    Alert.alert('Save Workout', 'Are you finished with your run?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: resetRun },
-      {
-        text: 'Save Run',
-        onPress: () => {
-          stopTimer();
-          stopLocationWatch();
-          setStatus('idle');
+    showAlert({
+      title: 'Save Workout',
+      message: 'Are you finished with your run?',
+      why: 'This will end your simulated run tracking session.',
+      actionGuide: 'Choose "Save Run" to record your progress, "Discard" to delete the simulated path, or "Cancel" to continue tracking.',
+      type: 'info',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: resetRun },
+        {
+          text: 'Save Run',
+          onPress: () => {
+            stopTimer();
+            stopLocationWatch();
+            setStatus('idle');
 
-          const distKm = Math.round((distanceM / 1000) * 100) / 100;
-          const avgP = formatPace(distKm, elapsed);
-          const cal = Math.round(distKm * 70);
+            const distKm = Math.round((distanceM / 1000) * 100) / 100;
+            const avgP = formatPace(distKm, elapsed);
+            const cal = Math.round(distKm * 70);
 
-          const hour = new Date().getHours();
-          let defaultTitle = 'Morning Jog 🏃‍♂️';
-          if (hour >= 12 && hour < 17) defaultTitle = 'Afternoon Run 🏃‍♀️';
-          else if (hour >= 17 && hour < 21) defaultTitle = 'Evening Run 🌆';
-          else if (hour >= 21 || hour < 6) defaultTitle = 'Night Run 🌙';
+            const hour = new Date().getHours();
+            let defaultTitle = 'Morning Jog 🏃‍♂️';
+            if (hour >= 12 && hour < 17) defaultTitle = 'Afternoon Run 🏃‍♀️';
+            else if (hour >= 17 && hour < 21) defaultTitle = 'Evening Run 🌆';
+            else if (hour >= 21 || hour < 6) defaultTitle = 'Night Run 🌙';
 
-          setCustomRunTitle(defaultTitle);
-          setSummaryData({
-            distanceKm: distKm,
-            durationSeconds: elapsed,
-            avgPace: avgP,
-            calories: cal,
-            routeCoordinates: [...trackPoints],
-          });
-          setShowSummaryModal(true);
+            setCustomRunTitle(defaultTitle);
+            setSummaryData({
+              distanceKm: distKm,
+              durationSeconds: elapsed,
+              avgPace: avgP,
+              calories: cal,
+              routeCoordinates: [...trackPoints],
+            });
+            setShowSummaryModal(true);
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const resetRun = () => {
@@ -380,9 +389,21 @@ export const MapScreen: React.FC = () => {
         distanceKm: summaryData.distanceKm,
         routeCoordinates: summaryData.routeCoordinates,
       });
-      Alert.alert('Saved!', 'Your run has been recorded in your history.');
+      showAlert({
+        title: 'Run Saved',
+        message: 'Your run has been recorded in your history.',
+        why: 'The details and simulated route track points have been synced to the database.',
+        actionGuide: 'Tap OK to view your activity details in the dashboard history.',
+        type: 'success',
+      });
     } catch {
-      Alert.alert('Saved Locally', 'Saved offline. It will sync automatically.');
+      showAlert({
+        title: 'Saved Locally',
+        message: 'Saved offline. It will sync automatically.',
+        why: 'A temporary network interruption prevented database sync.',
+        actionGuide: 'The local activity data will be synced as soon as internet connection returns.',
+        type: 'info',
+      });
     } finally {
       setSavingRun(false);
       setShowSummaryModal(false);

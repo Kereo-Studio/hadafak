@@ -18,6 +18,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MapPin, Play, Apple, Award, Home } from 'lucide-react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AlertProvider } from './src/components/CustomAlert';
 
 type AuthState = 'loading' | 'welcome' | 'login' | 'signup' | 'onboarding' | 'authenticated';
 
@@ -231,7 +232,9 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      {renderContent()}
+      <AlertProvider>
+        {renderContent()}
+      </AlertProvider>
     </SafeAreaProvider>
   );
 }

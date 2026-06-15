@@ -46,6 +46,8 @@ import {
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText, G } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
 import { programService } from '../services/programService';
+import { StateFeedback } from '../components/StateFeedback';
+import { useAlert } from '../components/CustomAlert';
 
 const { width } = Dimensions.get('window');
 
@@ -116,6 +118,7 @@ interface WorkoutHistoryItem {
 }
 
 export const WorkoutsScreen: React.FC = () => {
+  const { showAlert } = useAlert();
   const route = useRoute<any>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -272,34 +275,31 @@ export const WorkoutsScreen: React.FC = () => {
     );
   };
 
-  const handleDeleteRun = (id: string) => {
-    Alert.alert('Delete Run', 'Are you sure you want to delete this run session?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setLoading(true);
-            await api.delete(`/runs/${id}`);
-            await fetchWorkoutData();
-          } catch (err) {
-            Alert.alert('Error', 'Unable to delete run session.');
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
+  const handleDeleteRun = async (id: string) => {
+    try {
+      setLoading(true);
+      await api.delete(`/runs/${id}`);
+      await fetchWorkoutData();
+    } catch (err) {
+      showAlert({
+        title: 'Deletion Failed',
+        message: 'Unable to delete run session.',
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderRunsHistory = () => {
     if (runsHistory.length === 0) {
       return (
-        <View style={styles.emptyHistoryCard}>
-          <Award size={36} color={COLORS.textMuted} style={{ marginBottom: 10 }} />
-          <Text style={styles.emptyHistoryText}>No runs completed yet. Get outside and track your first route!</Text>
-        </View>
+        <StateFeedback
+          type="empty"
+          title="No Runs Logged Yet"
+          description="Get outside and track your first run, walk, or cycling route!"
+          icon={<Award size={36} color={COLORS.primary} />}
+        />
       );
     }
 
@@ -564,7 +564,7 @@ export const WorkoutsScreen: React.FC = () => {
 
   // Program progression generation and manual plan editing handlers
   const handleRegenerateProgram = async () => {
-    await programService.regenerateProgram(setIsRegenerating, fetchWorkoutData);
+    await programService.regenerateProgram(setIsRegenerating, fetchWorkoutData, showAlert);
   };
 
   const handleOpenProgramSelector = async () => {
@@ -586,9 +586,21 @@ export const WorkoutsScreen: React.FC = () => {
       await api.post(`/profiles/assign-program/${programId}`);
       setIsProgramSelectorVisible(false);
       await fetchWorkoutData();
-      Alert.alert('Success', 'Workout program updated successfully!');
+      showAlert({
+        title: 'Program Updated',
+        message: 'Your active workout program has been changed.',
+        why: 'The new training program is now bound to your profile and will update your scheduled splits.',
+        actionGuide: 'Check your updated Training Plan tab to see the new exercises and splits.',
+        type: 'success',
+      });
     } catch (err) {
-      Alert.alert('Error', 'Unable to change workout program.');
+      showAlert({
+        title: 'Update Failed',
+        message: 'Unable to assign workout program.',
+        why: 'There was a connection issue or the selected program is invalid.',
+        actionGuide: 'Verify your internet connection and try selecting it again.',
+        type: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -624,16 +636,34 @@ export const WorkoutsScreen: React.FC = () => {
 
   const handleSaveCustomProgram = async () => {
     if (!customProgramName.trim()) {
-      Alert.alert('Error', 'Please enter a program name.');
+      showAlert({
+        title: 'Program Name Required',
+        message: 'The custom program title field is empty.',
+        why: 'Every workout program must have a unique identifier name for your personal records.',
+        actionGuide: 'Please enter a name for your custom program and try again.',
+        type: 'warning',
+      });
       return;
     }
     if (customProgramDays.length === 0) {
-      Alert.alert('Error', 'Please add at least one split day.');
+      showAlert({
+        title: 'Split Days Missing',
+        message: 'Your custom program does not contain any days.',
+        why: 'A training routine must have at least one split day (e.g. Day 1: Full Body) to hold exercises.',
+        actionGuide: 'Click "Add Day" to add one or more training days to your custom plan.',
+        type: 'warning',
+      });
       return;
     }
     for (const d of customProgramDays) {
       if (!d.title.trim()) {
-        Alert.alert('Error', 'Please fill in all day titles.');
+        showAlert({
+          title: 'Empty Split Name',
+          message: 'One or more of your split days has no title.',
+          why: 'Every split day requires a descriptive title (e.g. Upper Body, Leg Day) to keep your schedule organized.',
+          actionGuide: 'Type a name for all day fields, then save.',
+          type: 'warning',
+        });
         return;
       }
     }
@@ -655,10 +685,22 @@ export const WorkoutsScreen: React.FC = () => {
       
       setIsCustomProgramModalVisible(false);
       await fetchWorkoutData();
-      Alert.alert('Success', 'Your custom workout program has been created and assigned!');
+      showAlert({
+        title: 'Custom Program Assigned',
+        message: 'Your custom program is now active.',
+        why: 'The program templates and custom splits were created and assigned to your user account.',
+        actionGuide: 'Tap OK to begin adding specific exercises to each training day split.',
+        type: 'success',
+      });
     } catch (err) {
       console.warn('Failed to create custom program:', err);
-      Alert.alert('Error', 'Failed to create custom program.');
+      showAlert({
+        title: 'Save Program Failed',
+        message: 'Unable to save your custom program.',
+        why: 'The database server rejected the split configuration or connection timed out.',
+        actionGuide: 'Verify your internet connection and try pressing "Save Program" again.',
+        type: 'error',
+      });
     } finally {
       setIsRegenerating(false);
     }
@@ -682,14 +724,26 @@ export const WorkoutsScreen: React.FC = () => {
         daysPerWeek: genDays,
       });
 
-      Alert.alert('Success', 'Your personalized workout plan was generated successfully!');
+      showAlert({
+        title: 'AI Workout Plan Created',
+        message: 'Your personalized AI workout plan was successfully generated.',
+        why: 'The system has analyzed your fitness level, equipment access, and days per week to output tailored exercises.',
+        actionGuide: 'Tap OK to view your newly generated splits and begin training.',
+        type: 'success',
+      });
       setIsGenModalVisible(false);
       
       // Refresh workouts tab to retrieve newly generated plan
       await fetchWorkoutData();
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Generation Error', e.response?.data?.message || 'Failed to generate personalized workout plan.');
+      showAlert({
+        title: 'Generation Failed',
+        message: 'AI could not build your personalized workout plan.',
+        why: e.response?.data?.message || 'The AI workout generation service is currently offline or received invalid attributes.',
+        actionGuide: 'Check your network link, verify your profile inputs, and try generating again.',
+        type: 'error',
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -697,10 +751,13 @@ export const WorkoutsScreen: React.FC = () => {
 
   const handleDeleteWorkoutPlan = async () => {
     if (!activeWorkoutPlan) return;
-    Alert.alert(
-      'Reset Workout Plan',
-      'Are you sure you want to delete this custom/generated workout plan and start over?',
-      [
+    showAlert({
+      title: 'Reset Workout Plan',
+      message: 'Are you sure you want to delete this custom/generated workout plan and start over?',
+      why: 'This will permanently remove the program structure, assigned days, and exercise templates.',
+      actionGuide: 'Tap "Reset" to confirm and clear the active plan, or "Cancel" to keep it.',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reset',
@@ -711,17 +768,29 @@ export const WorkoutsScreen: React.FC = () => {
               await api.delete(`/workouts/plans/${activeWorkoutPlan.id}`);
               setActiveWorkoutPlan(null);
               await fetchWorkoutData();
-              Alert.alert('Success', 'Workout plan reset.');
+              showAlert({
+                title: 'Workout Plan Reset',
+                message: 'Your workout plan has been successfully cleared.',
+                why: 'The database record has been deleted.',
+                actionGuide: 'You can now select a new program or generate another AI workout plan.',
+                type: 'success',
+              });
             } catch (err) {
               console.warn(err);
-              Alert.alert('Error', 'Unable to delete workout plan.');
+              showAlert({
+                title: 'Reset Failed',
+                message: 'Unable to delete workout plan.',
+                why: 'A database sync error occurred or connection was lost.',
+                actionGuide: 'Please check your connection and try resetting the plan again.',
+                type: 'error',
+              });
             } finally {
               setLoading(false);
             }
           }
         }
       ]
-    );
+    });
   };
 
   const handleOpenEditPlanEx = (pde: any) => {
@@ -765,51 +834,55 @@ export const WorkoutsScreen: React.FC = () => {
           targetRepsRange: editTargetRepsRange,
         });
       }
-      Alert.alert('Success', 'Exercise target parameters updated successfully.');
+      showAlert({
+        title: 'Exercise Targets Updated',
+        message: 'The target sets and reps have been modified.',
+        why: 'The database updated your workout plan templates to guide your next session.',
+        actionGuide: 'Review your workout day split to see the updated goals.',
+        type: 'success',
+      });
       setIsEditPlanExModalVisible(false);
       fetchWorkoutData();
     } catch (err) {
-      Alert.alert('Error', 'Unable to save modifications.');
+      showAlert({
+        title: 'Save Modification Failed',
+        message: 'Failed to update target parameters.',
+        why: 'A network error occurred or the inputs are incorrectly structured.',
+        actionGuide: 'Verify that target sets and reps range are valid and check your network connection.',
+        type: 'error',
+      });
     }
   };
 
   const handleRemovePlanEx = async (pdeId: string) => {
-    Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to remove this exercise from your training split day?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (activeWorkoutPlan) {
-                const updatedExercises = activeWorkoutPlan.workoutExercises.filter((we: any) => we.id !== pdeId);
-                const exercisesPayload = updatedExercises.map((we: any) => ({
-                  exerciseId: we.exerciseId,
-                  sets: we.sets,
-                  reps: String(we.reps),
-                  weight: we.weight || null,
-                  restTimeSeconds: we.restTimeSeconds || 90,
-                  dayNumber: we.dayNumber || 1,
-                }));
-                await api.patch(`/workouts/plans/${activeWorkoutPlan.id}`, {
-                  name: activeWorkoutPlan.name,
-                  exercises: exercisesPayload,
-                });
-              } else {
-                await api.delete(`/programs/exercises/${pdeId}`);
-              }
-              Alert.alert('Success', 'Exercise removed from plan day.');
-              fetchWorkoutData();
-            } catch (err) {
-              Alert.alert('Error', 'Unable to remove exercise.');
-            }
-          },
-        },
-      ]
-    );
+    try {
+      if (activeWorkoutPlan) {
+        const updatedExercises = activeWorkoutPlan.workoutExercises.filter((we: any) => we.id !== pdeId);
+        const exercisesPayload = updatedExercises.map((we: any) => ({
+          exerciseId: we.exerciseId,
+          sets: we.sets,
+          reps: String(we.reps),
+          weight: we.weight || null,
+          restTimeSeconds: we.restTimeSeconds || 90,
+          dayNumber: we.dayNumber || 1,
+        }));
+        await api.patch(`/workouts/plans/${activeWorkoutPlan.id}`, {
+          name: activeWorkoutPlan.name,
+          exercises: exercisesPayload,
+        });
+      } else {
+        await api.delete(`/programs/exercises/${pdeId}`);
+      }
+      fetchWorkoutData();
+    } catch (err) {
+      showAlert({
+        title: 'Removal Failed',
+        message: 'Unable to remove exercise.',
+        why: 'A database update error occurred or connection was lost.',
+        actionGuide: 'Please try again in a few moments.',
+        type: 'error',
+      });
+    }
   };
 
   const handleOpenAddPlanEx = (dayId: string) => {
@@ -885,13 +958,25 @@ export const WorkoutsScreen: React.FC = () => {
           targetRepsRange: addPlanExRepsRange,
         });
       }
-      Alert.alert('Success', 'Exercise added to training plan!');
+      showAlert({
+        title: 'Exercise Added',
+        message: 'The exercise has been added to your split day.',
+        why: 'The database template has been successfully appended with this activity.',
+        actionGuide: 'Review your training splits or begin your workout routine to see it.',
+        type: 'success',
+      });
       setIsAddPlanExModalVisible(false);
       setAddPlanExQuery('');
       setAddPlanExResults([]);
       fetchWorkoutData();
     } catch (err) {
-      Alert.alert('Error', 'Unable to add exercise to plan day.');
+      showAlert({
+        title: 'Add Exercise Failed',
+        message: 'Could not append the exercise to your routine.',
+        why: 'The database server was unable to save the new target parameters or connection timed out.',
+        actionGuide: 'Check your internet connection and try pressing "Add to Plan" again.',
+        type: 'error',
+      });
     }
   };
 
@@ -932,11 +1017,23 @@ export const WorkoutsScreen: React.FC = () => {
     setIsSyncing(true);
     try {
       await api.post('/exercises/sync');
-      Alert.alert('Success', 'Exercise catalog synchronized from external APIs!');
+      showAlert({
+        title: 'Catalog Synchronized',
+        message: 'The exercise catalog is now fully up to date.',
+        why: 'All exercise items, muscle groups, instructions, and target equipment have been refreshed from remote api services.',
+        actionGuide: 'Use the search box in the catalog tab to look for newly added exercises.',
+        type: 'success',
+      });
       fetchCatalogExercises();
     } catch (err: any) {
       console.warn('Catalog sync failed:', err);
-      Alert.alert('Sync Error', err.response?.data?.message || 'Failed to sync exercises catalog.');
+      showAlert({
+        title: 'Synchronization Failed',
+        message: 'Could not sync exercises catalog.',
+        why: err.response?.data?.message || 'The external API service did not respond or network connection is offline.',
+        actionGuide: 'Check your internet connection and tap the synchronize button to try again.',
+        type: 'error',
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -986,11 +1083,23 @@ export const WorkoutsScreen: React.FC = () => {
           });
         }
       }
-      Alert.alert('Success', 'Exercise added to training plan!');
+      showAlert({
+        title: 'Exercise Added',
+        message: 'The catalog exercise has been appended to your workout split.',
+        why: 'Your training plan has been updated with the new sets and reps parameters.',
+        actionGuide: 'Tap OK to return to the catalog or review your training splits.',
+        type: 'success',
+      });
       setSelectedCatalogExercise(null);
       fetchWorkoutData();
     } catch (err) {
-      Alert.alert('Error', 'Unable to add exercise to training plan.');
+      showAlert({
+        title: 'Insertion Failed',
+        message: 'Failed to append the exercise to your active split.',
+        why: 'A database update mismatch or connection issue occurred.',
+        actionGuide: 'Verify your network connection and retry.',
+        type: 'error',
+      });
     }
   };
 
@@ -1170,7 +1279,13 @@ export const WorkoutsScreen: React.FC = () => {
       ]);
       setWorkoutDuration(0);
       startTimer();
-      Alert.alert('Offline Mode', 'Workout started locally.');
+      showAlert({
+        title: 'Offline Mode Active',
+        message: 'Your workout session has started in offline mode.',
+        why: 'We were unable to reach our servers to log the session initialization, but your reps and sets will be tracked locally.',
+        actionGuide: 'Proceed with your workout. All logs will be synced to the database once you finish.',
+        type: 'info',
+      });
     } finally {
       setLoading(false);
     }
@@ -1211,7 +1326,13 @@ export const WorkoutsScreen: React.FC = () => {
     // Check if already in workout
     const exists = activeExercises.find((ae) => ae.exerciseId === exercise.id);
     if (exists) {
-      Alert.alert('Notice', 'Exercise is already added to this session.');
+      showAlert({
+        title: 'Already Added',
+        message: 'This exercise is already included in your active session.',
+        why: 'The active workout tracker lists this exercise in your current day split.',
+        actionGuide: 'If you want to track more sets, tap "+ Add Set" button directly under the exercise details card.',
+        type: 'info',
+      });
       return;
     }
 
@@ -1384,10 +1505,22 @@ export const WorkoutsScreen: React.FC = () => {
       setActiveSession(null);
       stopTimer();
       setWorkoutDuration(0);
-      Alert.alert('Success', 'Gym workout session logged successfully!');
+      showAlert({
+        title: 'Workout Logged!',
+        message: 'Your training session was saved successfully.',
+        why: 'The database recorded all finished sets, reps, load weight, and your perceived effort (RPE).',
+        actionGuide: 'Keep it up! Check your Gym History list to view this entry and track your progressive overload trend.',
+        type: 'success',
+      });
       fetchWorkoutData();
     } catch (e) {
-      Alert.alert('Error', 'Unable to complete workout log.');
+      showAlert({
+        title: 'Logging Failed',
+        message: 'Could not submit your workout session.',
+        why: 'A network communication error occurred or some exercises lack required inputs.',
+        actionGuide: 'Please check your internet connection and tap the finish button to try logging again.',
+        type: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -1395,30 +1528,37 @@ export const WorkoutsScreen: React.FC = () => {
 
   // Cancel/Discard active workout
   const handleDiscardWorkout = () => {
-    Alert.alert('Discard Session', 'Are you sure you want to discard this workout logs?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: async () => {
-          if (activeSession?.id) {
-            try {
-              setLoading(true);
-              await api.delete(`/workouts/${activeSession.id}`);
-            } catch (err) {
-              console.warn('Failed to discard active session on server:', err);
-            } finally {
-              setLoading(false);
+    showAlert({
+      title: 'Discard Workout?',
+      message: 'Are you sure you want to discard this workout session?',
+      why: 'All sets and reps tracked in the current session will be permanently deleted and cannot be recovered.',
+      actionGuide: 'Tap "Discard" to confirm and clear the active tracker, or "Cancel" to continue tracking.',
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            if (activeSession?.id) {
+              try {
+                setLoading(true);
+                await api.delete(`/workouts/${activeSession.id}`);
+              } catch (err) {
+                console.warn('Failed to discard active session on server:', err);
+              } finally {
+                setLoading(false);
+              }
             }
-          }
-          setIsWorkoutActive(false);
-          setActiveSession(null);
-          stopTimer();
-          setWorkoutDuration(0);
-          setActiveExercises([]);
+            setIsWorkoutActive(false);
+            setActiveSession(null);
+            stopTimer();
+            setWorkoutDuration(0);
+            setActiveExercises([]);
+          },
         },
-      },
-    ]);
+      ]
+    });
   };
 
   // Calculate training volume sum for render
@@ -1514,6 +1654,18 @@ export const WorkoutsScreen: React.FC = () => {
     const cpY2 = p.y;
     return `${path} C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p.x} ${p.y}`;
   }, '');
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <StateFeedback
+          type="loading"
+          title="Loading Workout Hub..."
+          description="Fetching your training plan, exercise catalog, and workout history."
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1699,60 +1851,71 @@ export const WorkoutsScreen: React.FC = () => {
                 <Text style={styles.historySectionTitle}>Gym Logs History</Text>
                 {history.length > 0 ? (
                   history.map((item) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={styles.historyCard}
-                      onPress={() => {
-                        setSelectedWorkoutSession(item);
-                        setIsDetailModalVisible(true);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.historyHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Clock size={16} color={COLORS.textMuted} style={{ marginRight: 6 }} />
-                          <Text style={styles.historyDate}>
-                            {new Date(item.date).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                          </Text>
+                    <View key={item.id} style={{ position: 'relative' }}>
+                      <TouchableOpacity
+                        style={styles.historyCard}
+                        onPress={() => {
+                          setSelectedWorkoutSession(item);
+                          setIsDetailModalVisible(true);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.historyHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Clock size={16} color={COLORS.textMuted} style={{ marginRight: 6 }} />
+                            <Text style={styles.historyDate}>
+                              {new Date(item.date).toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <Text style={styles.historyDuration}>{item.duration} mins</Text>
+                            <TouchableOpacity
+                              onPress={() => handleDeleteSession(item.id)}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Trash2 size={16} color={COLORS.error || '#FF4A4A'} />
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                        <Text style={styles.historyDuration}>{item.duration} mins</Text>
-                      </View>
-                      <Text style={styles.historyName}>
-                        {item.programDay?.name || 'Strength Session'}
-                      </Text>
-                      
-                      {/* List of exercises performed */}
-                      <View style={styles.historyExecsList}>
-                        {(() => {
-                          const listLogs = item.exerciseLogs || item.logs || [];
-                          return (
-                            <>
-                              {listLogs.slice(0, 3).map((log: any, idx: number) => (
-                                <View key={log.id || idx} style={styles.historyExecItem}>
-                                  <Check size={14} color={COLORS.success} style={{ marginRight: 6 }} />
-                                  <Text style={styles.historyExecName}>
-                                    {log.exercise?.name} ({log.sets?.length} sets)
-                                  </Text>
-                                </View>
-                              ))}
-                              {listLogs.length > 3 && (
-                                <Text style={styles.historyExecMore}>+{listLogs.length - 3} more exercises</Text>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </View>
-                    </TouchableOpacity>
+                        <Text style={styles.historyName}>
+                          {item.programDay?.name || 'Strength Session'}
+                        </Text>
+                        
+                        {/* List of exercises performed */}
+                        <View style={styles.historyExecsList}>
+                          {(() => {
+                            const listLogs = item.exerciseLogs || item.logs || [];
+                            return (
+                              <>
+                                {listLogs.slice(0, 3).map((log: any, idx: number) => (
+                                  <View key={log.id || idx} style={styles.historyExecItem}>
+                                    <Check size={14} color={COLORS.success} style={{ marginRight: 6 }} />
+                                    <Text style={styles.historyExecName}>
+                                      {log.exercise?.name} ({log.sets?.length} sets)
+                                    </Text>
+                                  </View>
+                                ))}
+                                {listLogs.length > 3 && (
+                                  <Text style={styles.historyExecMore}>+{listLogs.length - 3} more exercises</Text>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </View>
+                      </TouchableOpacity>
+                    </View>
                   ))
                 ) : (
-                  <View style={styles.emptyHistoryCard}>
-                    <Award size={36} color={COLORS.textMuted} style={{ marginBottom: 10 }} />
-                    <Text style={styles.emptyHistoryText}>No workouts logged yet. Your fitness journey starts now!</Text>
-                  </View>
+                  <StateFeedback
+                    type="empty"
+                    title="No Workouts Logged Yet"
+                    description="Your fitness journey starts now! Log your first workout today."
+                    icon={<Award size={36} color={COLORS.primary} />}
+                  />
                 )}
               </View>
             ) : activeTab === 'runs' ? (
@@ -2292,12 +2455,12 @@ export const WorkoutsScreen: React.FC = () => {
                 </View>
               ))
             ) : (
-              <View style={styles.emptyActiveCard}>
-                <Dumbbell size={34} color={COLORS.textMuted} style={{ marginBottom: 12 }} />
-                <Text style={styles.emptyActiveText}>
-                  Your active routine is empty. Tap below to search and add exercises to log!
-                </Text>
-              </View>
+              <StateFeedback
+                type="empty"
+                title="Your active routine is empty"
+                description="Tap 'Add Exercise' below to select and log exercises to this workout!"
+                icon={<Dumbbell size={34} color={COLORS.primary} />}
+              />
             )}
 
             {/* Add Exercise Trigger Button */}
@@ -2407,7 +2570,7 @@ export const WorkoutsScreen: React.FC = () => {
         transparent={true}
         onRequestClose={() => setIsFinishModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View style={styles.finishModalOverlay}>
           <View style={styles.finishModalContent}>
             <Award size={36} color={COLORS.primary} style={{ marginBottom: 8, opacity: 0.9 }} />
             <Text style={styles.finishModalTitle}>How was your workout?</Text>
@@ -3901,10 +4064,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   // Finish Modal
+  finishModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   finishModalContent: {
     backgroundColor: '#FFFFFF',
     borderRadius: 32,
-    marginHorizontal: 30,
+    width: '90%',
+    maxWidth: 340,
     padding: 24,
     alignItems: 'center',
     ...SHADOWS.card,

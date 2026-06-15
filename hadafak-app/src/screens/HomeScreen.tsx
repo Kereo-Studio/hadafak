@@ -18,6 +18,7 @@ import {
 import { Pedometer } from 'expo-sensors';
 import { pedometerService, getLocalTodaySteps, saveLocalTodaySteps } from '../utils/pedometerService';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAlert } from '../components/CustomAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../theme/colors';
 import {
@@ -46,6 +47,7 @@ import {
 } from 'lucide-react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
+import { StateFeedback } from '../components/StateFeedback';
 
 const { width } = Dimensions.get('window');
 
@@ -113,6 +115,7 @@ const MiniProgressCircle: React.FC<{
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { showAlert } = useAlert();
   const [selectedActivity, setSelectedActivity] = useState<string>('cycling');
   const [isCalendarVisible, setIsCalendarVisible] = useState(false);
 
@@ -648,7 +651,7 @@ export const HomeScreen: React.FC = () => {
             const diffSinceSync = newVal - lastSyncedStepsRef.current;
             if (diffSinceSync >= syncThreshold && !isSyncingStepsRef.current) {
               isSyncingStepsRef.current = true;
-              pedometerService.syncSteps(api).then((success) => {
+              pedometerService.syncSteps(api, showAlert).then((success) => {
                 if (success) {
                   lastSyncedStepsRef.current = newVal;
                 }
@@ -674,7 +677,7 @@ export const HomeScreen: React.FC = () => {
 
       const performSyncAndFetch = async () => {
         // Sync native steps to backend first
-        await pedometerService.syncSteps(api);
+        await pedometerService.syncSteps(api, showAlert);
 
         if (active) {
           // Fetch the updated dashboard data
@@ -771,7 +774,11 @@ export const HomeScreen: React.FC = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <StateFeedback
+          type="loading"
+          title="Preparing Your Fitness Day..."
+          description="Syncing steps, active time, and personalized meals."
+        />
       </SafeAreaView>
     );
   }
@@ -944,7 +951,13 @@ export const HomeScreen: React.FC = () => {
                 ]}
                 onPress={() => {
                   if (isFuture) {
-                    Alert.alert('Future Date', 'You cannot log activities for future dates.');
+                    showAlert({
+                      title: 'Future Date Selection',
+                      message: 'You cannot log activities for future dates.',
+                      why: 'The selected date is ahead of your device time, and fitness logs cannot be pre-recorded.',
+                      actionGuide: 'Please select a past date or today from the calendar header to record your workouts.',
+                      type: 'warning',
+                    });
                     return;
                   }
                   setSelectedActivity(exercise.id);

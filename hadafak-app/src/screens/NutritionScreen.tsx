@@ -35,11 +35,15 @@ import {
   Camera,
   Upload,
   ScanBarcode,
+  Heart,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { api } from '../services/api';
+import { storage } from '../utils/storage';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+import { StateFeedback } from '../components/StateFeedback';
+import { useAlert } from '../components/CustomAlert';
 
 const { width } = Dimensions.get('window');
 
@@ -71,6 +75,7 @@ interface LoggedMeal {
 }
 
 export const NutritionScreen: React.FC = () => {
+  const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'tracker' | 'recipes'>('tracker');
@@ -112,6 +117,103 @@ export const NutritionScreen: React.FC = () => {
   const [substitutionResult, setSubstitutionResult] = useState<any>(null);
   const [isSubstituting, setIsSubstituting] = useState(false);
 
+  // Recipes Hub additional states
+  const [favoriteRecipeIds, setFavoriteRecipeIds] = useState<string[]>([]);
+  const [servingsScale, setServingsScale] = useState(1);
+  const [isCookingMode, setIsCookingMode] = useState(false);
+  const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  // Helper helpers
+  const detectTimerMinutes = (text: string): number | null => {
+    const match = text.match(/(\d+)\s*(minute|minutes|min|mins)\b/i);
+    if (match) {
+      return parseInt(match[1], 10);
+    }
+    return null;
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const calculateMatchScore = (recipe: any, fridgeString: string) => {
+    if (!fridgeString || !fridgeString.trim()) return 0;
+    const userIngredients = fridgeString
+      .split(',')
+      .map((i) => i.trim().toLowerCase())
+      .filter(Boolean);
+    if (userIngredients.length === 0) return 0;
+    const recipeIngs = recipe.ingredients?.map((ing: any) => 
+      (ing.customName || ing.food?.name || '').toLowerCase()
+    ) || [];
+    if (recipeIngs.length === 0) return 0;
+    let matches = 0;
+    recipeIngs.forEach((rIng: string) => {
+      if (userIngredients.some((uIng) => rIng.includes(uIng) || uIng.includes(rIng))) {
+        matches++;
+      }
+    });
+    return Math.round((matches / recipeIngs.length) * 100);
+  };
+
+  const toggleFavorite = async (recipeId: string) => {
+    let updatedFavs: string[];
+    if (favoriteRecipeIds.includes(recipeId)) {
+      updatedFavs = favoriteRecipeIds.filter(id => id !== recipeId);
+    } else {
+      updatedFavs = [...favoriteRecipeIds, recipeId];
+    }
+    setFavoriteRecipeIds(updatedFavs);
+    try {
+      await storage.setItem('favorite_recipes', JSON.stringify(updatedFavs));
+    } catch (err) {
+      console.warn('Error saving favorites:', err);
+    }
+  };
+
+  const handleOpenRecipeDetail = (item: any) => {
+    setSelectedRecipeDetail(item);
+    setServingsScale(item.servings || 1);
+    setIsCookingMode(false);
+    setActiveStepIndex(0);
+    setTimerSeconds(0);
+    setIsTimerRunning(false);
+    setIsDetailModalVisible(true);
+  };
+
+  // Load favorites on mount
+  useEffect(() => {
+    const loadFavorites = async () => {
+      try {
+        const favs = await storage.getItem('favorite_recipes');
+        if (favs) {
+          setFavoriteRecipeIds(JSON.parse(favs));
+        }
+      } catch (err) {
+        console.warn('Error loading favorites:', err);
+      }
+    };
+    loadFavorites();
+  }, []);
+
+  // Countdown Timer Effect
+  useEffect(() => {
+    let interval: any;
+    if (isTimerRunning && timerSeconds > 0) {
+      interval = setInterval(() => {
+        setTimerSeconds((prev) => prev - 1);
+      }, 1000);
+    } else if (timerSeconds === 0 && isTimerRunning) {
+      setIsTimerRunning(false);
+      Alert.alert('Cooking Timer Complete!', 'Your cooking step timer has finished.');
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, timerSeconds]);
+
   // Load recipes from API
   const fetchRecipes = async (queryText = '', tagVal = '') => {
     setLoadingRecipes(true);
@@ -132,14 +234,21 @@ export const NutritionScreen: React.FC = () => {
   // Trigger search on query/tag change
   useEffect(() => {
     if (activeTab === 'recipes') {
-      fetchRecipes(recipesQuery, selectedRecipeTag);
+      const tagParam = selectedRecipeTag === 'Favorites' ? '' : selectedRecipeTag;
+      fetchRecipes(recipesQuery, tagParam);
     }
   }, [recipesQuery, selectedRecipeTag, activeTab]);
 
   // AI Recipe generation handler
   const handleGenerateAiRecipe = async () => {
     if (!fridgeIngredients.trim()) {
-      Alert.alert('Missing Input', 'Please type at least one ingredient.');
+      showAlert({
+        title: 'Missing Ingredients',
+        message: 'No ingredients were entered.',
+        why: 'The AI recipe generator needs to know what ingredients you have available in order to suggest a matching meal.',
+        actionGuide: 'Type at least one ingredient (e.g., chicken breast, white rice, or broccoli) in the text field.',
+        type: 'warning',
+      });
       return;
     }
     setIsGeneratingRecipe(true);
@@ -155,17 +264,28 @@ export const NutritionScreen: React.FC = () => {
       });
 
       if (res.data) {
-        Alert.alert('Success', 'AI custom recipe created & saved to catalog!');
+        showAlert({
+          title: 'Recipe Generated!',
+          message: 'Your AI recipe was successfully created.',
+          why: 'A new recipe matching your ingredients has been saved directly to your personalized catalog.',
+          actionGuide: 'Review the steps, preparation details, and nutritional macros below.',
+          type: 'success',
+        });
         setFridgeIngredients('');
         setFridgePrompt('');
         setIsFridgeModalVisible(false);
         // Refresh catalog list and open detail of the newly generated recipe
         await fetchRecipes(recipesQuery, selectedRecipeTag);
-        setSelectedRecipeDetail(res.data);
-        setIsDetailModalVisible(true);
+        handleOpenRecipeDetail(res.data);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to generate AI recipe.');
+      showAlert({
+        title: 'Generation Failed',
+        message: 'Failed to generate your recipe.',
+        why: err.response?.data?.message || 'The AI service experienced an error or is temporarily offline.',
+        actionGuide: 'Check your internet connection, adjust your ingredient list, and submit the request again.',
+        type: 'error',
+      });
     } finally {
       setIsGeneratingRecipe(false);
     }
@@ -176,7 +296,13 @@ export const NutritionScreen: React.FC = () => {
     if (!selectedRecipeDetail) return;
     const servingsNum = parseFloat(logRecipeServings);
     if (isNaN(servingsNum) || servingsNum <= 0) {
-      Alert.alert('Invalid input', 'Please enter a valid number of servings.');
+      showAlert({
+        title: 'Invalid Servings',
+        message: 'The serving size quantity is invalid.',
+        why: 'Servings must be a positive number greater than zero.',
+        actionGuide: 'Please enter a valid numeric value (e.g., 1.0, 2.5) for the servings input.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -187,13 +313,25 @@ export const NutritionScreen: React.FC = () => {
         mealType: logRecipeMealType,
         date,
       });
-      Alert.alert('Logged', 'Recipe logged successfully to your daily meals journal.');
+      showAlert({
+        title: 'Meal Logged Successfully',
+        message: 'Your recipe has been logged to your daily journal.',
+        why: 'The database recorded the consumption of this recipe and updated your active calorie intake and macronutrients.',
+        actionGuide: 'Review your updated rings to see how this affects your remaining calories for today.',
+        type: 'success',
+      });
       setIsLogRecipeModalVisible(false);
       setIsDetailModalVisible(false);
       // Reload daily logs to reflect macros in circular chart rings
       fetchDailySummary();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to log recipe.');
+      showAlert({
+        title: 'Meal Logging Failed',
+        message: 'Could not log the recipe to your journal.',
+        why: err.response?.data?.message || 'A database sync error occurred or server session expired.',
+        actionGuide: 'Please verify your network connection and try submitting the entry again.',
+        type: 'error',
+      });
     } finally {
       setIsLoggingRecipe(false);
     }
@@ -203,7 +341,13 @@ export const NutritionScreen: React.FC = () => {
   const handleFetchSubstitution = async () => {
     if (!selectedIngredientToSubstitute) return;
     if (!substituteNameInput.trim()) {
-      Alert.alert('Input needed', 'Please specify a replacement food name.');
+      showAlert({
+        title: 'Input Needed',
+        message: 'The replacement food name is missing.',
+        why: 'The AI service requires a target ingredient name to calculate equivalent weights and nutrition changes.',
+        actionGuide: 'Enter the name of the food item you want to swap in (e.g., olive oil instead of butter) in the text box.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -216,10 +360,13 @@ export const NutritionScreen: React.FC = () => {
       });
       setSubstitutionResult(res.data);
     } catch (err: any) {
-      Alert.alert(
-        'Not Found',
-        `Could not find substitution info: ${err.response?.data?.message || 'Food item not found in catalog.'}`
-      );
+      showAlert({
+        title: 'Substitution Info Not Found',
+        message: 'Could not find swap instructions for this item.',
+        why: err.response?.data?.message || 'The food item you entered is not recognized or lacks complete nutrition details in our database.',
+        actionGuide: 'Try entering a different, more common alternative food name (e.g., Greek yogurt, coconut oil) and search again.',
+        type: 'error',
+      });
     } finally {
       setIsSubstituting(false);
     }
@@ -330,7 +477,13 @@ export const NutritionScreen: React.FC = () => {
           },
         };
       });
-      Alert.alert('Network Sync', 'Logged water offline temporarily.');
+      showAlert({
+        title: 'Logged Offline',
+        message: 'Hydration logged offline temporarily.',
+        why: 'Your device is currently disconnected from the internet.',
+        actionGuide: 'Hadafak saved your water intake locally and will sync automatically once you are back online.',
+        type: 'info',
+      });
     }
   };
 
@@ -379,17 +532,23 @@ export const NutritionScreen: React.FC = () => {
         setSelectedFood(res.data[0]);
         setQuantity('1'); // default to 1 serving
       } else {
-        Alert.alert(
-          'Product Not Found',
-          `No product found for barcode: ${barcode}. Feel free to add a custom food item.`
-        );
+        showAlert({
+          title: 'Product Not Found',
+          message: `No product found for barcode: ${barcode}`,
+          why: 'This specific barcode is not registered in our food databases yet.',
+          actionGuide: 'Please enter this food manually or check the barcode numbers and try again.',
+          type: 'warning',
+        });
       }
     } catch (e) {
       console.error('Error fetching barcode product details', e);
-      Alert.alert(
-        'Scan Failed',
-        'Could not fetch product details from our databases. Please try again.'
-      );
+      showAlert({
+        title: 'Barcode Scan Failed',
+        message: 'Could not fetch product details.',
+        why: 'The network connection timed out or database search request failed.',
+        actionGuide: 'Check your internet connection, ensure the barcode is fully in view, and try scanning again.',
+        type: 'error',
+      });
     } finally {
       setIsSearching(false);
     }
@@ -400,7 +559,13 @@ export const NutritionScreen: React.FC = () => {
     if (!selectedFood) return;
     const qty = parseFloat(quantity);
     if (isNaN(qty) || qty <= 0) {
-      Alert.alert('Error', 'Please input a valid quantity amount.');
+      showAlert({
+        title: 'Invalid Quantity',
+        message: 'The food serving size quantity is invalid.',
+        why: 'Serving portion must be a positive number greater than zero.',
+        actionGuide: 'Enter a valid positive number in the serving quantity input.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -418,14 +583,26 @@ export const NutritionScreen: React.FC = () => {
       setQuantity('1');
       fetchDailySummary();
     } catch (e) {
-      Alert.alert('Error', 'Could not log food item to database.');
+      showAlert({
+        title: 'Food Log Failed',
+        message: 'Could not log the selected food item to your diary.',
+        why: 'A network request error occurred or the session token is invalid.',
+        actionGuide: 'Verify your internet connection and tap the Log button again.',
+        type: 'error',
+      });
     }
   };
 
   // Create customized food log
   const handleCreateAndLogFood = async () => {
     if (!customName || !customCalories) {
-      Alert.alert('Error', 'Please provide at least a food name and calorie count.');
+      showAlert({
+        title: 'Missing Required Fields',
+        message: 'Food name and calorie values are required.',
+        why: 'We need at least the food name and total calories to accurately track your metrics and display progress indicators.',
+        actionGuide: 'Please supply a descriptive food name and a valid calorie value, then try logging again.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -464,7 +641,13 @@ export const NutritionScreen: React.FC = () => {
       setCustomBarcode('');
       fetchDailySummary();
     } catch (e) {
-      Alert.alert('Error', 'Unable to create and log customized food.');
+      showAlert({
+        title: 'Custom Food Log Failed',
+        message: 'Unable to save and log your custom food item.',
+        why: 'A network error occurred or the nutrition server declined the custom attributes.',
+        actionGuide: 'Check your internet connection, ensure the calorie and macro numbers are correct, and try again.',
+        type: 'error',
+      });
     } finally {
       setIsCreatingFood(false);
     }
@@ -492,7 +675,13 @@ export const NutritionScreen: React.FC = () => {
   const pickImageFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Hadafak needs media library permissions to pick an image.');
+      showAlert({
+        title: 'Media Access Denied',
+        message: 'Hadafak cannot open your image gallery.',
+        why: 'Media library access permission has been denied by your operating system.',
+        actionGuide: 'Go to your device app settings, allow media permissions for Hadafak, and try again.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -513,14 +702,26 @@ export const NutritionScreen: React.FC = () => {
       }
     } catch (e) {
       console.warn('Failed to pick image:', e);
-      Alert.alert('Error', 'Failed to pick image from gallery.');
+      showAlert({
+        title: 'Gallery Import Failed',
+        message: 'Could not load your selected image.',
+        why: 'An internal error occurred while reading the file path or permission was denied.',
+        actionGuide: 'Try choosing another image or snapping a new photo directly using your camera.',
+        type: 'error',
+      });
     }
   };
 
   const takePhotoWithCamera = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Hadafak needs camera permissions to snap a photo.');
+      showAlert({
+        title: 'Camera Access Denied',
+        message: 'Hadafak cannot open your device camera.',
+        why: 'Camera hardware permissions were blocked or not granted.',
+        actionGuide: 'Open your phone Settings -> Apps -> Hadafak -> Permissions, allow Camera usage, and try again.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -540,7 +741,13 @@ export const NutritionScreen: React.FC = () => {
       }
     } catch (e) {
       console.warn('Failed to take photo:', e);
-      Alert.alert('Error', 'Failed to capture photo.');
+      showAlert({
+        title: 'Camera Capture Failed',
+        message: 'Could not capture photo from the camera.',
+        why: 'The camera interface closed unexpectedly or device storage is full.',
+        actionGuide: 'Please check your device storage availability and try relaunching the camera.',
+        type: 'error',
+      });
     }
   };
 
@@ -553,7 +760,13 @@ export const NutritionScreen: React.FC = () => {
       setAiResult(response.data);
     } catch (e) {
       console.error('AI Scan request failed:', e);
-      Alert.alert('Scan Failed', 'AI model analysis failed. Please check connection and try again.');
+      showAlert({
+        title: 'AI Scan Failed',
+        message: 'The AI model could not analyze your meal image.',
+        why: 'The image resolution might be insufficient, the food is unrecognizable, or our AI server encountered an error.',
+        actionGuide: 'Take a clearer photo in good lighting, check your network connection, and retry.',
+        type: 'error',
+      });
     } finally {
       setIsAiScanning(false);
     }
@@ -563,7 +776,13 @@ export const NutritionScreen: React.FC = () => {
     if (!aiResult) return;
     const qty = parseFloat(aiQuantity);
     if (isNaN(qty) || qty <= 0) {
-      Alert.alert('Error', 'Please input a valid quantity/serving amount.');
+      showAlert({
+        title: 'Invalid Servings',
+        message: 'Serving amount entered is incorrect.',
+        why: 'The serving size quantity must be a positive decimal number greater than zero.',
+        actionGuide: 'Enter a valid numeric multiplier (e.g. 1.0, 0.5, 2.0) in the serving field.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -591,7 +810,13 @@ export const NutritionScreen: React.FC = () => {
       handleCloseLogModal();
       fetchDailySummary();
     } catch (e) {
-      Alert.alert('Error', 'Could not log scanned food to database.');
+      showAlert({
+        title: 'Logging Failed',
+        message: 'Could not save the AI scanned meal to your database.',
+        why: 'The food entry could not be synchronized due to a network connection issue or database rejection.',
+        actionGuide: 'Verify your internet connection and try pressing "Log Scanned Meal" again.',
+        type: 'error',
+      });
     }
   };
 
@@ -627,7 +852,11 @@ export const NutritionScreen: React.FC = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <StateFeedback
+          type="loading"
+          title="Loading Nutrition Tracker..."
+          description="Syncing macro goals, logged meals, and hydration counter."
+        />
       </SafeAreaView>
     );
   }
@@ -1058,6 +1287,7 @@ export const NutritionScreen: React.FC = () => {
             >
               {[
                 { label: 'All Recipes', value: '' },
+                { label: 'Favorites 💚', value: 'Favorites' },
                 { label: 'High-Protein', value: 'High-Protein' },
                 { label: 'Low-Carb', value: 'Low-Carb' },
                 { label: 'Vegan', value: 'Vegan' },
@@ -1083,89 +1313,110 @@ export const NutritionScreen: React.FC = () => {
             <View style={styles.contentPadding}>
               {/* Recipes List */}
               {loadingRecipes ? (
-                <View style={styles.recipesLoader}>
-                  <ActivityIndicator size="large" color={COLORS.primary} />
-                  <Text style={styles.recipesLoaderText}>Loading delicious recipes...</Text>
-                </View>
-              ) : recipes.length === 0 ? (
-                <View style={styles.emptyRecipesCard}>
-                  <Utensils size={40} color={COLORS.textMuted} style={{ marginBottom: 12 }} />
-                  <Text style={styles.emptyRecipesTitle}>No Recipes Found</Text>
-                  <Text style={styles.emptyRecipesDesc}>
-                    Try clearing your search query, choosing a different tag, or creating a custom recipe using your fridge ingredients.
-                  </Text>
-                </View>
-              ) : (
-                recipes.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.recipeListItemCard}
-                    onPress={() => {
-                      setSelectedRecipeDetail(item);
-                      setIsDetailModalVisible(true);
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <View style={styles.recipeHeaderRow}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                          <Text style={styles.recipeItemTitle} numberOfLines={1}>{item.title}</Text>
-                          <View style={[
-                            styles.sourceBadge,
-                            item.source === 'ai' && { backgroundColor: '#EEF2FF' },
-                            item.source === 'user' && { backgroundColor: '#ECFDF5' }
-                          ]}>
-                            <Text style={[
-                              styles.sourceBadgeText,
-                              item.source === 'ai' && { color: '#4F46E5' },
-                              item.source === 'user' && { color: '#059669' }
+                <StateFeedback
+                  type="loading"
+                  title="Loading delicious recipes..."
+                  containerStyle={{ minHeight: 250 }}
+                />
+              ) : (() => {
+                const isFavTag = selectedRecipeTag === 'Favorites';
+                const filteredRecipes = isFavTag
+                  ? recipes.filter((r) => favoriteRecipeIds.includes(r.id))
+                  : recipes;
+                
+                if (filteredRecipes.length === 0) {
+                  return (
+                    <StateFeedback
+                      type="empty"
+                      title={isFavTag ? "No Favorite Recipes" : "No Recipes Found"}
+                      description={isFavTag ? "Save your favorite recipes by tapping the heart icon in their detail cards." : "Try clearing your search query, choosing a different tag, or creating a custom recipe using your fridge ingredients."}
+                      containerStyle={{ minHeight: 250 }}
+                      icon={<Utensils size={36} color={COLORS.primary} />}
+                    />
+                  );
+                }
+
+                return filteredRecipes.map((item) => {
+                  const matchScore = calculateMatchScore(item, fridgeIngredients);
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.recipeListItemCard}
+                      onPress={() => handleOpenRecipeDetail(item)}
+                      activeOpacity={0.9}
+                    >
+                      <View style={styles.recipeHeaderRow}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <Text style={styles.recipeItemTitle} numberOfLines={1}>{item.title}</Text>
+                            <View style={[
+                              styles.sourceBadge,
+                              item.source === 'ai' && { backgroundColor: '#EEF2FF' },
+                              item.source === 'user' && { backgroundColor: '#ECFDF5' }
                             ]}>
-                              {item.source.toUpperCase()}
-                            </Text>
+                              <Text style={[
+                                styles.sourceBadgeText,
+                                item.source === 'ai' && { color: '#4F46E5' },
+                                item.source === 'user' && { color: '#059669' }
+                              ]}>
+                                {item.source.toUpperCase()}
+                              </Text>
+                            </View>
+                            {matchScore > 0 && (
+                              <View style={[styles.sourceBadge, { backgroundColor: '#ECFDF5', marginLeft: 6 }]}>
+                                <Text style={[styles.sourceBadgeText, { color: '#059669' }]}>
+                                  {matchScore}% MATCH
+                                </Text>
+                              </View>
+                            )}
+                            {favoriteRecipeIds.includes(item.id) && (
+                              <Heart size={14} color="#EF4444" fill="#EF4444" style={{ marginLeft: 6 }} />
+                            )}
                           </View>
+                          <Text style={styles.recipeItemDesc} numberOfLines={2}>{item.description}</Text>
                         </View>
-                        <Text style={styles.recipeItemDesc} numberOfLines={2}>{item.description}</Text>
                       </View>
-                    </View>
 
-                    {/* Prep details */}
-                    <View style={styles.recipePrepRow}>
-                      <View style={styles.recipePrepItem}>
-                        <Clock size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
-                        <Text style={styles.recipePrepLabel}>Prep: {item.prepTime}m</Text>
+                      {/* Prep details */}
+                      <View style={styles.recipePrepRow}>
+                        <View style={styles.recipePrepItem}>
+                          <Clock size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                          <Text style={styles.recipePrepLabel}>Prep: {item.prepTime}m</Text>
+                        </View>
+                        <View style={styles.recipePrepItem}>
+                          <Utensils size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                          <Text style={styles.recipePrepLabel}>Cook: {item.cookTime}m</Text>
+                        </View>
+                        <View style={styles.recipePrepItem}>
+                          <BookOpen size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                          <Text style={styles.recipePrepLabel}>{item.servings} Servings</Text>
+                        </View>
                       </View>
-                      <View style={styles.recipePrepItem}>
-                        <Utensils size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
-                        <Text style={styles.recipePrepLabel}>Cook: {item.cookTime}m</Text>
-                      </View>
-                      <View style={styles.recipePrepItem}>
-                        <BookOpen size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
-                        <Text style={styles.recipePrepLabel}>{item.servings} Servings</Text>
-                      </View>
-                    </View>
 
-                    {/* Macros Strip */}
-                    <View style={styles.recipeMacrosBar}>
-                      <View style={styles.recipeMacroPill}>
-                        <Text style={styles.macroPillLabel}>Calories</Text>
-                        <Text style={styles.macroPillValue}>{Math.round(item.calories)} Kcal</Text>
+                      {/* Macros Strip */}
+                      <View style={styles.recipeMacrosBar}>
+                        <View style={styles.recipeMacroPill}>
+                          <Text style={styles.macroPillLabel}>Calories</Text>
+                          <Text style={styles.macroPillValue}>{Math.round(item.calories)} Kcal</Text>
+                        </View>
+                        <View style={styles.recipeMacroPill}>
+                          <Text style={styles.macroPillLabel}>Protein</Text>
+                          <Text style={styles.macroPillValue}>{item.protein}g</Text>
+                        </View>
+                        <View style={styles.recipeMacroPill}>
+                          <Text style={styles.macroPillLabel}>Carbs</Text>
+                          <Text style={styles.macroPillValue}>{item.carbs}g</Text>
+                        </View>
+                        <View style={styles.recipeMacroPill}>
+                          <Text style={styles.macroPillLabel}>Fat</Text>
+                          <Text style={styles.macroPillValue}>{item.fat}g</Text>
+                        </View>
                       </View>
-                      <View style={styles.recipeMacroPill}>
-                        <Text style={styles.macroPillLabel}>Protein</Text>
-                        <Text style={styles.macroPillValue}>{item.protein}g</Text>
-                      </View>
-                      <View style={styles.recipeMacroPill}>
-                        <Text style={styles.macroPillLabel}>Carbs</Text>
-                        <Text style={styles.macroPillValue}>{item.carbs}g</Text>
-                      </View>
-                      <View style={styles.recipeMacroPill}>
-                        <Text style={styles.macroPillLabel}>Fat</Text>
-                        <Text style={styles.macroPillValue}>{item.fat}g</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
+                    </TouchableOpacity>
+                  );
+                });
+              })()
+              }
             </View>
           </View>
         )}
@@ -1644,30 +1895,80 @@ export const NutritionScreen: React.FC = () => {
               <Text style={styles.inputLabel}>Ingredients in my Fridge</Text>
               <TextInput
                 style={[styles.modalTextInput, { height: 60, textAlignVertical: 'top', paddingTop: 8 }]}
-                placeholder="e.g. Chicken, rice, broccoli, garlic"
+                placeholder="Selected ingredients will appear here..."
                 placeholderTextColor={COLORS.textMuted}
                 value={fridgeIngredients}
                 onChangeText={setFridgeIngredients}
                 multiline
               />
 
-              {/* Quick ingredient suggestions */}
-              <View style={styles.quickTagsWrapper}>
-                {['chicken', 'beef', 'egg', 'oats', 'banana', 'rice', 'broccoli', 'tofu'].map((ing) => (
-                  <TouchableOpacity
-                    key={ing}
-                    style={styles.quickIngTag}
-                    onPress={() => {
-                      const cur = fridgeIngredients.trim();
-                      if (!cur) setFridgeIngredients(ing);
-                      else if (cur.endsWith(',')) setFridgeIngredients(`${cur} ${ing}`);
-                      else setFridgeIngredients(`${cur}, ${ing}`);
-                    }}
-                  >
-                    <Text style={styles.quickIngTagText}>+ {ing}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {/* Category-based Ingredient Selector */}
+              <Text style={[styles.inputLabel, { marginTop: 12, fontSize: 13, color: COLORS.textMuted }]}>
+                Tap ingredients to add/remove:
+              </Text>
+              {[
+                {
+                  category: 'Proteins',
+                  items: ['Chicken', 'Beef', 'Egg', 'Tofu', 'Turkey', 'Salmon', 'Tuna'],
+                },
+                {
+                  category: 'Carbs & Grains',
+                  items: ['Oats', 'Rice', 'Sweet Potato', 'Pasta', 'Quinoa', 'Bread'],
+                },
+                {
+                  category: 'Produce & Veggies',
+                  items: ['Banana', 'Broccoli', 'Spinach', 'Garlic', 'Tomato', 'Onion', 'Avocado'],
+                },
+                {
+                  category: 'Dairy & Extras',
+                  items: ['Milk', 'Greek Yogurt', 'Cheese', 'Olive Oil', 'Butter', 'Soy Sauce'],
+                },
+              ].map((group) => (
+                <View key={group.category} style={{ marginTop: 10 }}>
+                  <Text style={styles.fridgeGroupTitle}>{group.category}</Text>
+                  <View style={styles.quickTagsWrapper}>
+                    {group.items.map((ing) => {
+                      const lowerIng = ing.toLowerCase();
+                      const currentList = fridgeIngredients
+                        .split(',')
+                        .map((x) => x.trim().toLowerCase())
+                        .filter(Boolean);
+                      const isSelected = currentList.includes(lowerIng);
+                      return (
+                        <TouchableOpacity
+                          key={ing}
+                          style={[
+                            styles.quickIngTag,
+                            isSelected && {
+                              backgroundColor: COLORS.primaryLight,
+                              borderColor: COLORS.primary,
+                            },
+                          ]}
+                          onPress={() => {
+                            let newList: string[];
+                            if (isSelected) {
+                              newList = currentList.filter((x) => x !== lowerIng);
+                            } else {
+                              newList = [...currentList, lowerIng];
+                            }
+                            setFridgeIngredients(newList.join(', '));
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text
+                            style={[
+                              styles.quickIngTagText,
+                              isSelected && { color: COLORS.primary, fontWeight: '700' },
+                            ]}
+                          >
+                            {isSelected ? '✓' : '+'} {ing}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
 
               <Text style={[styles.inputLabel, { marginTop: 16 }]}>Special prompt / style preference (Optional)</Text>
               <TextInput
@@ -1779,9 +2080,21 @@ export const NutritionScreen: React.FC = () => {
                 {/* Header */}
                 <View style={styles.modalHeaderRow}>
                   <View style={{ flex: 1, marginRight: 12 }}>
-                    <Text style={styles.modalTitle} numberOfLines={1}>
-                      {selectedRecipeDetail.title}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={[styles.modalTitle, { flexShrink: 1 }]} numberOfLines={1}>
+                        {selectedRecipeDetail.title}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => toggleFavorite(selectedRecipeDetail.id)}
+                        style={{ marginLeft: 10, padding: 4 }}
+                      >
+                        <Heart
+                          size={22}
+                          color={favoriteRecipeIds.includes(selectedRecipeDetail.id) ? '#EF4444' : COLORS.textMuted}
+                          fill={favoriteRecipeIds.includes(selectedRecipeDetail.id) ? '#EF4444' : 'transparent'}
+                        />
+                      </TouchableOpacity>
+                    </View>
                     <Text style={styles.modalSubtitle} numberOfLines={1}>
                       {selectedRecipeDetail.description}
                     </Text>
@@ -1798,148 +2111,345 @@ export const NutritionScreen: React.FC = () => {
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                  {/* Detailed macros strip */}
-                  <View style={[styles.recipeMacrosBar, { marginHorizontal: 0, paddingVertical: 14, backgroundColor: '#FAFAFA' }]}>
-                    <View style={styles.recipeMacroPill}>
-                      <Text style={styles.macroPillLabel}>Calories</Text>
-                      <Text style={[styles.macroPillValue, { fontSize: 16, color: COLORS.primary }]}>{Math.round(selectedRecipeDetail.calories)} kcal</Text>
-                    </View>
-                    <View style={styles.recipeMacroPill}>
-                      <Text style={styles.macroPillLabel}>Protein</Text>
-                      <Text style={[styles.macroPillValue, { fontSize: 16 }]}>{selectedRecipeDetail.protein}g</Text>
-                    </View>
-                    <View style={styles.recipeMacroPill}>
-                      <Text style={styles.macroPillLabel}>Carbs</Text>
-                      <Text style={[styles.macroPillValue, { fontSize: 16 }]}>{selectedRecipeDetail.carbs}g</Text>
-                    </View>
-                    <View style={styles.recipeMacroPill}>
-                      <Text style={styles.macroPillLabel}>Fat</Text>
-                      <Text style={[styles.macroPillValue, { fontSize: 16 }]}>{selectedRecipeDetail.fat}g</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.statsTimelineRow}>
-                    <View style={styles.timeTag}>
-                      <Clock size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
-                      <Text style={styles.timeTagText}>Prep: {selectedRecipeDetail.prepTime} mins</Text>
-                    </View>
-                    <View style={styles.timeTag}>
-                      <Utensils size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
-                      <Text style={styles.timeTagText}>Cook: {selectedRecipeDetail.cookTime} mins</Text>
-                    </View>
-                  </View>
-
-                  {/* Ingredients section */}
-                  <View style={{ marginTop: 18 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <Text style={styles.detailSectionTitle}>Ingredients</Text>
-                      <Text style={styles.substitutionTip}>Tap to AI substitute</Text>
+                {isCookingMode ? (
+                  <View style={{ flex: 1, paddingVertical: 10 }}>
+                    {/* Header with step number & close button */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <Text style={styles.wizardStepHeading}>
+                        Step {activeStepIndex + 1} of {selectedRecipeDetail.instructions?.length || 1}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setIsCookingMode(false)}
+                        style={styles.exitWizardBtn}
+                      >
+                        <Text style={styles.exitWizardText}>Exit Chef Mode</Text>
+                      </TouchableOpacity>
                     </View>
 
-                    {selectedRecipeDetail.ingredients?.length === 0 ? (
-                      <Text style={styles.emptyIngredientsMsg}>No ingredients specified.</Text>
-                    ) : (
-                      selectedRecipeDetail.ingredients?.map((ing: any) => {
-                        const isSelected = selectedIngredientToSubstitute?.id === ing.id;
-                        return (
-                          <View key={ing.id} style={{ marginBottom: 6 }}>
-                            <TouchableOpacity
-                              style={[
-                                styles.ingredientItemRow,
-                                isSelected && { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight }
-                              ]}
-                              onPress={() => {
-                                setSelectedIngredientToSubstitute(ing);
-                                setSubstituteNameInput('');
-                                setSubstitutionResult(null);
-                              }}
-                              activeOpacity={0.8}
-                            >
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.ingredientNameText}>
-                                  {ing.customName || (ing.food ? ing.food.name : 'Unknown')}
-                                </Text>
-                              </View>
-                              <Text style={styles.ingredientAmountText}>
-                                {ing.amount} {ing.unit}
+                    {/* Progress Bar */}
+                    <View style={styles.wizardProgressBarTrack}>
+                      <View
+                        style={[
+                          styles.wizardProgressBarFill,
+                          {
+                            width: `${((activeStepIndex + 1) / (selectedRecipeDetail.instructions?.length || 1)) * 100}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    <ScrollView style={{ flex: 1, marginTop: 20 }} showsVerticalScrollIndicator={false}>
+                      <View style={styles.wizardCard}>
+                        <Text style={styles.wizardInstructionText}>
+                          {selectedRecipeDetail.instructions?.[activeStepIndex]}
+                        </Text>
+                      </View>
+
+                      {/* Timer Integration */}
+                      {(() => {
+                        const stepText = selectedRecipeDetail.instructions?.[activeStepIndex] || '';
+                        const minutes = detectTimerMinutes(stepText);
+                        if (minutes !== null) {
+                          return (
+                            <View style={styles.timerContainer}>
+                              <Text style={styles.timerTitle}>Step Timer: {minutes} min suggested</Text>
+                              <Text style={styles.timerDisplay}>
+                                {timerSeconds > 0 ? formatTime(timerSeconds) : `${minutes}:00`}
                               </Text>
-                            </TouchableOpacity>
-
-                            {/* AI Substitution sub-drawer inside list */}
-                            {isSelected && (
-                              <View style={styles.substitutionDrawer}>
-                                <Text style={styles.subDrawerTitle}>AI Substitution Assistant</Text>
-                                <Text style={styles.subDrawerDesc}>
-                                  Enter an alternative food. We will match macro weights to find the exact replacement amount.
-                                </Text>
-
-                                <View style={styles.subInputRow}>
-                                  <TextInput
-                                    style={styles.subTextInput}
-                                    placeholder="e.g. Tofu, Tempeh, Turkey"
-                                    placeholderTextColor={COLORS.textMuted}
-                                    value={substituteNameInput}
-                                    onChangeText={setSubstituteNameInput}
-                                  />
+                              <View style={styles.timerControls}>
+                                <TouchableOpacity
+                                  style={[styles.timerBtn, isTimerRunning ? styles.timerBtnPause : styles.timerBtnStart]}
+                                  onPress={() => {
+                                    if (timerSeconds === 0) {
+                                      setTimerSeconds(minutes * 60);
+                                    }
+                                    setIsTimerRunning(!isTimerRunning);
+                                  }}
+                                >
+                                  <Text style={styles.timerBtnText}>
+                                    {isTimerRunning ? 'Pause' : timerSeconds > 0 ? 'Resume' : 'Start'}
+                                  </Text>
+                                </TouchableOpacity>
+                                {timerSeconds > 0 && (
                                   <TouchableOpacity
-                                    style={styles.subSubmitBtn}
-                                    onPress={handleFetchSubstitution}
-                                    disabled={isSubstituting}
-                                    activeOpacity={0.8}
+                                    style={[styles.timerBtn, styles.timerBtnReset]}
+                                    onPress={() => {
+                                      setTimerSeconds(0);
+                                      setIsTimerRunning(false);
+                                    }}
                                   >
-                                    {isSubstituting ? (
-                                      <ActivityIndicator size="small" color="#FFF" />
-                                    ) : (
-                                      <Text style={styles.subSubmitText}>Query AI</Text>
-                                    )}
+                                    <Text style={styles.timerBtnText}>Reset</Text>
                                   </TouchableOpacity>
-                                </View>
-
-                                {substitutionResult && (
-                                  <View style={styles.subResultBox}>
-                                    <Text style={styles.subResultIntro}>
-                                      Replace <Text style={{ fontWeight: 'bold' }}>{substitutionResult.originalIngredient}</Text> with:
-                                    </Text>
-                                    <Text style={styles.subResultAction}>
-                                      {substitutionResult.suggestedAmount} {substitutionResult.unit} of {substitutionResult.suggestedReplacement}
-                                    </Text>
-
-                                    <View style={styles.subResultMacrosGrid}>
-                                      <Text style={styles.subMacroLabel}>
-                                        New Macros: {substitutionResult.macrosDifference.calories} Kcal • P: {substitutionResult.macrosDifference.protein}g • C: {substitutionResult.macrosDifference.carbs}g • F: {substitutionResult.macrosDifference.fat}g
-                                      </Text>
-                                    </View>
-                                  </View>
                                 )}
                               </View>
-                            )}
-                          </View>
-                        );
-                      })
-                    )}
-                  </View>
+                            </View>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </ScrollView>
 
-                  {/* Instructions walkthrough section */}
-                  <View style={{ marginTop: 18 }}>
-                    <Text style={styles.detailSectionTitle}>Cooking Steps</Text>
-                    {(!selectedRecipeDetail.instructions || selectedRecipeDetail.instructions.length === 0) ? (
-                      <Text style={styles.emptyIngredientsMsg}>No preparation steps specified.</Text>
-                    ) : (
-                      selectedRecipeDetail.instructions.map((step: string, index: number) => (
-                        <View key={index} style={styles.instructionStepCard}>
-                          <View style={styles.instructionStepNumberBg}>
-                            <Text style={styles.instructionStepNumberText}>{index + 1}</Text>
-                          </View>
-                          <Text style={styles.instructionStepDescText}>{step}</Text>
+                    {/* Wizard Nav controls */}
+                    <View style={styles.wizardNavFooter}>
+                      <TouchableOpacity
+                        style={[styles.wizardNavBtn, activeStepIndex === 0 && { opacity: 0.5 }]}
+                        onPress={() => {
+                          if (activeStepIndex > 0) {
+                            setActiveStepIndex(prev => prev - 1);
+                            setTimerSeconds(0);
+                            setIsTimerRunning(false);
+                          }
+                        }}
+                        disabled={activeStepIndex === 0}
+                      >
+                        <Text style={styles.wizardNavBtnText}>Previous</Text>
+                      </TouchableOpacity>
+
+                      {activeStepIndex < (selectedRecipeDetail.instructions?.length || 1) - 1 ? (
+                        <TouchableOpacity
+                          style={[styles.wizardNavBtn, styles.wizardNavBtnNext]}
+                          onPress={() => {
+                            setActiveStepIndex(prev => prev + 1);
+                            setTimerSeconds(0);
+                            setIsTimerRunning(false);
+                          }}
+                        >
+                          <Text style={[styles.wizardNavBtnText, { color: '#FFF' }]}>Next Step</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.wizardNavBtn, styles.wizardNavBtnFinish]}
+                          onPress={() => {
+                            setIsCookingMode(false);
+                            showAlert({
+                              title: 'Chef Mode Complete!',
+                              message: 'Well done cooking this delicious healthy meal!',
+                              type: 'success',
+                              why: 'You have walked through all the required kitchen steps.',
+                              actionGuide: 'Tap Log this Meal in the details screen to save the macros to your daily tracker.'
+                            });
+                          }}
+                        >
+                          <Text style={[styles.wizardNavBtnText, { color: '#FFF' }]}>Finish</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ) : (
+                  <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                    {/* Portion / Servings Scaler */}
+                    <View style={styles.portionScalerCard}>
+                      <Text style={styles.portionScalerTitle}>Scale Recipe Servings</Text>
+                      <View style={styles.portionControls}>
+                        <TouchableOpacity
+                          onPress={() => setServingsScale((prev) => Math.max(1, prev - 1))}
+                          style={styles.portionBtn}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.portionBtnText}>-</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.portionValue}>
+                          {servingsScale} {servingsScale === 1 ? 'serving' : 'servings'}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => setServingsScale((prev) => prev + 1)}
+                          style={styles.portionBtn}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.portionBtnText}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Detailed macros strip */}
+                    <View style={[styles.recipeMacrosBar, { marginHorizontal: 0, paddingVertical: 14, backgroundColor: '#FAFAFA' }]}>
+                      <View style={styles.recipeMacroPill}>
+                        <Text style={styles.macroPillLabel}>Calories</Text>
+                        <Text style={[styles.macroPillValue, { fontSize: 16, color: COLORS.primary }]}>
+                          {Math.round(selectedRecipeDetail.calories * servingsScale)} kcal
+                        </Text>
+                      </View>
+                      <View style={styles.recipeMacroPill}>
+                        <Text style={styles.macroPillLabel}>Protein</Text>
+                        <Text style={[styles.macroPillValue, { fontSize: 16 }]}>
+                          {Math.round(selectedRecipeDetail.protein * servingsScale * 10) / 10}g
+                        </Text>
+                      </View>
+                      <View style={styles.recipeMacroPill}>
+                        <Text style={styles.macroPillLabel}>Carbs</Text>
+                        <Text style={[styles.macroPillValue, { fontSize: 16 }]}>
+                          {Math.round(selectedRecipeDetail.carbs * servingsScale * 10) / 10}g
+                        </Text>
+                      </View>
+                      <View style={styles.recipeMacroPill}>
+                        <Text style={styles.macroPillLabel}>Fat</Text>
+                        <Text style={[styles.macroPillValue, { fontSize: 16 }]}>
+                          {Math.round(selectedRecipeDetail.fat * servingsScale * 10) / 10}g
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Calorie Budget Impact Analysis */}
+                    {(() => {
+                      const remainingCals = Math.max(0, summary.calories.target - summary.calories.consumed);
+                      const mealCals = Math.round(selectedRecipeDetail.calories * servingsScale);
+                      const remainingAfterLog = Math.max(0, remainingCals - mealCals);
+                      return (
+                        <View style={styles.macroImpactBox}>
+                          <TrendingUp size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                          <Text style={styles.macroImpactText}>
+                            Logging this will leave you with{' '}
+                            <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>
+                              {remainingAfterLog} kcal
+                            </Text>{' '}
+                            remaining for today.
+                          </Text>
                         </View>
-                      ))
-                    )}
-                  </View>
+                      );
+                    })()}
 
-                  {/* Spacer */}
-                  <View style={{ height: 30 }} />
-                </ScrollView>
+                    <View style={styles.statsTimelineRow}>
+                      <View style={styles.timeTag}>
+                        <Clock size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                        <Text style={styles.timeTagText}>Prep: {selectedRecipeDetail.prepTime} mins</Text>
+                      </View>
+                      <View style={styles.timeTag}>
+                        <Utensils size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                        <Text style={styles.timeTagText}>Cook: {selectedRecipeDetail.cookTime} mins</Text>
+                      </View>
+                    </View>
+
+                    {/* Ingredients section */}
+                    <View style={{ marginTop: 18 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={styles.detailSectionTitle}>Ingredients</Text>
+                        <Text style={styles.substitutionTip}>Tap to AI substitute</Text>
+                      </View>
+
+                      {selectedRecipeDetail.ingredients?.length === 0 ? (
+                        <Text style={styles.emptyIngredientsMsg}>No ingredients specified.</Text>
+                      ) : (
+                        selectedRecipeDetail.ingredients?.map((ing: any) => {
+                          const isSelected = selectedIngredientToSubstitute?.id === ing.id;
+                          const baseServings = selectedRecipeDetail.servings || 1;
+                          const scaledAmount = Math.round(((ing.amount / baseServings) * servingsScale) * 10) / 10;
+                          const displayAmount = isNaN(scaledAmount) ? ing.amount : scaledAmount;
+                          return (
+                            <View key={ing.id} style={{ marginBottom: 6 }}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.ingredientItemRow,
+                                  isSelected && { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight }
+                                ]}
+                                onPress={() => {
+                                  setSelectedIngredientToSubstitute(ing);
+                                  setSubstituteNameInput('');
+                                  setSubstitutionResult(null);
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.ingredientNameText}>
+                                    {ing.customName || (ing.food ? ing.food.name : 'Unknown')}
+                                  </Text>
+                                </View>
+                                <Text style={styles.ingredientAmountText}>
+                                  {displayAmount} {ing.unit}
+                                </Text>
+                              </TouchableOpacity>
+
+                              {/* AI Substitution sub-drawer inside list */}
+                              {isSelected && (
+                                <View style={styles.substitutionDrawer}>
+                                  <Text style={styles.subDrawerTitle}>AI Substitution Assistant</Text>
+                                  <Text style={styles.subDrawerDesc}>
+                                    Enter an alternative food. We will match macro weights to find the exact replacement amount.
+                                  </Text>
+
+                                  <View style={styles.subInputRow}>
+                                    <TextInput
+                                      style={styles.subTextInput}
+                                      placeholder="e.g. Tofu, Tempeh, Turkey"
+                                      placeholderTextColor={COLORS.textMuted}
+                                      value={substituteNameInput}
+                                      onChangeText={setSubstituteNameInput}
+                                    />
+                                    <TouchableOpacity
+                                      style={styles.subSubmitBtn}
+                                      onPress={handleFetchSubstitution}
+                                      disabled={isSubstituting}
+                                      activeOpacity={0.8}
+                                    >
+                                      {isSubstituting ? (
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                      ) : (
+                                        <Text style={styles.subSubmitText}>Query AI</Text>
+                                      )}
+                                    </TouchableOpacity>
+                                  </View>
+
+                                  {substitutionResult && (
+                                    <View style={styles.subResultBox}>
+                                      <Text style={styles.subResultIntro}>
+                                        Replace <Text style={{ fontWeight: 'bold' }}>{substitutionResult.originalIngredient}</Text> with:
+                                      </Text>
+                                      <Text style={styles.subResultAction}>
+                                        {substitutionResult.suggestedAmount} {substitutionResult.unit} of {substitutionResult.suggestedReplacement}
+                                      </Text>
+
+                                      <View style={styles.subResultMacrosGrid}>
+                                        <Text style={styles.subMacroLabel}>
+                                          New Macros: {substitutionResult.macrosDifference.calories} KCal • P: {substitutionResult.macrosDifference.protein}g • C: {substitutionResult.macrosDifference.carbs}g • F: {substitutionResult.macrosDifference.fat}g
+                                        </Text>
+                                      </View>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })
+                      )}
+                    </View>
+
+                    {/* Instructions walkthrough section */}
+                    <View style={{ marginTop: 18 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={styles.detailSectionTitle}>Cooking Steps</Text>
+                        {selectedRecipeDetail.instructions && selectedRecipeDetail.instructions.length > 0 && (
+                          <TouchableOpacity
+                            style={styles.startCookingBtn}
+                            onPress={() => {
+                              setIsCookingMode(true);
+                              setActiveStepIndex(0);
+                              setTimerSeconds(0);
+                              setIsTimerRunning(false);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Sparkles size={14} color="#FFF" style={{ marginRight: 4 }} />
+                            <Text style={styles.startCookingText}>Chef Mode</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      {(!selectedRecipeDetail.instructions || selectedRecipeDetail.instructions.length === 0) ? (
+                        <Text style={styles.emptyIngredientsMsg}>No preparation steps specified.</Text>
+                      ) : (
+                        selectedRecipeDetail.instructions.map((step: string, index: number) => (
+                          <View key={index} style={styles.instructionStepCard}>
+                            <View style={styles.instructionStepNumberBg}>
+                              <Text style={styles.instructionStepNumberText}>{index + 1}</Text>
+                            </View>
+                            <Text style={styles.instructionStepDescText}>{step}</Text>
+                          </View>
+                        ))
+                      )}
+                    </View>
+
+                    {/* Spacer */}
+                    <View style={{ height: 30 }} />
+                  </ScrollView>
+                )}
 
                 {/* Primary/Secondary action footer */}
                 <View style={styles.detailActionFooter}>
@@ -2270,6 +2780,208 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+  },
+  fridgeGroupTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  portionScalerCard: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  portionScalerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  portionControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  portionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  portionBtnText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  portionValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginHorizontal: 20,
+    minWidth: 80,
+    textAlign: 'center',
+  },
+  macroImpactBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  macroImpactText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.text,
+  },
+  startCookingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  startCookingText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  wizardStepHeading: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  exitWizardBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    borderRadius: 8,
+  },
+  exitWizardText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  wizardProgressBarTrack: {
+    height: 6,
+    backgroundColor: '#EAEAEA',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 6,
+  },
+  wizardProgressBarFill: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 3,
+  },
+  wizardCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    minHeight: 180,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  wizardInstructionText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    lineHeight: 28,
+    textAlign: 'center',
+  },
+  timerContainer: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  timerTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    marginBottom: 6,
+  },
+  timerDisplay: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: COLORS.text,
+    fontVariant: ['tabular-nums'],
+    marginBottom: 10,
+  },
+  timerControls: {
+    flexDirection: 'row',
+  },
+  timerBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginHorizontal: 6,
+  },
+  timerBtnStart: {
+    backgroundColor: COLORS.primary,
+  },
+  timerBtnPause: {
+    backgroundColor: '#F59E0B',
+  },
+  timerBtnReset: {
+    backgroundColor: '#EF4444',
+  },
+  timerBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  wizardNavFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#EAEAEA',
+    marginTop: 12,
+  },
+  wizardNavBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  wizardNavBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  wizardNavBtnNext: {
+    backgroundColor: COLORS.primary,
+  },
+  wizardNavBtnFinish: {
+    backgroundColor: '#10B981',
   },
 
   // Meal selection row

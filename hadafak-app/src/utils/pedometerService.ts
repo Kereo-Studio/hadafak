@@ -33,20 +33,37 @@ export const saveLocalTodaySteps = async (steps: number): Promise<void> => {
 // Only show the "go to settings" alert once per app session
 let hasShownSettingsAlert = false;
 
-const showGoToSettingsAlert = () => {
+const showGoToSettingsAlert = (showAlert?: (config: any) => void) => {
   if (hasShownSettingsAlert) return;
   hasShownSettingsAlert = true;
-  Alert.alert(
-    'Enable Step Tracking',
-    'Physical Activity permission was denied for Expo Go. To enable step tracking, go to Settings → Apps → Expo Go → Permissions → Physical Activity → Allow.',
-    [
-      { text: 'Not Now', style: 'cancel' },
-      {
-        text: 'Open Settings',
-        onPress: () => Linking.openSettings(),
-      },
-    ]
-  );
+  if (showAlert) {
+    showAlert({
+      title: 'Enable Step Tracking',
+      message: 'Physical Activity permission was denied for Expo Go.',
+      why: 'We need permission to access your device physical activity sensors to sync your daily steps automatically.',
+      actionGuide: 'Tap "Open Settings" to go to Settings → Apps → Expo Go → Permissions → Physical Activity and select "Allow".',
+      type: 'warning',
+      buttons: [
+        { text: 'Not Now', style: 'cancel' },
+        {
+          text: 'Open Settings',
+          onPress: () => Linking.openSettings(),
+        },
+      ]
+    });
+  } else {
+    Alert.alert(
+      'Enable Step Tracking',
+      'Physical Activity permission was denied for Expo Go. To enable step tracking, go to Settings → Apps → Expo Go → Permissions → Physical Activity → Allow.',
+      [
+        { text: 'Not Now', style: 'cancel' },
+        {
+          text: 'Open Settings',
+          onPress: () => Linking.openSettings(),
+        },
+      ]
+    );
+  }
 };
 
 export const pedometerService = {
@@ -59,12 +76,12 @@ export const pedometerService = {
     }
   },
 
-  async requestPermission(): Promise<boolean> {
+  async requestPermission(showAlert?: (config: any) => void): Promise<boolean> {
     if (Platform.OS === 'web') return false;
     try {
       const { granted, canAskAgain } = await Pedometer.requestPermissionsAsync();
       if (!granted && !canAskAgain) {
-        showGoToSettingsAlert();
+        showGoToSettingsAlert(showAlert);
       }
       return granted;
     } catch (e) {
@@ -82,7 +99,7 @@ export const pedometerService = {
     }
   },
 
-  async syncSteps(apiInstance: any): Promise<boolean> {
+  async syncSteps(apiInstance: any, showAlert?: (config: any) => void): Promise<boolean> {
     if (Platform.OS === 'web') return false;
 
     try {
@@ -92,12 +109,12 @@ export const pedometerService = {
         if (!canAskAgain) {
           // Permission was permanently blocked — show "Open Settings" alert
           console.log('[Pedometer] Permission permanently denied.');
-          showGoToSettingsAlert();
+          showGoToSettingsAlert(showAlert);
           return false;
         }
 
         // Can still ask — request permission (will show system dialog)
-        const granted = await this.requestPermission();
+        const granted = await this.requestPermission(showAlert);
         if (!granted) return false;
       }
 
