@@ -124,6 +124,7 @@ export const NutritionScreen: React.FC = () => {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [visibleRecipesCount, setVisibleRecipesCount] = useState(15);
 
   // Helper helpers
   const detectTimerMinutes = (text: string): number | null => {
@@ -236,6 +237,7 @@ export const NutritionScreen: React.FC = () => {
     if (activeTab === 'recipes') {
       const tagParam = selectedRecipeTag === 'Favorites' ? '' : selectedRecipeTag;
       fetchRecipes(recipesQuery, tagParam);
+      setVisibleRecipesCount(15);
     }
   }, [recipesQuery, selectedRecipeTag, activeTab]);
 
@@ -1351,113 +1353,133 @@ export const NutritionScreen: React.FC = () => {
                   );
                 }
 
-                return filteredRecipes.map((item) => {
-                  const matchScore = calculateMatchScore(item, fridgeIngredients);
-                  const isFavorite = favoriteRecipeIds.includes(item.id);
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={styles.recipeListItemCard}
-                      onPress={() => handleOpenRecipeDetail(item)}
-                      activeOpacity={0.9}
-                    >
-                      {/* Floating Favorite Heart Button */}
-                      <TouchableOpacity
-                        style={styles.favoriteHeartFloating}
-                        onPress={() => toggleFavorite(item.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Heart
-                          size={16}
-                          color={isFavorite ? '#EF4444' : '#9CA3AF'}
-                          fill={isFavorite ? '#EF4444' : 'transparent'}
-                        />
-                      </TouchableOpacity>
+                const paginatedRecipes = filteredRecipes.slice(0, visibleRecipesCount);
 
-                      <View style={styles.recipeCardMainRow}>
-                        {/* Recipe Image / Fallback Thumbnail */}
-                        <View style={styles.recipeCardImageContainer}>
-                          {item.imageUrl ? (
-                            <Image
-                              source={{ uri: item.imageUrl }}
-                              style={styles.recipeCardImage}
-                              resizeMode="cover"
+                return (
+                  <View>
+                    {paginatedRecipes.map((item) => {
+                      const matchScore = calculateMatchScore(item, fridgeIngredients);
+                      const isFavorite = favoriteRecipeIds.includes(item.id);
+                      return (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={styles.recipeListItemCard}
+                          onPress={() => handleOpenRecipeDetail(item)}
+                          activeOpacity={0.9}
+                        >
+                          {/* Floating Favorite Heart Button */}
+                          <TouchableOpacity
+                            style={styles.favoriteHeartFloating}
+                            onPress={() => toggleFavorite(item.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Heart
+                              size={16}
+                              color={isFavorite ? '#EF4444' : '#9CA3AF'}
+                              fill={isFavorite ? '#EF4444' : 'transparent'}
                             />
-                          ) : (
-                            <View style={styles.recipeCardImagePlaceholder}>
-                              <Utensils size={24} color={COLORS.primary} />
-                            </View>
-                          )}
-                        </View>
+                          </TouchableOpacity>
 
-                        {/* Recipe Text content */}
-                        <View style={styles.recipeCardContentRight}>
-                          <View style={styles.recipeBadgesRow}>
-                            <View style={[
-                              styles.sourceBadge,
-                              item.source === 'ai' && { backgroundColor: '#EEF2FF' },
-                              item.source === 'user' && { backgroundColor: '#ECFDF5' }
-                            ]}>
-                              <Text style={[
-                                styles.sourceBadgeText,
-                                item.source === 'ai' && { color: '#4F46E5' },
-                                item.source === 'user' && { color: '#059669' }
-                              ]}>
-                                {item.source.toUpperCase()}
-                              </Text>
+                          <View style={styles.recipeCardMainRow}>
+                            {/* Recipe Image / Fallback Thumbnail */}
+                            <View style={styles.recipeCardImageContainer}>
+                              {item.imageUrl ? (
+                                <Image
+                                  source={{ uri: item.imageUrl }}
+                                  style={styles.recipeCardImage}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View style={styles.recipeCardImagePlaceholder}>
+                                  <Utensils size={24} color={COLORS.primary} />
+                                </View>
+                              )}
                             </View>
-                            {matchScore > 0 && (
-                              <View style={[styles.sourceBadge, { backgroundColor: '#ECFDF5', marginLeft: 6 }]}>
-                                <Text style={[styles.sourceBadgeText, { color: '#059669' }]}>
-                                  {matchScore}% MATCH
-                                </Text>
+
+                            {/* Recipe Text content */}
+                            <View style={styles.recipeCardContentRight}>
+                              <View style={styles.recipeBadgesRow}>
+                                {item.source !== 'database' && (
+                                  <View style={[
+                                    styles.sourceBadge,
+                                    item.source === 'ai' && { backgroundColor: '#EEF2FF' },
+                                    item.source === 'user' && { backgroundColor: '#ECFDF5' }
+                                  ]}>
+                                    <Text style={[
+                                      styles.sourceBadgeText,
+                                      item.source === 'ai' && { color: '#4F46E5' },
+                                      item.source === 'user' && { color: '#059669' }
+                                    ]}>
+                                      {item.source.toUpperCase()}
+                                    </Text>
+                                  </View>
+                                )}
+                                {matchScore > 0 && (
+                                  <View style={[styles.sourceBadge, { backgroundColor: '#ECFDF5', marginLeft: item.source !== 'database' ? 6 : 0 }]}>
+                                    <Text style={[styles.sourceBadgeText, { color: '#059669' }]}>
+                                      {matchScore}% MATCH
+                                    </Text>
+                                  </View>
+                                )}
                               </View>
-                            )}
+
+                              <Text style={styles.recipeItemTitle} numberOfLines={1}>{item.title}</Text>
+                              <Text style={styles.recipeItemDesc} numberOfLines={2}>{item.description}</Text>
+                            </View>
                           </View>
 
-                          <Text style={styles.recipeItemTitle} numberOfLines={1}>{item.title}</Text>
-                          <Text style={styles.recipeItemDesc} numberOfLines={2}>{item.description}</Text>
-                        </View>
-                      </View>
+                          {/* Prep details */}
+                          <View style={styles.recipePrepRow}>
+                            <View style={styles.recipePrepItem}>
+                              <Clock size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                              <Text style={styles.recipePrepLabel}>Prep: {item.prepTime}m</Text>
+                            </View>
+                            <View style={styles.recipePrepItem}>
+                              <Utensils size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                              <Text style={styles.recipePrepLabel}>Cook: {item.cookTime}m</Text>
+                            </View>
+                            <View style={styles.recipePrepItem}>
+                              <BookOpen size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                              <Text style={styles.recipePrepLabel}>{item.servings} Servings</Text>
+                            </View>
+                          </View>
 
-                      {/* Prep details */}
-                      <View style={styles.recipePrepRow}>
-                        <View style={styles.recipePrepItem}>
-                          <Clock size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
-                          <Text style={styles.recipePrepLabel}>Prep: {item.prepTime}m</Text>
-                        </View>
-                        <View style={styles.recipePrepItem}>
-                          <Utensils size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
-                          <Text style={styles.recipePrepLabel}>Cook: {item.cookTime}m</Text>
-                        </View>
-                        <View style={styles.recipePrepItem}>
-                          <BookOpen size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
-                          <Text style={styles.recipePrepLabel}>{item.servings} Servings</Text>
-                        </View>
-                      </View>
+                          {/* Macros Strip */}
+                          <View style={styles.recipeMacrosBar}>
+                            <View style={styles.recipeMacroPill}>
+                              <Text style={styles.macroPillLabel}>Calories</Text>
+                              <Text style={styles.macroPillValue}>{Math.round(item.calories)} Kcal</Text>
+                            </View>
+                            <View style={styles.recipeMacroPill}>
+                              <Text style={styles.macroPillLabel}>Protein</Text>
+                              <Text style={styles.macroPillValue}>{item.protein}g</Text>
+                            </View>
+                            <View style={styles.recipeMacroPill}>
+                              <Text style={styles.macroPillLabel}>Carbs</Text>
+                              <Text style={styles.macroPillValue}>{item.carbs}g</Text>
+                            </View>
+                            <View style={styles.recipeMacroPill}>
+                              <Text style={styles.macroPillLabel}>Fat</Text>
+                              <Text style={styles.macroPillValue}>{item.fat}g</Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
 
-                      {/* Macros Strip */}
-                      <View style={styles.recipeMacrosBar}>
-                        <View style={styles.recipeMacroPill}>
-                          <Text style={styles.macroPillLabel}>Calories</Text>
-                          <Text style={styles.macroPillValue}>{Math.round(item.calories)} Kcal</Text>
-                        </View>
-                        <View style={styles.recipeMacroPill}>
-                          <Text style={styles.macroPillLabel}>Protein</Text>
-                          <Text style={styles.macroPillValue}>{item.protein}g</Text>
-                        </View>
-                        <View style={styles.recipeMacroPill}>
-                          <Text style={styles.macroPillLabel}>Carbs</Text>
-                          <Text style={styles.macroPillValue}>{item.carbs}g</Text>
-                        </View>
-                        <View style={styles.recipeMacroPill}>
-                          <Text style={styles.macroPillLabel}>Fat</Text>
-                          <Text style={styles.macroPillValue}>{item.fat}g</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                });
+                    {filteredRecipes.length > visibleRecipesCount && (
+                      <TouchableOpacity
+                        style={styles.loadMoreRecipesBtn}
+                        onPress={() => setVisibleRecipesCount((prev) => prev + 15)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.loadMoreRecipesBtnText}>
+                          Load More ({filteredRecipes.length - visibleRecipesCount} remaining)
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
               })()
               }
             </View>
@@ -4012,6 +4034,26 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 14,
     fontWeight: '700',
+    color: COLORS.primary,
+  },
+  loadMoreRecipesBtn: {
+    marginVertical: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  loadMoreRecipesBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
     color: COLORS.primary,
   },
 });
