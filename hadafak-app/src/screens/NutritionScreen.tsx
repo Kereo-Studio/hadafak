@@ -1338,6 +1338,7 @@ export const NutritionScreen: React.FC = () => {
 
                 return filteredRecipes.map((item) => {
                   const matchScore = calculateMatchScore(item, fridgeIngredients);
+                  const isFavorite = favoriteRecipeIds.includes(item.id);
                   return (
                     <TouchableOpacity
                       key={item.id}
@@ -1345,10 +1346,38 @@ export const NutritionScreen: React.FC = () => {
                       onPress={() => handleOpenRecipeDetail(item)}
                       activeOpacity={0.9}
                     >
-                      <View style={styles.recipeHeaderRow}>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                            <Text style={styles.recipeItemTitle} numberOfLines={1}>{item.title}</Text>
+                      {/* Floating Favorite Heart Button */}
+                      <TouchableOpacity
+                        style={styles.favoriteHeartFloating}
+                        onPress={() => toggleFavorite(item.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Heart
+                          size={16}
+                          color={isFavorite ? '#EF4444' : '#9CA3AF'}
+                          fill={isFavorite ? '#EF4444' : 'transparent'}
+                        />
+                      </TouchableOpacity>
+
+                      <View style={styles.recipeCardMainRow}>
+                        {/* Recipe Image / Fallback Thumbnail */}
+                        <View style={styles.recipeCardImageContainer}>
+                          {item.imageUrl ? (
+                            <Image
+                              source={{ uri: item.imageUrl }}
+                              style={styles.recipeCardImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={styles.recipeCardImagePlaceholder}>
+                              <Utensils size={24} color={COLORS.primary} />
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Recipe Text content */}
+                        <View style={styles.recipeCardContentRight}>
+                          <View style={styles.recipeBadgesRow}>
                             <View style={[
                               styles.sourceBadge,
                               item.source === 'ai' && { backgroundColor: '#EEF2FF' },
@@ -1369,10 +1398,9 @@ export const NutritionScreen: React.FC = () => {
                                 </Text>
                               </View>
                             )}
-                            {favoriteRecipeIds.includes(item.id) && (
-                              <Heart size={14} color="#EF4444" fill="#EF4444" style={{ marginLeft: 6 }} />
-                            )}
                           </View>
+
+                          <Text style={styles.recipeItemTitle} numberOfLines={1}>{item.title}</Text>
                           <Text style={styles.recipeItemDesc} numberOfLines={2}>{item.description}</Text>
                         </View>
                       </View>
@@ -2237,6 +2265,20 @@ export const NutritionScreen: React.FC = () => {
                   </View>
                 ) : (
                   <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                    {/* Recipe Image Banner */}
+                    {selectedRecipeDetail.imageUrl ? (
+                      <Image
+                        source={{ uri: selectedRecipeDetail.imageUrl }}
+                        style={styles.detailRecipeImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.detailRecipeImagePlaceholder}>
+                        <Utensils size={40} color={COLORS.primary} />
+                        <Text style={styles.detailRecipeImagePlaceholderText}>Healthy Recipe</Text>
+                      </View>
+                    )}
+
                     {/* Portion / Servings Scaler */}
                     <View style={styles.portionScalerCard}>
                       <Text style={styles.portionScalerTitle}>Scale Recipe Servings</Text>
@@ -3872,5 +3914,75 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontWeight: '600',
     marginTop: 2,
+  },
+  favoriteHeartFloating: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  recipeCardMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recipeCardImageContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+  },
+  recipeCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  recipeCardImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5F3FF',
+  },
+  recipeCardContentRight: {
+    flex: 1,
+    paddingLeft: 12,
+    justifyContent: 'center',
+  },
+  recipeBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  detailRecipeImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  detailRecipeImagePlaceholder: {
+    width: '100%',
+    height: 180,
+    borderRadius: 16,
+    backgroundColor: '#F5F3FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  detailRecipeImagePlaceholderText: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });
