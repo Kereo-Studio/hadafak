@@ -1274,6 +1274,22 @@ export const NutritionScreen: React.FC = () => {
                       </TouchableOpacity>
                     )}
                   </View>
+
+                  {/* Separate Favorites Heart Toggle */}
+                  <TouchableOpacity
+                    style={[
+                      styles.favoritesToggleBtn,
+                      selectedRecipeTag === 'Favorites' && styles.favoritesToggleBtnActive
+                    ]}
+                    onPress={() => setSelectedRecipeTag(selectedRecipeTag === 'Favorites' ? '' : 'Favorites')}
+                    activeOpacity={0.8}
+                  >
+                    <Heart
+                      size={18}
+                      color={selectedRecipeTag === 'Favorites' ? '#FFFFFF' : '#EF4444'}
+                      fill={selectedRecipeTag === 'Favorites' ? '#FFFFFF' : 'transparent'}
+                    />
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -1287,7 +1303,6 @@ export const NutritionScreen: React.FC = () => {
             >
               {[
                 { label: 'All Recipes', value: '' },
-                { label: 'Favorites 💚', value: 'Favorites' },
                 { label: 'High-Protein', value: 'High-Protein' },
                 { label: 'Low-Carb', value: 'Low-Carb' },
                 { label: 'Vegan', value: 'Vegan' },
@@ -2644,13 +2659,27 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  // Tag lists
+   // Tag lists
   tagsScrollView: {
-    marginHorizontal: -20,
     marginBottom: 18,
   },
   tagsContentContainer: {
     paddingHorizontal: 20,
+  },
+  favoritesToggleBtn: {
+    marginLeft: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#222222',
+  },
+  favoritesToggleBtnActive: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
   },
   tagPill: {
     paddingHorizontal: 16,
