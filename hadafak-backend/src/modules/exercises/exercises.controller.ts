@@ -109,6 +109,8 @@ export class ExercisesController {
     @Param('externalId') externalId: string,
     @Res() res: Response,
   ) {
+    const fallbackUrl = 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=360&auto=format&fit=crop';
+
     try {
       // 1. Check if we already have it cached locally
       const uploadDir = path.join(process.cwd(), 'uploads', 'exercises');
@@ -120,52 +122,60 @@ export class ExercisesController {
       }
 
       // 2. If not, trigger the download & cache logic!
-      const cachedUrl = await this.syncService.downloadAndCacheGif(externalId);
-      if (cachedUrl) {
-        if (cachedUrl.startsWith('http')) {
-          // S3 URL - Redirect the client
-          return res.redirect(cachedUrl);
-        } else {
-          // Local path - Send the file
-          res.setHeader('Content-Type', 'image/gif');
-          res.setHeader('Cache-Control', 'public, max-age=31536000');
-          return res.sendFile(path.join(process.cwd(), cachedUrl));
+      try {
+        const cachedUrl = await this.syncService.downloadAndCacheGif(externalId);
+        if (cachedUrl) {
+          if (cachedUrl.startsWith('http')) {
+            // S3 URL - Redirect the client
+            return res.redirect(cachedUrl);
+          } else {
+            // Local path - Send the file
+            res.setHeader('Content-Type', 'image/gif');
+            res.setHeader('Cache-Control', 'public, max-age=31536000');
+            return res.sendFile(path.join(process.cwd(), cachedUrl));
+          }
         }
+      } catch (cacheErr) {
+        console.warn(`Cache attempt failed for ${externalId}: ${cacheErr.message}`);
       }
 
       // 3. Fallback: If caching mechanism fails/is incomplete, fetch directly
       const apiKey = process.env.EXERCISEDB_API_KEY;
       if (!apiKey) {
-        res.status(HttpStatus.NOT_FOUND).send('API key not configured');
-        return;
+        return res.redirect(fallbackUrl);
       }
 
-      const response = await fetch(
-        `https://exercisedb.p.rapidapi.com/image?exerciseId=${externalId}&resolution=360`,
-        {
-          headers: {
-            'X-RapidAPI-Key': apiKey,
-            'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+      try {
+        const response = await fetch(
+          `https://exercisedb.p.rapidapi.com/image?exerciseId=${externalId}&resolution=360`,
+          {
+            headers: {
+              'X-RapidAPI-Key': apiKey,
+              'X-RapidAPI-Host': 'exercisedb.p.rapidapi.com',
+            },
           },
-        },
-      );
+        );
 
-      if (!response.ok) {
-        res.status(response.status).send('Failed to fetch image from external provider');
-        return;
+        if (!response.ok) {
+          return res.redirect(fallbackUrl);
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (contentType) {
+          res.setHeader('Content-Type', contentType);
+        }
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        return res.send(buffer);
+      } catch (fetchErr) {
+        console.warn(`Direct fetch failed for ${externalId}: ${fetchErr.message}`);
+        return res.redirect(fallbackUrl);
       }
-
-      const contentType = response.headers.get('content-type');
-      if (contentType) {
-        res.setHeader('Content-Type', contentType);
-      }
-      res.setHeader('Cache-Control', 'public, max-age=31536000');
-
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      res.send(buffer);
     } catch (err) {
-      res.status(HttpStatus.INTERNAL_SERVER_ERROR).send(err.message);
+      console.warn(`General fallback triggered for ${externalId}: ${err.message}`);
+      return res.redirect(fallbackUrl);
     }
   }
 

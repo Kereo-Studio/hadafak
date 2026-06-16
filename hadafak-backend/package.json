@@ -19,6 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:seed": "ts-node src/database/seeds/seed.ts",
+    "db:add-programs": "ts-node src/database/seeds/add-new-programs.ts",
     "s3:download": "ts-node src/scripts/download-s3.ts"
   },
   "dependencies": {

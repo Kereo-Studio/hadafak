@@ -48,6 +48,7 @@ import {
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
 import { StateFeedback } from '../components/StateFeedback';
+import { storage } from '../utils/storage';
 
 const { width } = Dimensions.get('window');
 
@@ -179,6 +180,35 @@ export const HomeScreen: React.FC = () => {
   const [suggestedRecipes, setSuggestedRecipes] = useState<any[]>([]);
   const [selectedRecipeDetail, setSelectedRecipeDetail] = useState<any | null>(null);
   const [isRecipeDetailModalVisible, setIsRecipeDetailModalVisible] = useState(false);
+  const [favoriteRecipeIds, setFavoriteRecipeIds] = useState<string[]>([]);
+
+  const loadFavorites = async () => {
+    try {
+      const favs = await storage.getItem('favorite_recipes');
+      if (favs) {
+        setFavoriteRecipeIds(JSON.parse(favs));
+      } else {
+        setFavoriteRecipeIds([]);
+      }
+    } catch (err) {
+      console.warn('Error loading favorites:', err);
+    }
+  };
+
+  const toggleFavorite = async (recipeId: string) => {
+    let updatedFavs: string[];
+    if (favoriteRecipeIds.includes(recipeId)) {
+      updatedFavs = favoriteRecipeIds.filter(id => id !== recipeId);
+    } else {
+      updatedFavs = [...favoriteRecipeIds, recipeId];
+    }
+    setFavoriteRecipeIds(updatedFavs);
+    try {
+      await storage.setItem('favorite_recipes', JSON.stringify(updatedFavs));
+    } catch (err) {
+      console.warn('Error saving favorites:', err);
+    }
+  };
 
   const getSuggestedMealInfo = () => {
     const hour = new Date().getHours();
@@ -690,10 +720,12 @@ export const HomeScreen: React.FC = () => {
       };
 
       performSyncAndFetch();
+      loadFavorites();
 
       const handleAppStateChange = (nextAppState: string) => {
         if (nextAppState === 'active') {
           performSyncAndFetch();
+          loadFavorites();
         }
       };
 
@@ -1038,45 +1070,108 @@ export const HomeScreen: React.FC = () => {
           contentContainerStyle={styles.recentPlanScroll}
         >
           {suggestedRecipes.length > 0 ? (
-            suggestedRecipes.map((recipe, index) => (
-              <TouchableOpacity
-                key={recipe.id || index}
-                style={styles.recipeCard}
-                onPress={() => {
-                  setSelectedRecipeDetail(recipe);
-                  setIsRecipeDetailModalVisible(true);
-                }}
-                activeOpacity={0.9}
-              >
-                <View style={styles.recipeCardHeader}>
-                  <View style={styles.recipeCardBadge}>
-                    <Text style={styles.recipeCardBadgeText}>
-                      {recipe.tags && recipe.tags.length > 0 ? recipe.tags[0] : 'Healthy'}
-                    </Text>
+            suggestedRecipes.map((recipe, index) => {
+              const isFavorite = favoriteRecipeIds.includes(recipe.id);
+              return (
+                <TouchableOpacity
+                  key={recipe.id || index}
+                  style={styles.recipeListItemCard}
+                  onPress={() => {
+                    navigation.navigate('Nutrition', { openRecipeId: recipe.id });
+                  }}
+                  activeOpacity={0.9}
+                >
+                  {/* Floating Favorite Heart Button */}
+                  <TouchableOpacity
+                    style={styles.favoriteHeartFloating}
+                    onPress={() => toggleFavorite(recipe.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Heart
+                      size={16}
+                      color={isFavorite ? '#EF4444' : '#9CA3AF'}
+                      fill={isFavorite ? '#EF4444' : 'transparent'}
+                    />
+                  </TouchableOpacity>
+
+                  <View style={styles.recipeCardMainRow}>
+                    {/* Recipe Image / Fallback Thumbnail */}
+                    <View style={styles.recipeCardImageContainer}>
+                      {recipe.imageUrl ? (
+                        <Image
+                          source={{ uri: recipe.imageUrl }}
+                          style={styles.recipeCardImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.recipeCardImagePlaceholder}>
+                          <Utensils size={24} color={COLORS.primary} />
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Recipe Text content */}
+                    <View style={styles.recipeCardContentRight}>
+                      <View style={styles.recipeBadgesRow}>
+                        {recipe.source !== 'database' && (
+                          <View style={[
+                            styles.sourceBadge,
+                            recipe.source === 'ai' && { backgroundColor: '#EEF2FF' },
+                            recipe.source === 'user' && { backgroundColor: '#ECFDF5' }
+                          ]}>
+                            <Text style={[
+                              styles.sourceBadgeText,
+                              recipe.source === 'ai' && { color: '#4F46E5' },
+                              recipe.source === 'user' && { color: '#059669' }
+                            ]}>
+                              {recipe.source.toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.recipeItemTitle} numberOfLines={1}>{recipe.title}</Text>
+                      <Text style={styles.recipeItemDesc} numberOfLines={2}>{recipe.description || 'No description provided.'}</Text>
+                    </View>
                   </View>
-                </View>
-                <Text style={styles.recipeCardTitle} numberOfLines={1}>
-                  {recipe.title}
-                </Text>
-                <Text style={styles.recipeCardDesc} numberOfLines={2}>
-                  {recipe.description || 'No description provided.'}
-                </Text>
-                <View style={styles.recipeCardFooter}>
-                  <View style={styles.recipeCardMeta}>
-                    <Flame size={14} color={COLORS.primary} />
-                    <Text style={styles.recipeCardMetaText}>
-                      {Math.round(recipe.calories)} kcal
-                    </Text>
+
+                  {/* Prep details */}
+                  <View style={styles.recipePrepRow}>
+                    <View style={styles.recipePrepItem}>
+                      <Clock size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                      <Text style={styles.recipePrepLabel}>Prep: {recipe.prepTime}m</Text>
+                    </View>
+                    <View style={styles.recipePrepItem}>
+                      <Utensils size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                      <Text style={styles.recipePrepLabel}>Cook: {recipe.cookTime}m</Text>
+                    </View>
+                    <View style={styles.recipePrepItem}>
+                      <BookOpen size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                      <Text style={styles.recipePrepLabel}>{recipe.servings} Servings</Text>
+                    </View>
                   </View>
-                  <View style={styles.recipeCardMeta}>
-                    <Clock size={14} color={COLORS.textMuted} />
-                    <Text style={styles.recipeCardMetaText}>
-                      {recipe.prepTime + recipe.cookTime}m
-                    </Text>
+
+                  {/* Macros Strip */}
+                  <View style={styles.recipeMacrosBar}>
+                    <View style={styles.recipeMacroPill}>
+                      <Text style={styles.macroPillLabel}>Calories</Text>
+                      <Text style={styles.macroPillValue}>{Math.round(recipe.calories)} Kcal</Text>
+                    </View>
+                    <View style={styles.recipeMacroPill}>
+                      <Text style={styles.macroPillLabel}>Protein</Text>
+                      <Text style={styles.macroPillValue}>{recipe.protein}g</Text>
+                    </View>
+                    <View style={styles.recipeMacroPill}>
+                      <Text style={styles.macroPillLabel}>Carbs</Text>
+                      <Text style={styles.macroPillValue}>{recipe.carbs}g</Text>
+                    </View>
+                    <View style={styles.recipeMacroPill}>
+                      <Text style={styles.macroPillLabel}>Fat</Text>
+                      <Text style={styles.macroPillValue}>{recipe.fat}g</Text>
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))
+                </TouchableOpacity>
+              );
+            })
           ) : (
             <View style={{ paddingHorizontal: 20, paddingVertical: 10 }}>
               <Text style={{ color: COLORS.textMuted, fontSize: 14, fontStyle: 'italic' }}>
@@ -2318,66 +2413,125 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   // Recipe Suggestion Styles
-  recipeCard: {
+  recipeListItemCard: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 16,
     marginRight: 16,
-    width: 220,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    width: 320,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
   },
-  recipeCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  recipeCardBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: COLORS.primaryLight,
-    marginRight: 8,
-  },
-  recipeCardBadgeText: {
-    fontSize: 10,
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  recipeCardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+  recipeItemTitle: {
+    fontSize: 16,
+    fontWeight: '900',
     color: COLORS.text,
-    marginBottom: 4,
+    marginRight: 6,
+    maxWidth: '75%',
   },
-  recipeCardDesc: {
-    fontSize: 11,
+  sourceBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  sourceBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  recipeItemDesc: {
+    fontSize: 12,
     color: COLORS.textMuted,
-    marginBottom: 12,
-    lineHeight: 15,
+    lineHeight: 16,
+    marginTop: 2,
   },
-  recipeCardFooter: {
+  recipePrepRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 12,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: '#F3F4F6',
     paddingTop: 8,
-    marginTop: 8,
   },
-  recipeCardMeta: {
+  recipePrepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  recipePrepLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: '700',
+  },
+  recipeMacrosBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 10,
+    marginTop: 12,
+  },
+  recipeMacroPill: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  macroPillLabel: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontWeight: '700',
+  },
+  macroPillValue: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: COLORS.text,
+    marginTop: 2,
+  },
+  favoriteHeartFloating: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  recipeCardMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  recipeCardMetaText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginLeft: 4,
+  recipeCardImageContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+  },
+  recipeCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  recipeCardImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5F3FF',
+  },
+  recipeCardContentRight: {
+    flex: 1,
+    paddingLeft: 12,
+    justifyContent: 'center',
+  },
+  recipeBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   // Recipe detail modal
   recipeDetailModalOverlay: {

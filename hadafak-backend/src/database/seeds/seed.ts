@@ -309,6 +309,76 @@ export async function runSeeding(dataSource: DataSource) {
     programDayExerciseRepository.create({ programDayId: fbDays[2].id, exerciseId: getExId('Tricep Pushdown'), order: 4, targetSets: 3, targetRepsRange: '10-15', targetRestTime: 60 }),
   ]);
 
+  // 4. Fat Loss Conditioning (HIIT & Strength)
+  const flc = programRepository.create({
+    name: 'Fat Loss Conditioning (HIIT & Strength)',
+    description: 'High-intensity metabolic conditioning split designed to maximize fat loss, retain lean muscle, and boost cardiovascular health.',
+    level: ProgramLevel.INTERMEDIATE,
+  });
+  const savedFlc = await programRepository.save(flc);
+  
+  const flcDays = await programDayRepository.save([
+    programDayRepository.create({ programId: savedFlc.id, dayNumber: 1, title: 'Upper Body Burn' }),
+    programDayRepository.create({ programId: savedFlc.id, dayNumber: 2, title: 'Lower Body Burn' }),
+    programDayRepository.create({ programId: savedFlc.id, dayNumber: 3, title: 'Full Body Conditioning' }),
+  ]);
+
+  await programDayExerciseRepository.save([
+    // Upper Body Burn
+    programDayExerciseRepository.create({ programDayId: flcDays[0].id, exerciseId: getExId('Pull-up'), order: 1, targetSets: 4, targetRepsRange: '10-12', targetRestTime: 60 }),
+    programDayExerciseRepository.create({ programDayId: flcDays[0].id, exerciseId: getExId('Bench Press'), order: 2, targetSets: 4, targetRepsRange: '12-15', targetRestTime: 60 }),
+    programDayExerciseRepository.create({ programDayId: flcDays[0].id, exerciseId: getExId('Dumbbell Lateral Raise'), order: 3, targetSets: 3, targetRepsRange: '15-20', targetRestTime: 45 }),
+    programDayExerciseRepository.create({ programDayId: flcDays[0].id, exerciseId: getExId('Bicep Curl'), order: 4, targetSets: 3, targetRepsRange: '12-15', targetRestTime: 45 }),
+    // Lower Body Burn
+    programDayExerciseRepository.create({ programDayId: flcDays[1].id, exerciseId: getExId('Barbell Squat'), order: 1, targetSets: 4, targetRepsRange: '12-15', targetRestTime: 75 }),
+    programDayExerciseRepository.create({ programDayId: flcDays[1].id, exerciseId: getExId('Romanian Deadlift'), order: 2, targetSets: 4, targetRepsRange: '12-15', targetRestTime: 75 }),
+    programDayExerciseRepository.create({ programDayId: flcDays[1].id, exerciseId: getExId('Leg Extension'), order: 3, targetSets: 3, targetRepsRange: '15-20', targetRestTime: 45 }),
+    programDayExerciseRepository.create({ programDayId: flcDays[1].id, exerciseId: getExId('Lying Leg Curl'), order: 4, targetSets: 3, targetRepsRange: '15-20', targetRestTime: 45 }),
+    // Full Body Conditioning
+    programDayExerciseRepository.create({ programDayId: flcDays[2].id, exerciseId: getExId('Overhead Press'), order: 1, targetSets: 3, targetRepsRange: '12-15', targetRestTime: 60 }),
+    programDayExerciseRepository.create({ programDayId: flcDays[2].id, exerciseId: getExId('Barbell Row'), order: 2, targetSets: 3, targetRepsRange: '12-15', targetRestTime: 60 }),
+    programDayExerciseRepository.create({ programDayId: flcDays[2].id, exerciseId: getExId('Bench Press'), order: 3, targetSets: 3, targetRepsRange: '12-15', targetRestTime: 60 }),
+    programDayExerciseRepository.create({ programDayId: flcDays[2].id, exerciseId: getExId('Barbell Squat'), order: 4, targetSets: 3, targetRepsRange: '12-15', targetRestTime: 75 }),
+  ]);
+
+  // 5. Advanced Strength & Power Split
+  const asp = programRepository.create({
+    name: 'Advanced Strength & Power Split',
+    description: 'Heavy resistance program focusing on raw power output, targeting compound lift strength, and building dense muscle tissue.',
+    level: ProgramLevel.ADVANCED,
+  });
+  const savedAsp = await programRepository.save(asp);
+
+  const aspDays = await programDayRepository.save([
+    programDayRepository.create({ programId: savedAsp.id, dayNumber: 1, title: 'Push Power' }),
+    programDayRepository.create({ programId: savedAsp.id, dayNumber: 2, title: 'Pull & Legs Power' }),
+    programDayRepository.create({ programId: savedAsp.id, dayNumber: 3, title: 'Upper Hypertrophy' }),
+    programDayRepository.create({ programId: savedAsp.id, dayNumber: 4, title: 'Lower Hypertrophy' }),
+  ]);
+
+  await programDayExerciseRepository.save([
+    // Push Power
+    programDayExerciseRepository.create({ programDayId: aspDays[0].id, exerciseId: getExId('Bench Press'), order: 1, targetSets: 5, targetRepsRange: '5', targetRestTime: 120 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[0].id, exerciseId: getExId('Overhead Press'), order: 2, targetSets: 5, targetRepsRange: '5', targetRestTime: 120 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[0].id, exerciseId: getExId('Incline Dumbbell Press'), order: 3, targetSets: 4, targetRepsRange: '6-8', targetRestTime: 90 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[0].id, exerciseId: getExId('Tricep Pushdown'), order: 4, targetSets: 4, targetRepsRange: '8-10', targetRestTime: 75 }),
+    // Pull & Legs Power
+    programDayExerciseRepository.create({ programDayId: aspDays[1].id, exerciseId: getExId('Barbell Squat'), order: 1, targetSets: 5, targetRepsRange: '5', targetRestTime: 150 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[1].id, exerciseId: getExId('Romanian Deadlift'), order: 2, targetSets: 5, targetRepsRange: '5', targetRestTime: 150 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[1].id, exerciseId: getExId('Pull-up'), order: 3, targetSets: 4, targetRepsRange: '6-8', targetRestTime: 90 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[1].id, exerciseId: getExId('Barbell Row'), order: 4, targetSets: 4, targetRepsRange: '6-8', targetRestTime: 90 }),
+    // Upper Hypertrophy
+    programDayExerciseRepository.create({ programDayId: aspDays[2].id, exerciseId: getExId('Bench Press'), order: 1, targetSets: 4, targetRepsRange: '10-12', targetRestTime: 90 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[2].id, exerciseId: getExId('Barbell Row'), order: 2, targetSets: 4, targetRepsRange: '10-12', targetRestTime: 90 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[2].id, exerciseId: getExId('Overhead Press'), order: 3, targetSets: 3, targetRepsRange: '10-12', targetRestTime: 90 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[2].id, exerciseId: getExId('Bicep Curl'), order: 4, targetSets: 3, targetRepsRange: '12-15', targetRestTime: 60 }),
+    // Lower Hypertrophy
+    programDayExerciseRepository.create({ programDayId: aspDays[3].id, exerciseId: getExId('Barbell Squat'), order: 1, targetSets: 4, targetRepsRange: '10-12', targetRestTime: 100 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[3].id, exerciseId: getExId('Romanian Deadlift'), order: 2, targetSets: 4, targetRepsRange: '10-12', targetRestTime: 100 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[3].id, exerciseId: getExId('Leg Extension'), order: 3, targetSets: 3, targetRepsRange: '12-15', targetRestTime: 60 }),
+    programDayExerciseRepository.create({ programDayId: aspDays[3].id, exerciseId: getExId('Lying Leg Curl'), order: 4, targetSets: 3, targetRepsRange: '12-15', targetRestTime: 60 }),
+  ]);
+
   console.log('Programs, ProgramDays, and Foods seeded successfully!');
 }
 

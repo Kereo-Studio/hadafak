@@ -65,16 +65,30 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       if (programsRes.data && programsRes.data.length > 0) {
         let matchedProgramId = programsRes.data[0].id;
         
-        // Smart matching logic based on goals
-        if (goal === 'gain_muscle') {
-          const splitProg = programsRes.data.find((p: any) => p.name.toLowerCase().includes('split'));
-          if (splitProg) matchedProgramId = splitProg.id;
-        } else if (goal === 'lose_fat') {
-          const pplProg = programsRes.data.find((p: any) => p.name.toLowerCase().includes('push') || p.name.toLowerCase().includes('ppl'));
-          if (pplProg) matchedProgramId = pplProg.id;
+        if (trainingLocation === 'home') {
+          // Smart matching for HOME workouts
+          if (goal === 'gain_muscle') {
+            const dumbbellProg = programsRes.data.find((p: any) => p.name.toLowerCase().includes('dumbbell'));
+            if (dumbbellProg) matchedProgramId = dumbbellProg.id;
+          } else if (goal === 'lose_fat') {
+            const hiitProg = programsRes.data.find((p: any) => p.name.toLowerCase().includes('hiit'));
+            if (hiitProg) matchedProgramId = hiitProg.id;
+          } else {
+            const bodyweightProg = programsRes.data.find((p: any) => p.name.toLowerCase().includes('bodyweight'));
+            if (bodyweightProg) matchedProgramId = bodyweightProg.id;
+          }
         } else {
-          const bodyWeightProg = programsRes.data.find((p: any) => p.name.toLowerCase().includes('body') || p.name.toLowerCase().includes('full'));
-          if (bodyWeightProg) matchedProgramId = bodyWeightProg.id;
+          // Smart matching for GYM workouts
+          if (goal === 'gain_muscle') {
+            const splitProg = programsRes.data.find((p: any) => !p.name.toLowerCase().includes('dumbbell') && p.name.toLowerCase().includes('split'));
+            if (splitProg) matchedProgramId = splitProg.id;
+          } else if (goal === 'lose_fat') {
+            const pplProg = programsRes.data.find((p: any) => !p.name.toLowerCase().includes('dumbbell') && (p.name.toLowerCase().includes('push') || p.name.toLowerCase().includes('ppl')));
+            if (pplProg) matchedProgramId = pplProg.id;
+          } else {
+            const bodyWeightProg = programsRes.data.find((p: any) => !p.name.toLowerCase().includes('bodyweight') && (p.name.toLowerCase().includes('body') || p.name.toLowerCase().includes('full')));
+            if (bodyWeightProg) matchedProgramId = bodyWeightProg.id;
+          }
         }
 
         await api.post(`/profiles/assign-program/${matchedProgramId}`);

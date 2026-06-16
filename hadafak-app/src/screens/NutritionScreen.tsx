@@ -44,6 +44,7 @@ import { storage } from '../utils/storage';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { StateFeedback } from '../components/StateFeedback';
 import { useAlert } from '../components/CustomAlert';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
@@ -76,6 +77,8 @@ interface LoggedMeal {
 
 export const NutritionScreen: React.FC = () => {
   const { showAlert } = useAlert();
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'tracker' | 'recipes'>('tracker');
@@ -212,8 +215,34 @@ export const NutritionScreen: React.FC = () => {
       setIsTimerRunning(false);
       Alert.alert('Cooking Timer Complete!', 'Your cooking step timer has finished.');
     }
-    return () => clearInterval(interval);
   }, [isTimerRunning, timerSeconds]);
+
+  // Listen for openRecipeId parameter (e.g. from HomeScreen suggestions link)
+  useEffect(() => {
+    const openRecipeId = route.params?.openRecipeId;
+    if (openRecipeId) {
+      setActiveTab('recipes');
+      const found = recipes.find((r) => r.id === openRecipeId);
+      if (found) {
+        handleOpenRecipeDetail(found);
+        navigation.setParams({ openRecipeId: undefined });
+      } else {
+        const fetchAndOpen = async () => {
+          try {
+            const res = await api.get(`/recipes/${openRecipeId}`);
+            if (res.data) {
+              handleOpenRecipeDetail(res.data);
+            }
+          } catch (err) {
+            console.warn('Error fetching recipe for param openRecipeId:', err);
+          } finally {
+            navigation.setParams({ openRecipeId: undefined });
+          }
+        };
+        fetchAndOpen();
+      }
+    }
+  }, [route.params?.openRecipeId, recipes]);
 
   // Load recipes from API
   const fetchRecipes = async (queryText = '', tagVal = '') => {

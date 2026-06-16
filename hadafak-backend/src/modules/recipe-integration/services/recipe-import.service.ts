@@ -210,12 +210,15 @@ export class RecipeImportService {
           food = await queryRunner.manager.save(Food, food);
         }
 
+        // Convert the ingredient amount to an estimated gram equivalent
+        const gramAmount = this.convertUnitToGrams(ing.amount, ing.unit, food.name);
+
         // Add macros scaled by ingredient amount (amount represents ratio of 100g serving units)
-        const scale = ing.amount / 100;
-        totalCalories += Number(food.calories) * scale;
-        totalProtein += Number(food.protein) * scale;
-        totalCarbs += Number(food.carbs) * scale;
-        totalFat += Number(food.fat) * scale;
+        const scale = gramAmount / 100;
+        totalCalories += (Number(food.calories) || 0) * scale;
+        totalProtein += (Number(food.protein) || 0) * scale;
+        totalCarbs += (Number(food.carbs) || 0) * scale;
+        totalFat += (Number(food.fat) || 0) * scale;
 
         const recipeIng = queryRunner.manager.create(RecipeIngredient, {
           foodId: food.id,
@@ -285,5 +288,89 @@ export class RecipeImportService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  private convertUnitToGrams(amount: number, unit: string, foodName: string): number {
+    const u = (unit || '').toLowerCase().trim();
+    const name = (foodName || '').toLowerCase();
+
+    // If already in grams/milliliters, return amount as-is
+    if (u === 'g' || u === 'gram' || u === 'grams' || u === 'ml' || u === 'milliliter' || u === 'milliliters') {
+      return amount;
+    }
+
+    // Weight conversions
+    if (u === 'kg' || u === 'kilogram' || u === 'kilograms') {
+      return amount * 1000;
+    }
+    if (u === 'oz' || u === 'ounce' || u === 'ounces') {
+      return amount * 28.35;
+    }
+    if (u === 'lb' || u === 'pound' || u === 'pounds') {
+      return amount * 453.6;
+    }
+
+    // Volumetric culinary conversions (average water-like density assumptions)
+    if (u === 'tbsp' || u === 'tablespoon' || u === 'tablespoons') {
+      return amount * 15;
+    }
+    if (u === 'tsp' || u === 'teaspoon' || u === 'teaspoons') {
+      return amount * 5;
+    }
+    if (u === 'cup' || u === 'cups') {
+      return amount * 200;
+    }
+    if (u === 'pinch' || u === 'pinches') {
+      return amount * 0.5;
+    }
+
+    // Piece conversions based on specific ingredient keywords
+    if (
+      u === 'pcs' ||
+      u === 'pc' ||
+      u === 'piece' ||
+      u === 'pieces' ||
+      u === 'whole' ||
+      u === 'unit' ||
+      u === 'units' ||
+      u === 'can' ||
+      u === 'cans' ||
+      u === 'pack' ||
+      u === 'package' ||
+      u === 'clove' ||
+      u === 'cloves' ||
+      u === ''
+    ) {
+      if (name.includes('chicken breast') || name.includes('breast')) {
+        return amount * 200; // 1 chicken breast is roughly 200g
+      }
+      if (name.includes('chicken thigh') || name.includes('thigh')) {
+        return amount * 120; // 1 thigh is roughly 120g
+      }
+      if (name.includes('chicken') || name.includes('mandi')) {
+        return amount * 800; // Whole chicken portion/serving estimate is large
+      }
+      if (name.includes('egg')) {
+        return amount * 50; // 1 egg is roughly 50g
+      }
+      if (name.includes('garlic') || name.includes('clove')) {
+        return amount * 5; // 1 clove is roughly 5g
+      }
+      if (name.includes('onion') || name.includes('tomato') || name.includes('potato') || name.includes('apple') || name.includes('banana')) {
+        return amount * 150; // Average piece size is 150g
+      }
+      if (name.includes('lemon') || name.includes('lime')) {
+        return amount * 60; // 1 lemon is roughly 60g
+      }
+      if (name.includes('can') || name.includes('tin')) {
+        return amount * 400; // Standard canned food is roughly 400g
+      }
+
+      // Default fallback for pieces/unspecified units
+      return amount * 100;
+    }
+
+    // Fallback if unit is unknown, assume it is grams
+    return amount;
   }
 }
