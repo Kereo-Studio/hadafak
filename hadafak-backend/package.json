@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:seed": "ts-node src/database/seeds/seed.ts",
     "db:add-programs": "ts-node src/database/seeds/add-new-programs.ts",
-    "s3:download": "ts-node src/scripts/download-s3.ts"
+    "s3:download": "ts-node src/scripts/download-s3.ts",
+    "db:import-offline": "ts-node src/scripts/import-local-dataset.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1067.0",
