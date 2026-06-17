@@ -37,7 +37,7 @@ jobs:
       - name: Execute Remote SSH Commands
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: "192.168.10.100"
+          host: "ssh-deploy.phoenitech.store" # <-- Change this from 192.168.10.100
           username: "houmani"
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
@@ -53,7 +53,7 @@ jobs:
                 container_name: hadafak-backend
                 restart: unless-stopped
                 env_file:
-                  - .env # <-- Securely loads your pre-configured local env variables
+                  - .env
                 networks:
                   - proxy-tier
             networks:
@@ -64,3 +64,7 @@ jobs:
             # Pull and restart the container seamlessly
             docker compose pull
             docker compose up -d --remove-orphans
+
+            echo "Starting storage optimization..."
+            docker image prune -f
+            docker images "${{ secrets.DOCKERHUB_USERNAME }}/hadafak-backend" --format "{{.ID}}" | tail -n +3 | xargs -r docker rmi -f
