@@ -1,62 +1,63 @@
-name: Deploy Backend to Amazon ECS
+name: Remote Deploy HADAFAK Backend
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
     paths:
-      - 'hadafak-backend/**'
-      - '.github/workflows/deploy.yml'
+      - 'hadafak-backend/**' 
 
 jobs:
-  deploy:
-    name: Deploy Backend
+  build-and-push:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-central-1
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, Tag, and Push Image to Amazon ECR
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: hadafak-backend
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          cd hadafak-backend
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Download Active Task Definition from ECS
-        run: |
-          aws ecs describe-task-definition --task-definition hadafak-production-backend --query taskDefinition > task-definition.json
-
-      - name: Render New Task Definition with Updated Image
-        id: render-task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
         with:
-          task-definition: task-definition.json
-          container-name: app
-          image: ${{ steps.build-image.outputs.image }}
+          context: ./hadafak-backend
+          file: ./hadafak-backend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/hadafak-backend:latest
 
-      - name: Deploy Task Definition to Amazon ECS Service
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+  deploy-to-laptop:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute Remote SSH Commands
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
-          service: hadafak-production-service
-          cluster: hadafak-production-cluster
-          wait-for-service-stability: true
+          host: "192.168.10.100"
+          username: "houmani"
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            mkdir -p /opt/deployment/hadafak-backend
+            cd /opt/deployment/hadafak-backend
+            
+            # Create the docker-compose file dynamically
+            cat << 'EOF' > docker-compose.yml
+            version: '3.8'
+            services:
+              hadafak-backend:
+                image: ${{ secrets.DOCKERHUB_USERNAME }}/hadafak-backend:latest
+                container_name: hadafak-backend
+                restart: unless-stopped
+                env_file:
+                  - .env # <-- Securely loads your pre-configured local env variables
+                networks:
+                  - proxy-tier
+            networks:
+              proxy-tier:
+                external: true
+            EOF
+
+            # Pull and restart the container seamlessly
+            docker compose pull
+            docker compose up -d --remove-orphans
