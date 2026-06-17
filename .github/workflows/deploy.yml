@@ -5,9 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'hadafak-backend/**'
-
   workflow_dispatch:
-    
 
 jobs:
   build-and-push:
@@ -29,42 +27,3 @@ jobs:
           file: ./hadafak-backend/Dockerfile
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/hadafak-backend:latest
-
-  deploy-to-laptop:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Execute Remote SSH Commands
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: "ssh-deploy.phoenitech.store" # <-- Change this from 192.168.10.100
-          username: "houmani"
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            mkdir -p /opt/deployment/hadafak-backend
-            cd /opt/deployment/hadafak-backend
-            
-            # Create the docker-compose file dynamically
-            cat << 'EOF' > docker-compose.yml
-            version: '3.8'
-            services:
-              hadafak-backend:
-                image: ${{ secrets.DOCKERHUB_USERNAME }}/hadafak-backend:latest
-                container_name: hadafak-backend
-                restart: unless-stopped
-                env_file:
-                  - .env
-                networks:
-                  - proxy-tier
-            networks:
-              proxy-tier:
-                external: true
-            EOF
-
-            # Pull and restart the container seamlessly
-            docker compose pull
-            docker compose up -d --remove-orphans
-
-            echo "Starting storage optimization..."
-            docker image prune -f
-            docker images "${{ secrets.DOCKERHUB_USERNAME }}/hadafak-backend" --format "{{.ID}}" | tail -n +3 | xargs -r docker rmi -f
