@@ -35,9 +35,10 @@ export class CreateProfileDto {
   @Max(7)
   trainingDays: number;
 
-  @ApiProperty({ example: 'gym', description: 'gym or home' })
+  @ApiProperty({ example: 'gym', description: 'gym or home', required: false })
+  @IsOptional()
   @IsString()
-  trainingLocation: string;
+  trainingLocation?: string;
 
   @ApiProperty({ example: 2200, required: false })
   @IsOptional()

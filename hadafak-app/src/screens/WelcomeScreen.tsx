@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Dimensions, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../theme/colors';
 import { Button } from '../components/Button';
-import { Trophy } from 'lucide-react-native';
+import { TrophyIcon } from '../components/icons/fitness';
 
 const { width } = Dimensions.get('window');
 const logoImg = require('../../assets/hadafaklogo-nobg.png');
@@ -33,7 +33,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         {/* Motivational Card */}
         <View style={styles.visualCard}>
           <View style={styles.cardHeader}>
-            <Trophy size={24} color={COLORS.primary} />
+            <TrophyIcon size={24} color={COLORS.primary} />
             <Text style={styles.cardTitle}>Ready to reach your target?</Text>
           </View>
           <Text style={styles.cardBody}>

@@ -12,8 +12,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Play, Pause, Square, Navigation,
-  Clock, Zap, Flame, Ghost, Eye, Check, Trophy, ChevronUp, ChevronDown,
+  Clock, Ghost, Eye, Check, ChevronUp, ChevronDown,
 } from 'lucide-react-native';
+import { LightningIcon, FireIcon, TrophyIcon } from '../components/icons/fitness';
 import { COLORS } from '../theme/colors';
 import { api } from '../services/api';
 import { storage } from '../utils/storage';
@@ -943,14 +944,14 @@ export const MapScreen: React.FC = () => {
             <Animated.View style={styles.expandableContent}>
               <View style={styles.secondaryStatsGrid}>
                 <View style={styles.statCard}>
-                  <Zap size={18} color={COLORS.primary} />
+                  <LightningIcon size={18} color={COLORS.primary} />
                   <View style={styles.statCardMeta}>
                     <Text style={styles.statCardValue}>{formatPace(distKm, elapsed)}</Text>
                     <Text style={styles.statCardLabel}>Current Pace</Text>
                   </View>
                 </View>
                 <View style={styles.statCard}>
-                  <Flame size={18} color="#FF6B6B" />
+                  <FireIcon size={18} color="#FF6B6B" />
                   <View style={styles.statCardMeta}>
                     <Text style={styles.statCardValue}>{calories}</Text>
                     <Text style={styles.statCardLabel}>Calories Burned</Text>
@@ -1128,7 +1129,7 @@ export const MapScreen: React.FC = () => {
             <View style={styles.modalContainer}>
               {/* Header Icon + Title */}
               <View style={{ alignItems: 'center', marginBottom: 12 }}>
-                <Trophy size={42} color={COLORS.primary} style={{ marginBottom: 6 }} />
+                <TrophyIcon size={42} color={COLORS.primary} style={{ marginBottom: 6 }} />
                 <Text style={[styles.modalTitle, { color: COLORS.primary, textAlign: 'center', fontSize: 20, marginBottom: 2 }]}>
                   AWESOME RUN!
                 </Text>

@@ -70,7 +70,8 @@
           "isAndroidBackgroundLocationEnabled": true
         }
       ],
-      "expo-background-task"
+      "expo-background-task",
+      "expo-font"
     ],
     "extra": {
       "eas": {

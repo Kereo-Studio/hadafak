@@ -24,20 +24,29 @@ export async function seedPrograms(dataSource: DataSource): Promise<void> {
     if (ex.externalId) idByExternal.set(ex.externalId, ex.id);
   }
 
-  const existingNames = new Set((await programRepo.find({ select: { name: true } })).map((p) => p.name));
+  const existing = await programRepo.find({ select: { id: true, name: true, location: true } });
+  const existingById = new Map(existing.map((p) => [p.name, p]));
 
   let created = 0;
+  let updated = 0;
   let skipped = 0;
   const missingRefs = new Set<string>();
 
   const seedOne = async (def: ProgramDef): Promise<void> => {
-    if (existingNames.has(def.name)) {
-      skipped++;
+    const found = existingById.get(def.name);
+    if (found) {
+      // Fix location if it was defaulted to 'gym' before the column existed
+      if (found.location === def.location) {
+        skipped++;
+      } else {
+        await programRepo.update(found.id, { location: def.location });
+        updated++;
+      }
       return;
     }
 
     const program = await programRepo.save(
-      programRepo.create({ name: def.name, description: def.description, level: def.level }),
+      programRepo.create({ name: def.name, description: def.description, level: def.level, location: def.location }),
     );
 
     for (let di = 0; di < def.days.length; di++) {
@@ -75,5 +84,5 @@ export async function seedPrograms(dataSource: DataSource): Promise<void> {
   if (missingRefs.size) {
     console.warn(`  ⚠ ${missingRefs.size} exercise refs not found (skipped): ${[...missingRefs].join(', ')}`);
   }
-  console.log(`  ✓ Programs: ${created} created, ${skipped} already present.`);
+  console.log(`  ✓ Programs: ${created} created, ${updated} location-fixed, ${skipped} unchanged.`);
 }

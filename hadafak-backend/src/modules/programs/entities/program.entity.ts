@@ -14,6 +14,8 @@ export enum ProgramLevel {
   ADVANCED = 'advanced',
 }
 
+export type ProgramLocation = 'gym' | 'home';
+
 @Entity('programs')
 export class Program {
   @PrimaryGeneratedColumn('uuid')
@@ -31,6 +33,9 @@ export class Program {
     default: ProgramLevel.BEGINNER,
   })
   level: ProgramLevel;
+
+  @Column({ name: 'location', type: 'varchar', default: 'gym' })
+  location: ProgramLocation;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

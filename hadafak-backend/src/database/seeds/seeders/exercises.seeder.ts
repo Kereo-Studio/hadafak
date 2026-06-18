@@ -162,7 +162,11 @@ export async function seedExercises(dataSource: DataSource): Promise<void> {
       if (usedNames.has(name)) name = `${name}-${ex.id}`;
       usedNames.add(name);
 
-      const gifUrl = s3UrlMap.get(ex.id) || `/api/v1/exercises/image/${ex.id}`;
+      const s3Base = process.env.AWS_S3_BUCKET_NAME
+        ? `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_S3_REGION || 'eu-central-1'}.amazonaws.com`
+        : null;
+      const gifUrl = s3UrlMap.get(ex.id)
+        ?? (s3Base ? `${s3Base}/exercises/${ex.id}.gif` : `/api/v1/exercises/image/${ex.id}`);
 
       await exerciseRepo.save(
         exerciseRepo.create({

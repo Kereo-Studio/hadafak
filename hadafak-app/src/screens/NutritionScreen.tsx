@@ -17,26 +17,29 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS } from '../theme/colors';
 import {
-  Flame,
   Plus,
   Trash2,
   Search,
-  GlassWater,
-  Sparkles,
   Check,
   ChevronRight,
-  Apple,
   X,
   PlusCircle,
-  TrendingUp,
   Clock,
-  Utensils,
   BookOpen,
   Camera,
   Upload,
   ScanBarcode,
-  Heart,
 } from 'lucide-react-native';
+import {
+  FireIcon,
+  FoodAppleIcon,
+  CupWaterIcon,
+  CreationIcon,
+  HeartIcon,
+  HeartOutlineIcon,
+  SilverwareIcon,
+  ChartLineIcon,
+} from '../components/icons/fitness';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { api } from '../services/api';
@@ -913,7 +916,7 @@ export const NutritionScreen: React.FC = () => {
               onPress={() => setActiveTab('tracker')}
               activeOpacity={0.8}
             >
-              <Apple size={16} color={activeTab === 'tracker' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 6 }} />
+              <FoodAppleIcon size={16} color={activeTab === 'tracker' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 6 }} />
               <Text style={[styles.tabButtonText, activeTab === 'tracker' && styles.tabButtonTextActive]}>
                 Daily Tracker
               </Text>
@@ -923,7 +926,7 @@ export const NutritionScreen: React.FC = () => {
               onPress={() => setActiveTab('recipes')}
               activeOpacity={0.8}
             >
-              <Sparkles size={16} color={activeTab === 'recipes' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 6 }} />
+              <CreationIcon size={16} color={activeTab === 'recipes' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 6 }} />
               <Text style={[styles.tabButtonText, activeTab === 'recipes' && styles.tabButtonTextActive]}>
                 Recipes Hub
               </Text>
@@ -1227,7 +1230,7 @@ export const NutritionScreen: React.FC = () => {
             <View style={styles.waterTrackerCard}>
               <View style={styles.waterDetails}>
                 <View style={styles.waterHeader}>
-                  <GlassWater size={28} color="#3B82F6" style={{ marginRight: 10 }} />
+                  <CupWaterIcon size={28} color="#3B82F6" style={{ marginRight: 10 }} />
                   <View>
                     <Text style={styles.waterTitle}>Water Counter</Text>
                     <Text style={styles.waterVolume}>
@@ -1283,7 +1286,7 @@ export const NutritionScreen: React.FC = () => {
                     onPress={() => setIsFridgeModalVisible(true)}
                     activeOpacity={0.8}
                   >
-                    <Sparkles size={16} color={COLORS.textInverse} style={{ marginRight: 6 }} />
+                    <CreationIcon size={16} color={COLORS.textInverse} style={{ marginRight: 6 }} />
                     <Text style={styles.fridgeOpenText}>Open Fridge</Text>
                   </TouchableOpacity>
                 </View>
@@ -1316,11 +1319,10 @@ export const NutritionScreen: React.FC = () => {
                   onPress={() => setSelectedRecipeTag(selectedRecipeTag === 'Favorites' ? '' : 'Favorites')}
                   activeOpacity={0.8}
                 >
-                  <Heart
-                    size={18}
-                    color={selectedRecipeTag === 'Favorites' ? '#FFFFFF' : '#EF4444'}
-                    fill={selectedRecipeTag === 'Favorites' ? '#FFFFFF' : 'transparent'}
-                  />
+                  {selectedRecipeTag === 'Favorites'
+                    ? <HeartIcon size={18} color="#FFFFFF" />
+                    : <HeartOutlineIcon size={18} color="#EF4444" />
+                  }
                 </TouchableOpacity>
               </View>
             </View>
@@ -1377,7 +1379,7 @@ export const NutritionScreen: React.FC = () => {
                       title={isFavTag ? "No Favorite Recipes" : "No Recipes Found"}
                       description={isFavTag ? "Save your favorite recipes by tapping the heart icon in their detail cards." : "Try clearing your search query, choosing a different tag, or creating a custom recipe using your fridge ingredients."}
                       containerStyle={{ minHeight: 250 }}
-                      icon={<Utensils size={36} color={COLORS.primary} />}
+                      icon={<SilverwareIcon size={36} color={COLORS.primary} />}
                     />
                   );
                 }
@@ -1402,11 +1404,10 @@ export const NutritionScreen: React.FC = () => {
                             onPress={() => toggleFavorite(item.id)}
                             activeOpacity={0.7}
                           >
-                            <Heart
-                              size={16}
-                              color={isFavorite ? '#EF4444' : '#9CA3AF'}
-                              fill={isFavorite ? '#EF4444' : 'transparent'}
-                            />
+                            {isFavorite
+                              ? <HeartIcon size={16} color="#EF4444" />
+                              : <HeartOutlineIcon size={16} color="#9CA3AF" />
+                            }
                           </TouchableOpacity>
 
                           <View style={styles.recipeCardMainRow}>
@@ -1420,7 +1421,7 @@ export const NutritionScreen: React.FC = () => {
                                 />
                               ) : (
                                 <View style={styles.recipeCardImagePlaceholder}>
-                                  <Utensils size={24} color={COLORS.primary} />
+                                  <SilverwareIcon size={24} color={COLORS.primary} />
                                 </View>
                               )}
                             </View>
@@ -1464,7 +1465,7 @@ export const NutritionScreen: React.FC = () => {
                               <Text style={styles.recipePrepLabel}>Prep: {item.prepTime}m</Text>
                             </View>
                             <View style={styles.recipePrepItem}>
-                              <Utensils size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                              <SilverwareIcon size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
                               <Text style={styles.recipePrepLabel}>Cook: {item.cookTime}m</Text>
                             </View>
                             <View style={styles.recipePrepItem}>
@@ -1587,7 +1588,7 @@ export const NutritionScreen: React.FC = () => {
                 {selectedFood ? (
                   /* Food selected: input servings/quantity */
                   <View style={styles.servingsConfigCard}>
-                    <Apple size={36} color={COLORS.primary} style={{ marginBottom: 12 }} />
+                    <FoodAppleIcon size={36} color={COLORS.primary} style={{ marginBottom: 12 }} />
                     <Text style={styles.selectedFoodLabel}>{selectedFood.name}</Text>
                     <Text style={styles.selectedFoodMacros}>
                       1 serving size: {selectedFood.servingSize || 100} {selectedFood.servingUnit || 'g'} • {selectedFood.calories} Kcal
@@ -1704,7 +1705,7 @@ export const NutritionScreen: React.FC = () => {
               <ScrollView style={styles.aiScanContainer} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
                 {!selectedImage ? (
                   <View style={styles.aiSelectorCard}>
-                    <Sparkles size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
+                    <CreationIcon size={48} color={COLORS.primary} style={{ marginBottom: 16 }} />
                     <Text style={styles.aiCardTitle}>Analyze Food with AI</Text>
                     <Text style={styles.aiCardSubtitle}>
                       Snap a photo of your meal or upload an image, and Gemini will estimate ingredients and macronutrients automatically!
@@ -1752,7 +1753,7 @@ export const NutritionScreen: React.FC = () => {
                     {!isAiScanning && aiResult && (
                       <View style={styles.aiResultContent}>
                         <View style={styles.aiResultHeaderRow}>
-                          <Sparkles size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+                          <CreationIcon size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
                           <Text style={styles.aiResultTitle}>AI Nutrition Estimate</Text>
                         </View>
 
@@ -1970,7 +1971,7 @@ export const NutritionScreen: React.FC = () => {
           <View style={styles.modalContent}>
             <View style={styles.modalHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Sparkles size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <CreationIcon size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
                 <Text style={styles.modalTitle}>AI Fridge Recipe Builder</Text>
               </View>
               <TouchableOpacity
@@ -2083,7 +2084,7 @@ export const NutritionScreen: React.FC = () => {
                   <ActivityIndicator size="small" color="#FFF" />
                 ) : (
                   <>
-                    <Sparkles size={18} color="#FFF" style={{ marginRight: 8 }} />
+                    <CreationIcon size={18} color="#FFF" style={{ marginRight: 8 }} />
                     <Text style={styles.fridgeSubmitText}>Generate AI Recipe</Text>
                   </>
                 )}
@@ -2182,11 +2183,10 @@ export const NutritionScreen: React.FC = () => {
                         onPress={() => toggleFavorite(selectedRecipeDetail.id)}
                         style={{ marginLeft: 10, padding: 4 }}
                       >
-                        <Heart
-                          size={22}
-                          color={favoriteRecipeIds.includes(selectedRecipeDetail.id) ? '#EF4444' : COLORS.textMuted}
-                          fill={favoriteRecipeIds.includes(selectedRecipeDetail.id) ? '#EF4444' : 'transparent'}
-                        />
+                        {favoriteRecipeIds.includes(selectedRecipeDetail.id)
+                          ? <HeartIcon size={22} color="#EF4444" />
+                          : <HeartOutlineIcon size={22} color={COLORS.textMuted} />
+                        }
                       </TouchableOpacity>
                     </View>
                     <Text style={styles.modalSubtitle} numberOfLines={1}>
@@ -2340,7 +2340,7 @@ export const NutritionScreen: React.FC = () => {
                       />
                     ) : (
                       <View style={styles.detailRecipeImagePlaceholder}>
-                        <Utensils size={40} color={COLORS.primary} />
+                        <SilverwareIcon size={40} color={COLORS.primary} />
                         <Text style={styles.detailRecipeImagePlaceholderText}>Healthy Recipe</Text>
                       </View>
                     )}
@@ -2404,7 +2404,7 @@ export const NutritionScreen: React.FC = () => {
                       const remainingAfterLog = Math.max(0, remainingCals - mealCals);
                       return (
                         <View style={styles.macroImpactBox}>
-                          <TrendingUp size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                          <ChartLineIcon size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
                           <Text style={styles.macroImpactText}>
                             Logging this will leave you with{' '}
                             <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>
@@ -2422,7 +2422,7 @@ export const NutritionScreen: React.FC = () => {
                         <Text style={styles.timeTagText}>Prep: {selectedRecipeDetail.prepTime} mins</Text>
                       </View>
                       <View style={styles.timeTag}>
-                        <Utensils size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                        <SilverwareIcon size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
                         <Text style={styles.timeTagText}>Cook: {selectedRecipeDetail.cookTime} mins</Text>
                       </View>
                     </View>
@@ -2535,7 +2535,7 @@ export const NutritionScreen: React.FC = () => {
                             }}
                             activeOpacity={0.8}
                           >
-                            <Sparkles size={14} color="#FFF" style={{ marginRight: 4 }} />
+                            <CreationIcon size={14} color="#FFF" style={{ marginRight: 4 }} />
                             <Text style={styles.startCookingText}>Chef Mode</Text>
                           </TouchableOpacity>
                         )}

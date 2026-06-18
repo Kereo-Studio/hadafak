@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Program, ProgramLevel } from './entities/program.entity';
+import { Program, ProgramLevel, ProgramLocation } from './entities/program.entity';
 import { ProgramDay } from './entities/program-day.entity';
 import { ProgramDayExercise } from './entities/program-day-exercise.entity';
 import { Exercise } from '../exercises/entities/exercise.entity';
@@ -23,8 +23,9 @@ export class ProgramsService {
     private readonly exercisesService: ExercisesService,
   ) {}
 
-  async findAll(): Promise<Program[]> {
+  async findAll(location?: ProgramLocation): Promise<Program[]> {
     return this.programRepository.find({
+      where: location ? { location } : undefined,
       relations: {
         days: {
           exercises: {
@@ -32,6 +33,7 @@ export class ProgramsService {
           },
         },
       },
+      order: { createdAt: 'ASC' },
     });
   }
 
@@ -92,172 +94,124 @@ export class ProgramsService {
 
   async generateProgramForUser(userId: string): Promise<Program> {
     const profile = await this.profilesService.findByUserId(userId);
-    const exercises = await this.exerciseRepository.find();
-    
-    const getExId = (name: string): string | null => {
-      const found = exercises.find((e) => e.name.toLowerCase() === name.toLowerCase());
-      return found ? found.id : null;
-    };
+    const isHome = profile.trainingLocation === 'home';
 
-    let programName = `Personalized program`;
-    let programDesc = `Custom routine generated based on your goals.`;
+    const exercises = await this.exerciseRepository.find({
+      select: { id: true, externalId: true },
+    });
+    const byExternal = new Map(exercises.filter((e) => e.externalId).map((e) => [e.externalId!, e.id]));
+    const ex = (extId: string) => byExternal.get(extId) ?? null;
+
     let level = ProgramLevel.BEGINNER;
+    if (profile.trainingDays >= 5) level = ProgramLevel.ADVANCED;
+    else if (profile.trainingDays >= 3) level = ProgramLevel.INTERMEDIATE;
 
-    if (profile.trainingDays >= 5) {
-      level = ProgramLevel.ADVANCED;
-    } else if (profile.trainingDays >= 3) {
-      level = ProgramLevel.INTERMEDIATE;
+    type DaySpec = { title: string; exIds: [string, number, string, number][] };
+    // [externalId, sets, reps-string, rest-seconds]
+    let programName: string;
+    let programDesc: string;
+    let days: DaySpec[];
+
+    if (isHome) {
+      // ── HOME programs (bodyweight + dumbbell only) ─────────────────────────
+      if (profile.trainingDays >= 5) {
+        programName = 'Home Dumbbell PPL';
+        programDesc = 'Push/Pull/Legs split using only dumbbells and bodyweight — built for your home setup.';
+        days = [
+          { title: 'Push Day', exIds: [['0289', 4, '8-12', 90], ['0405', 3, '10-12', 75], ['0334', 3, '12-15', 60], ['0351', 3, '12-15', 60]] },
+          { title: 'Pull Day', exIds: [['0293', 4, '8-12', 90], ['0300', 3, '8-12', 90], ['0313', 3, '12-15', 60]] },
+          { title: 'Legs Day', exIds: [['1760', 4, '10-12', 90], ['1459', 4, '10-12', 90], ['0336', 3, '10-12', 60]] },
+          { title: 'Push Day B', exIds: [['0308', 4, '10-12', 75], ['2137', 3, '10-12', 75], ['0259', 3, '12-15', 60], ['0334', 3, '15-20', 45]] },
+          { title: 'Pull Day B', exIds: [['0293', 4, '10-12', 90], ['0298', 3, '12-15', 60], ['1326', 3, '6-10', 90]] },
+        ];
+      } else if (profile.trainingDays === 4) {
+        programName = 'Home Upper/Lower Split';
+        programDesc = 'Four-day dumbbell upper/lower split designed for your home gym.';
+        days = [
+          { title: 'Upper A', exIds: [['0289', 4, '8-12', 90], ['0293', 4, '8-12', 90], ['0405', 3, '10-12', 75], ['0334', 3, '12-15', 60], ['0313', 3, '12-15', 45]] },
+          { title: 'Lower A', exIds: [['1760', 4, '10-12', 90], ['1459', 4, '10-12', 90], ['0336', 3, '10-12', 60], ['0431', 3, '10-12', 60]] },
+          { title: 'Upper B', exIds: [['0308', 4, '10-12', 75], ['0300', 4, '8-12', 90], ['2137', 3, '10-12', 75], ['0351', 3, '12-15', 60]] },
+          { title: 'Lower B', exIds: [['1459', 4, '10-12', 90], ['1760', 4, '12-15', 75], ['3013', 4, '15-20', 45], ['0417', 3, '20-25', 45]] },
+        ];
+      } else {
+        programName = 'Home Full Body';
+        programDesc = 'Three full-body sessions using dumbbells and bodyweight — perfect for training at home.';
+        days = [
+          { title: 'Full Body A', exIds: [['0289', 3, '10-12', 75], ['0293', 3, '10-12', 75], ['1760', 3, '12-15', 75], ['0405', 3, '10-12', 60]] },
+          { title: 'Full Body B', exIds: [['1459', 3, '10-12', 75], ['0308', 3, '12-15', 60], ['0336', 3, '10-12', 60], ['0334', 3, '12-15', 45]] },
+          { title: 'Full Body C', exIds: [['1760', 3, '12-15', 75], ['0293', 3, '10-12', 75], ['0313', 3, '12-15', 45], ['0351', 3, '12-15', 45]] },
+        ];
+      }
+    } else {
+      // ── GYM programs (barbell + machine) ─────────────────────────────────
+      if (profile.trainingDays >= 5) {
+        programName = '6-Day Push/Pull/Legs';
+        programDesc = 'High-frequency PPL hitting each muscle group twice weekly for maximum hypertrophy.';
+        days = [
+          { title: 'Push A', exIds: [['0025', 4, '6-8', 120], ['0091', 3, '8-10', 90], ['0314', 3, '10-12', 90], ['0334', 4, '12-15', 60], ['0241', 3, '10-12', 60]] },
+          { title: 'Pull A', exIds: [['0032', 3, '5', 150], ['2330', 4, '8-10', 90], ['0861', 3, '10-12', 90], ['0203', 4, '15-20', 60], ['0031', 3, '10-12', 60]] },
+          { title: 'Legs A', exIds: [['0043', 4, '6-8', 120], ['0085', 3, '8-10', 90], ['2287', 3, '10-12', 90], ['0586', 3, '12-15', 60], ['0605', 4, '15-20', 60]] },
+          { title: 'Push B', exIds: [['0047', 4, '6-8', 120], ['0405', 3, '10-12', 90], ['0308', 3, '12-15', 75], ['0334', 4, '12-15', 60], ['0351', 3, '10-12', 60]] },
+          { title: 'Pull B', exIds: [['0027', 4, '6-8', 120], ['0652', 4, '6-10', 90], ['0861', 3, '10-12', 90], ['0203', 3, '15-20', 60], ['0313', 3, '10-12', 60]] },
+          { title: 'Legs B', exIds: [['0043', 4, '8-10', 120], ['0085', 4, '8-10', 90], ['0585', 3, '12-15', 60], ['0586', 3, '12-15', 60], ['0605', 4, '15-20', 60]] },
+        ];
+      } else if (profile.trainingDays === 4) {
+        programName = '4-Day Upper/Lower Split';
+        programDesc = 'Hits each muscle group twice weekly with three rest days — ideal for steady progression.';
+        days = [
+          { title: 'Upper A', exIds: [['0314', 4, '8-10', 90], ['0027', 4, '8-10', 90], ['0405', 3, '10-12', 90], ['0652', 3, '6-10', 90], ['0313', 3, '10-12', 60], ['0351', 3, '10-12', 60]] },
+          { title: 'Lower A', exIds: [['0043', 4, '6-8', 120], ['0085', 4, '8-10', 90], ['0336', 3, '12', 60], ['0605', 4, '12-15', 60], ['0274', 3, '15-20', 60]] },
+          { title: 'Upper B', exIds: [['0025', 4, '8-12', 90], ['2330', 4, '8-10', 90], ['0091', 3, '8-12', 90], ['0334', 3, '12-15', 60], ['0241', 3, '12-15', 60]] },
+          { title: 'Lower B', exIds: [['0032', 4, '5', 150], ['2287', 4, '10-12', 90], ['0585', 3, '12-15', 60], ['0586', 3, '12-15', 60], ['0605', 4, '15-20', 60]] },
+        ];
+      } else {
+        programName = '3-Day Full Body';
+        programDesc = 'Beginner-friendly full-body plan built on heavy compound movements.';
+        days = [
+          { title: 'Full Body A', exIds: [['0043', 3, '8-10', 90], ['0025', 3, '8-10', 90], ['2330', 3, '10-12', 90], ['0334', 3, '12-15', 60], ['0464', 3, '60s', 60]] },
+          { title: 'Full Body B', exIds: [['0085', 3, '8-10', 90], ['0314', 3, '10-12', 90], ['0027', 3, '8-10', 90], ['0313', 3, '10-12', 60], ['0464', 3, '60s', 60]] },
+          { title: 'Full Body C', exIds: [['0043', 3, '8-10', 90], ['0091', 3, '8-10', 90], ['0652', 3, '6-10', 90], ['0241', 3, '10-15', 60], ['0274', 3, '15-20', 60]] },
+        ];
+      }
     }
 
     const program = this.programRepository.create({
       name: programName,
       description: programDesc,
       level,
+      location: isHome ? 'home' : 'gym',
     });
     const savedProgram = await this.programRepository.save(program);
 
-    const daysToCreate: { title: string; dayNumber: number; exercises: { name: string; sets: number; reps: string; rest: number }[] }[] = [];
-
-    if (profile.trainingDays === 4) {
-      program.name = `4-Day Upper / Lower Split`;
-      program.description = `Optimized schedule targeting upper body and lower body twice a week.`;
-      
-      daysToCreate.push(
-        {
-          title: 'Upper Body A',
-          dayNumber: 1,
-          exercises: [
-            { name: 'Bench Press', sets: 4, reps: '8-12', rest: 90 },
-            { name: 'Barbell Row', sets: 4, reps: '8-12', rest: 90 },
-            { name: 'Overhead Press', sets: 3, reps: '8-12', rest: 90 },
-            { name: 'Pull-up', sets: 3, reps: '8-10', rest: 90 },
-            { name: 'Bicep Curl', sets: 3, reps: '10-15', rest: 60 },
-          ],
-        },
-        {
-          title: 'Lower Body A',
-          dayNumber: 2,
-          exercises: [
-            { name: 'Barbell Squat', sets: 4, reps: '8-12', rest: 120 },
-            { name: 'Romanian Deadlift', sets: 4, reps: '8-12', rest: 120 },
-            { name: 'Leg Extension', sets: 3, reps: '10-15', rest: 60 },
-            { name: 'Lying Leg Curl', sets: 3, reps: '10-15', rest: 60 },
-          ],
-        },
-        {
-          title: 'Upper Body B',
-          dayNumber: 3,
-          exercises: [
-            { name: 'Incline Dumbbell Press', sets: 4, reps: '8-12', rest: 90 },
-            { name: 'Barbell Row', sets: 4, reps: '8-12', rest: 90 },
-            { name: 'Dumbbell Lateral Raise', sets: 3, reps: '12-15', rest: 60 },
-            { name: 'Tricep Pushdown', sets: 3, reps: '10-15', rest: 60 },
-          ],
-        },
-        {
-          title: 'Lower Body B',
-          dayNumber: 4,
-          exercises: [
-            { name: 'Barbell Squat', sets: 4, reps: '8-12', rest: 120 },
-            { name: 'Romanian Deadlift', sets: 4, reps: '8-12', rest: 120 },
-            { name: 'Lying Leg Curl', sets: 3, reps: '10-15', rest: 60 },
-            { name: 'Leg Extension', sets: 3, reps: '10-15', rest: 60 },
-          ],
-        },
+    for (let di = 0; di < days.length; di++) {
+      const daySpec = days[di];
+      const pDay = await this.programDayRepository.save(
+        this.programDayRepository.create({
+          programId: savedProgram.id,
+          dayNumber: di + 1,
+          title: daySpec.title,
+        }),
       );
-    } else if (profile.trainingDays === 3) {
-      program.name = `3-Day Push Pull Legs (PPL)`;
-      program.description = `Classic hypertrophy routine focusing on specific movement patterns.`;
-      
-      daysToCreate.push(
-        {
-          title: 'Push Day',
-          dayNumber: 1,
-          exercises: [
-            { name: 'Bench Press', sets: 4, reps: '8-12', rest: 90 },
-            { name: 'Incline Dumbbell Press', sets: 3, reps: '8-12', rest: 90 },
-            { name: 'Overhead Press', sets: 3, reps: '8-12', rest: 90 },
-            { name: 'Tricep Pushdown', sets: 3, reps: '10-15', rest: 60 },
-          ],
-        },
-        {
-          title: 'Pull Day',
-          dayNumber: 2,
-          exercises: [
-            { name: 'Pull-up', sets: 4, reps: '8-10', rest: 90 },
-            { name: 'Barbell Row', sets: 4, reps: '8-12', rest: 90 },
-            { name: 'Dumbbell Lateral Raise', sets: 3, reps: '12-15', rest: 60 },
-            { name: 'Bicep Curl', sets: 3, reps: '10-15', rest: 60 },
-          ],
-        },
-        {
-          title: 'Legs Day',
-          dayNumber: 3,
-          exercises: [
-            { name: 'Barbell Squat', sets: 4, reps: '8-12', rest: 120 },
-            { name: 'Romanian Deadlift', sets: 4, reps: '8-12', rest: 120 },
-            { name: 'Leg Extension', sets: 3, reps: '10-15', rest: 60 },
-            { name: 'Lying Leg Curl', sets: 3, reps: '10-15', rest: 60 },
-          ],
-        },
-      );
-    } else {
-      program.name = `Full Body Routine`;
-      program.description = `Compact compound movement schedule for overall physical conditioning.`;
-      
-      daysToCreate.push(
-        {
-          title: 'Full Body A',
-          dayNumber: 1,
-          exercises: [
-            { name: 'Barbell Squat', sets: 4, reps: '8-12', rest: 120 },
-            { name: 'Bench Press', sets: 4, reps: '8-12', rest: 90 },
-            { name: 'Barbell Row', sets: 4, reps: '8-12', rest: 90 },
-            { name: 'Dumbbell Lateral Raise', sets: 3, reps: '12-15', rest: 60 },
-          ],
-        },
-        {
-          title: 'Full Body B',
-          dayNumber: 2,
-          exercises: [
-            { name: 'Romanian Deadlift', sets: 4, reps: '8-12', rest: 120 },
-            { name: 'Incline Dumbbell Press', sets: 4, reps: '8-12', rest: 90 },
-            { name: 'Pull-up', sets: 3, reps: '8-10', rest: 90 },
-            { name: 'Bicep Curl', sets: 3, reps: '10-15', rest: 60 },
-          ],
-        },
-      );
-    }
-
-    await this.programRepository.save(program);
-
-    for (const d of daysToCreate) {
-      const pDay = this.programDayRepository.create({
-        programId: savedProgram.id,
-        dayNumber: d.dayNumber,
-        title: d.title,
-      });
-      const savedDay = await this.programDayRepository.save(pDay);
 
       let order = 1;
-      for (const e of d.exercises) {
-        const exerciseId = getExId(e.name);
+      for (const [extId, sets, reps, rest] of daySpec.exIds) {
+        const exerciseId = ex(extId);
         if (exerciseId) {
-          const dayEx = this.programDayExerciseRepository.create({
-            programDayId: savedDay.id,
-            exerciseId,
-            order: order++,
-            targetSets: e.sets,
-            targetRepsRange: e.reps,
-            targetRestTime: e.rest,
-          });
-          await this.programDayExerciseRepository.save(dayEx);
+          await this.programDayExerciseRepository.save(
+            this.programDayExerciseRepository.create({
+              programDayId: pDay.id,
+              exerciseId,
+              order: order++,
+              targetSets: sets,
+              targetRepsRange: reps,
+              targetRestTime: rest,
+            }),
+          );
         }
       }
     }
 
     await this.profilesService.assignProgram(userId, savedProgram.id);
-
     return this.findById(savedProgram.id);
   }
 

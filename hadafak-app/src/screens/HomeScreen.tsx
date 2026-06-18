@@ -22,29 +22,36 @@ import { useAlert } from '../components/CustomAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../theme/colors';
 import {
-  Bike,
-  Flame,
-  TrendingUp,
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   MoreVertical,
   Play,
-  Heart,
-  Footprints,
-  Sparkles,
-  Award,
-  Zap,
-  Dumbbell,
-  Waves,
-  Compass,
-  Activity,
   X,
   Clock,
   Trash2,
   Utensils,
   BookOpen,
 } from 'lucide-react-native';
+import {
+  BikeIcon,
+  FireIcon,
+  TreadmillIcon,
+  WalkIcon,
+  HikingIcon,
+  JumpRopeIcon,
+  EllipticalIcon,
+  SwimIcon,
+  RowingIcon,
+  HeartPulseIcon,
+  HeartIcon,
+  HeartOutlineIcon,
+  LightningIcon,
+  TrophyIcon,
+  DumbbellIcon,
+  ShoeIcon,
+  ChartLineIcon,
+} from '../components/icons/fitness';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
 import { StateFeedback } from '../components/StateFeedback';
@@ -53,16 +60,16 @@ import { storage } from '../utils/storage';
 const { width } = Dimensions.get('window');
 
 const CARDIO_EXERCISES = [
-  { id: 'cycling', name: 'Cycling', icon: Bike, type: 'cycling', category: 'run' },
-  { id: 'running', name: 'Running', icon: Flame, type: 'run', category: 'run' },
-  { id: 'treadmill', name: 'Treadmill', icon: Activity, type: 'run', category: 'run' },
-  { id: 'walking', name: 'Walking', icon: Footprints, type: 'walk', category: 'run' },
-  { id: 'hiking', name: 'Hiking', icon: Compass, type: 'hiking', category: 'run' },
-  { id: 'rope', name: 'Jump Rope', icon: TrendingUp, type: 'rope', category: 'steps' },
-  { id: 'elliptical', name: 'Elliptical', icon: Sparkles, type: 'walk', category: 'run' },
-  { id: 'swimming', name: 'Swimming', icon: Waves, type: 'run', category: 'run' },
-  { id: 'rowing', name: 'Rowing', icon: Dumbbell, type: 'run', category: 'run' },
-  { id: 'hiit', name: 'HIIT Cardio', icon: Heart, type: 'run', category: 'run' },
+  { id: 'cycling', name: 'Cycling', icon: BikeIcon, type: 'cycling', category: 'run' },
+  { id: 'running', name: 'Running', icon: FireIcon, type: 'run', category: 'run' },
+  { id: 'treadmill', name: 'Treadmill', icon: TreadmillIcon, type: 'run', category: 'run' },
+  { id: 'walking', name: 'Walking', icon: WalkIcon, type: 'walk', category: 'run' },
+  { id: 'hiking', name: 'Hiking', icon: HikingIcon, type: 'hiking', category: 'run' },
+  { id: 'rope', name: 'Jump Rope', icon: JumpRopeIcon, type: 'rope', category: 'steps' },
+  { id: 'elliptical', name: 'Elliptical', icon: EllipticalIcon, type: 'walk', category: 'run' },
+  { id: 'swimming', name: 'Swimming', icon: SwimIcon, type: 'run', category: 'run' },
+  { id: 'rowing', name: 'Rowing', icon: RowingIcon, type: 'run', category: 'run' },
+  { id: 'hiit', name: 'HIIT Cardio', icon: HeartPulseIcon, type: 'run', category: 'run' },
 ];
 
 const MiniProgressCircle: React.FC<{
@@ -868,7 +875,7 @@ export const HomeScreen: React.FC = () => {
                   size={46}
                   strokeWidth={4.5}
                 >
-                  <Flame size={18} color="#E65100" />
+                  <FireIcon size={18} color="#E65100" />
                 </MiniProgressCircle>
                 <View style={styles.progressRingCardTextContainer}>
                   <Text style={styles.progressRingValue}>
@@ -889,7 +896,7 @@ export const HomeScreen: React.FC = () => {
                   size={46}
                   strokeWidth={4.5}
                 >
-                  <Zap size={16} color="#A21CAF" />
+                  <LightningIcon size={16} color="#A21CAF" />
                 </MiniProgressCircle>
                 <View style={styles.progressRingCardTextContainer}>
                   <Text style={styles.progressRingValue}>
@@ -944,7 +951,7 @@ export const HomeScreen: React.FC = () => {
                     {activeBarIndex === idx && (
                       <View style={styles.tooltip}>
                         <View style={styles.tooltipPill}>
-                          <Flame size={12} color={COLORS.textInverse} style={{ marginRight: 4 }} />
+                          <FireIcon size={12} color={COLORS.textInverse} style={{ marginRight: 4 }} />
                           <Text style={styles.tooltipText}>{(bar.calories || 0).toLocaleString()} Kcal</Text>
                         </View>
                         <Text style={styles.tooltipSub}>{(bar.steps || 0).toLocaleString()} steps</Text>
@@ -1032,7 +1039,7 @@ export const HomeScreen: React.FC = () => {
           >
             <View style={styles.planHeader}>
               <View style={styles.planIconWrapper}>
-                <Zap size={20} color={COLORS.textInverse} />
+                <LightningIcon size={20} color={COLORS.textInverse} />
               </View>
               <View style={styles.planTitleContainer}>
                 <Text style={styles.planSub}>{myPlan.level}</Text>
@@ -1087,11 +1094,10 @@ export const HomeScreen: React.FC = () => {
                     onPress={() => toggleFavorite(recipe.id)}
                     activeOpacity={0.7}
                   >
-                    <Heart
-                      size={16}
-                      color={isFavorite ? '#EF4444' : '#9CA3AF'}
-                      fill={isFavorite ? '#EF4444' : 'transparent'}
-                    />
+                    {isFavorite
+                      ? <HeartIcon size={16} color="#EF4444" />
+                      : <HeartOutlineIcon size={16} color="#9CA3AF" />
+                    }
                   </TouchableOpacity>
 
                   <View style={styles.recipeCardMainRow}>
@@ -1208,7 +1214,7 @@ export const HomeScreen: React.FC = () => {
             <View style={[styles.infoMiniCard, { width: '48%' }]}>
               <View style={styles.miniHeader}>
                 <Text style={styles.miniTitle}>Steps</Text>
-                <Footprints size={20} color={COLORS.primary} />
+                <ShoeIcon size={20} color={COLORS.primary} />
               </View>
               <Text style={styles.miniValue}>{todaySteps}</Text>
               <Text style={styles.miniLabel}>Steps</Text>
@@ -1228,7 +1234,7 @@ export const HomeScreen: React.FC = () => {
             <View style={[styles.infoMiniCard, { width: '48%' }]}>
               <View style={styles.miniHeader}>
                 <Text style={styles.miniTitle}>{weightProgressTitle}</Text>
-                <TrendingUp size={20} color={COLORS.primary} />
+                <ChartLineIcon size={20} color={COLORS.primary} />
               </View>
               <Text style={styles.miniValue}>{weightProgressValue}</Text>
               <Text style={styles.miniLabel}>Total change</Text>
@@ -1238,7 +1244,7 @@ export const HomeScreen: React.FC = () => {
           {/* Bottom Referral Card */}
           <View style={styles.referralCard}>
             <View style={styles.referralIconWrapper}>
-              <Award size={24} color={COLORS.primary} />
+              <TrophyIcon size={24} color={COLORS.primary} />
             </View>
             <View style={styles.referralContent}>
               <Text style={styles.referralSub}>Invite your friends</Text>
@@ -1450,7 +1456,7 @@ export const HomeScreen: React.FC = () => {
 
                     {selectedWorkoutSession.rpe && (
                       <View style={styles.detailMetaItem}>
-                        <Award size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                        <TrophyIcon size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
                         <Text style={styles.detailMetaText}>RPE: {selectedWorkoutSession.rpe}/10</Text>
                       </View>
                     )}

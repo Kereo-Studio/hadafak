@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { ProgramsService } from './programs.service';
+import type { ProgramLocation } from './entities/program.entity';
 import { ProgramLevel } from './entities/program.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -13,10 +14,10 @@ export class ProgramsController {
   constructor(private readonly programsService: ProgramsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all gym programs' })
+  @ApiOperation({ summary: 'Get programs, optionally filtered by location (gym|home)' })
   @ApiResponse({ status: 200, description: 'Programs successfully retrieved.' })
-  async findAll() {
-    return this.programsService.findAll();
+  async findAll(@Query('location') location?: string) {
+    return this.programsService.findAll(location as ProgramLocation | undefined);
   }
 
   @Post('generate')

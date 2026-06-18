@@ -20,7 +20,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
 import { COLORS, SHADOWS } from '../theme/colors';
 import {
-  Dumbbell,
   Play,
   Check,
   Trash2,
@@ -28,22 +27,26 @@ import {
   X,
   PlusCircle,
   MinusCircle,
-  Timer,
-  Award,
   Clock,
   ChevronRight,
   ChevronDown,
   RefreshCw,
-  TrendingUp,
   Edit2,
   Plus,
   BookOpen,
-  Sparkles,
-  Zap,
   ImageOff,
   Eye,
   EyeOff,
 } from 'lucide-react-native';
+import {
+  DumbbellIcon,
+  RunIcon,
+  TrophyIcon,
+  ChartLineIcon,
+  TimerIcon,
+  LightningIcon,
+  CreationIcon,
+} from '../components/icons/fitness';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText, G } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
 import { programService } from '../services/programService';
@@ -311,7 +314,7 @@ export const WorkoutsScreen: React.FC = () => {
           type="empty"
           title="No Runs Logged Yet"
           description="Get outside and track your first run, walk, or cycling route!"
-          icon={<Award size={36} color={COLORS.primary} />}
+          icon={<TrophyIcon size={36} color={COLORS.primary} />}
         />
       );
     }
@@ -342,7 +345,7 @@ export const WorkoutsScreen: React.FC = () => {
                 <View style={styles.miniRouteContainer}>
                   {renderMiniRoutePath(run.routeCoordinates) || (
                     <View style={styles.miniRoutePlaceholder}>
-                      <Award size={16} color={COLORS.textMuted} />
+                      <TrophyIcon size={16} color={COLORS.textMuted} />
                     </View>
                   )}
                 </View>
@@ -392,6 +395,7 @@ export const WorkoutsScreen: React.FC = () => {
   const [allPrograms, setAllPrograms] = useState<any[]>([]);
   const [isProgramSelectorVisible, setIsProgramSelectorVisible] = useState(false);
   const [fetchingPrograms, setFetchingPrograms] = useState(false);
+  const [programSelectorTab, setProgramSelectorTab] = useState<'gym' | 'home'>('gym');
 
   // Create custom program states
   const [isCustomProgramModalVisible, setIsCustomProgramModalVisible] = useState(false);
@@ -583,6 +587,10 @@ export const WorkoutsScreen: React.FC = () => {
   const handleOpenProgramSelector = async () => {
     setIsProgramSelectorVisible(true);
     setFetchingPrograms(true);
+    // Default tab to current program's location
+    if (currentProgram?.location === 'home' || currentProgram?.location === 'gym') {
+      setProgramSelectorTab(currentProgram.location);
+    }
     try {
       const res = await api.get('/programs');
       setAllPrograms(res.data || []);
@@ -1720,7 +1728,7 @@ export const WorkoutsScreen: React.FC = () => {
                 onPress={() => setActiveTab('runs')}
                 activeOpacity={0.8}
               >
-                <TrendingUp size={16} color={activeTab === 'runs' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 4 }} />
+                <ChartLineIcon size={16} color={activeTab === 'runs' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 4 }} />
                 <Text style={[styles.tabButtonText, activeTab === 'runs' && styles.tabButtonTextActive]}>
                   Runs
                 </Text>
@@ -1730,7 +1738,7 @@ export const WorkoutsScreen: React.FC = () => {
                 onPress={() => setActiveTab('plan')}
                 activeOpacity={0.8}
               >
-                <Dumbbell size={16} color={activeTab === 'plan' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 4 }} />
+                <DumbbellIcon size={16} color={activeTab === 'plan' ? COLORS.primary : COLORS.textMuted} style={{ marginRight: 4 }} />
                 <Text style={[styles.tabButtonText, activeTab === 'plan' && styles.tabButtonTextActive]}>
                   Plans
                 </Text>
@@ -1743,7 +1751,7 @@ export const WorkoutsScreen: React.FC = () => {
                 <View style={styles.chartCard}>
                   <View style={styles.chartHeader}>
                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
-                      <TrendingUp size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                      <ChartLineIcon size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
                       <Text style={styles.chartTitle} numberOfLines={1}>Training Volume (kg)</Text>
                     </View>
                     <View style={styles.periodSwitchContainer}>
@@ -1847,7 +1855,7 @@ export const WorkoutsScreen: React.FC = () => {
 
                 {/* Glowing Start Session Card */}
                 <View style={styles.startSessionCard}>
-                  <Dumbbell size={38} color={COLORS.textInverse} style={{ marginBottom: 12 }} />
+                  <DumbbellIcon size={38} color={COLORS.textInverse} style={{ marginBottom: 12 }} />
                   <Text style={styles.startCardTitle}>Ready for your lift?</Text>
                   <Text style={styles.startCardSub}>Start an empty log session, add exercises, and record progression.</Text>
                   <TouchableOpacity
@@ -1927,7 +1935,7 @@ export const WorkoutsScreen: React.FC = () => {
                     type="empty"
                     title="No Workouts Logged Yet"
                     description="Your fitness journey starts now! Log your first workout today."
-                    icon={<Award size={36} color={COLORS.primary} />}
+                    icon={<TrophyIcon size={36} color={COLORS.primary} />}
                   />
                 )}
               </View>
@@ -1968,7 +1976,7 @@ export const WorkoutsScreen: React.FC = () => {
                           onPress={() => setIsGenModalVisible(true)}
                           activeOpacity={0.8}
                         >
-                          <Sparkles size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <CreationIcon size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
                           <Text style={styles.planCardBtnSolidText} numberOfLines={1}>Generator</Text>
                         </TouchableOpacity>
                       </View>
@@ -2077,7 +2085,7 @@ export const WorkoutsScreen: React.FC = () => {
                                         <Edit2 size={16} color={COLORS.textLight} />
                                       </TouchableOpacity>
                                       <TouchableOpacity
-                                        style={[styles.planExActionBtn, { marginLeft: 12 }]}
+                                        style={styles.planExActionBtn}
                                         onPress={() => handleRemovePlanEx(we.id)}
                                         activeOpacity={0.7}
                                       >
@@ -2100,16 +2108,45 @@ export const WorkoutsScreen: React.FC = () => {
                 ) : currentProgram ? (
                   <View>
                     <View style={styles.planInfoCard}>
-                      <View style={styles.planInfoTitleRow}>
-                        <Text style={styles.planProgramTitle}>{currentProgram.name}</Text>
-                        <View style={styles.planBadgeContainer}>
-                          <Text style={styles.planBadgeText}>
-                            {currentProgram.level?.toUpperCase() || 'BEGINNER'}
+                      {/* Header: level pill + days/week chip */}
+                      <View style={styles.planCardHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={[
+                            styles.planLevelPill,
+                            currentProgram.level === 'advanced'     && { backgroundColor: '#FEF2F2' },
+                            currentProgram.level === 'intermediate' && { backgroundColor: '#FFF7ED' },
+                            (!currentProgram.level || currentProgram.level === 'beginner') && { backgroundColor: '#ECFDF5' },
+                          ]}>
+                            <Text style={[
+                              styles.planLevelText,
+                              currentProgram.level === 'advanced'     && { color: '#DC2626' },
+                              currentProgram.level === 'intermediate' && { color: '#EA580C' },
+                              (!currentProgram.level || currentProgram.level === 'beginner') && { color: '#059669' },
+                            ]}>
+                              {currentProgram.level?.toUpperCase() || 'BEGINNER'}
+                            </Text>
+                          </View>
+                          <View style={styles.planLocationChip}>
+                            {currentProgram.location === 'home'
+                              ? <RunIcon size={11} color={COLORS.textLight} />
+                              : <DumbbellIcon size={11} color={COLORS.textLight} />
+                            }
+                            <Text style={styles.planLocationChipText}>
+                              {currentProgram.location === 'home' ? 'Home' : 'Gym'}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.planDaysChip}>
+                          <Text style={styles.planDaysChipText}>
+                            {currentProgram.days?.length || 0} days / week
                           </Text>
                         </View>
                       </View>
 
+                      <Text style={styles.planProgramTitle}>{currentProgram.name}</Text>
                       <Text style={styles.planProgramDesc}>{currentProgram.description}</Text>
+
+                      <View style={styles.planDivider} />
 
                       <View style={styles.planActionRow}>
                         <TouchableOpacity
@@ -2129,7 +2166,10 @@ export const WorkoutsScreen: React.FC = () => {
                           {isRegenerating ? (
                             <ActivityIndicator size="small" color="#FFFFFF" />
                           ) : (
-                            <Text style={styles.planCardBtnSolidText}>Re-generate</Text>
+                            <>
+                              <RefreshCw size={13} color="#FFFFFF" style={{ marginRight: 6 }} />
+                              <Text style={styles.planCardBtnSolidText}>Re-generate</Text>
+                            </>
                           )}
                         </TouchableOpacity>
                       </View>
@@ -2139,7 +2179,7 @@ export const WorkoutsScreen: React.FC = () => {
                         onPress={handleOpenCustomProgramModal}
                         activeOpacity={0.8}
                       >
-                        <Plus size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                        <Plus size={15} color={COLORS.primary} style={{ marginRight: 6 }} />
                         <Text style={styles.planCreateCustomBtnText}>Create Custom Plan</Text>
                       </TouchableOpacity>
                     </View>
@@ -2192,7 +2232,11 @@ export const WorkoutsScreen: React.FC = () => {
                               day.exercises.map((pde: any, eIdx: number) => (
                                 <View key={pde.id || eIdx} style={styles.planExRow}>
                                   <View style={{ flex: 1, paddingRight: 8 }}>
-                                    <Text style={styles.planExName}>{pde.exercise?.name || 'Exercise'}</Text>
+                                    <Text style={styles.planExName}>
+                                      {pde.exercise?.displayName
+                                        || pde.exercise?.name?.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+                                        || 'Exercise'}
+                                    </Text>
                                     <Text style={styles.planExDetails}>
                                       {pde.targetSets || 3} sets × {pde.targetRepsRange || '8-12'} reps
                                     </Text>
@@ -2207,7 +2251,7 @@ export const WorkoutsScreen: React.FC = () => {
                                       <Edit2 size={16} color={COLORS.textLight} />
                                     </TouchableOpacity>
                                     <TouchableOpacity
-                                      style={[styles.planExActionBtn, { marginLeft: 12 }]}
+                                      style={styles.planExActionBtn}
                                       onPress={() => handleRemovePlanEx(pde.id)}
                                       activeOpacity={0.7}
                                     >
@@ -2228,7 +2272,7 @@ export const WorkoutsScreen: React.FC = () => {
                   </View>
                 ) : (
                   <View style={styles.planEmptyCard}>
-                    <Sparkles size={40} color={COLORS.primary} style={{ marginBottom: 12 }} />
+                    <CreationIcon size={40} color={COLORS.primary} style={{ marginBottom: 12 }} />
                     <Text style={styles.planEmptyText}>No training plan assigned yet.</Text>
                     <TouchableOpacity
                       style={styles.planEmptyBtn}
@@ -2324,7 +2368,7 @@ export const WorkoutsScreen: React.FC = () => {
                         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                           {ae.source === 'exercicedb' && (
                             <View style={styles.badgeExerciseDb}>
-                              <Zap size={10} color="#7C3AED" style={{ marginRight: 3 }} />
+                              <LightningIcon size={10} color="#7C3AED" style={{ marginRight: 3 }} />
                               <Text style={styles.badgeTextExerciseDb}>ExerciseDB</Text>
                             </View>
                           )}
@@ -2472,7 +2516,7 @@ export const WorkoutsScreen: React.FC = () => {
                 type="empty"
                 title="Your active routine is empty"
                 description="Tap 'Add Exercise' below to select and log exercises to this workout!"
-                icon={<Dumbbell size={34} color={COLORS.primary} />}
+                icon={<DumbbellIcon size={34} color={COLORS.primary} />}
               />
             )}
 
@@ -2555,7 +2599,7 @@ export const WorkoutsScreen: React.FC = () => {
                         </Text>
                         {(item as any).source === 'exercicedb' && (
                           <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#7C3AED22', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                            <Zap size={9} color="#7C3AED" style={{ marginRight: 2 }} />
+                            <LightningIcon size={9} color="#7C3AED" style={{ marginRight: 2 }} />
                             <Text style={{ fontSize: 9, color: '#7C3AED', fontWeight: '600' }}>ExerciseDB</Text>
                           </View>
                         )}
@@ -2585,7 +2629,7 @@ export const WorkoutsScreen: React.FC = () => {
       >
         <View style={styles.finishModalOverlay}>
           <View style={styles.finishModalContent}>
-            <Award size={36} color={COLORS.primary} style={{ marginBottom: 8, opacity: 0.9 }} />
+            <TrophyIcon size={36} color={COLORS.primary} style={{ marginBottom: 8, opacity: 0.9 }} />
             <Text style={styles.finishModalTitle}>How was your workout?</Text>
             
             <Text style={styles.finishModalSubText}>
@@ -2663,7 +2707,7 @@ export const WorkoutsScreen: React.FC = () => {
 
             {/* Adaptation hint */}
             <View style={[styles.adaptHintRow, { backgroundColor: getRpeColor(parseInt(rpe)) + '12' }]}>
-              <Zap size={12} color={getRpeColor(parseInt(rpe))} style={{ marginRight: 6 }} />
+              <LightningIcon size={12} color={getRpeColor(parseInt(rpe))} style={{ marginRight: 6 }} />
               <Text style={[styles.adaptHintText, { color: getRpeColor(parseInt(rpe)) }]}>
                 {getRpeAdaptationText(parseInt(rpe))}
               </Text>
@@ -2727,7 +2771,7 @@ export const WorkoutsScreen: React.FC = () => {
                     
                     {selectedWorkoutSession.rpe && (
                       <View style={styles.detailMetaItem}>
-                        <Award size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                        <TrophyIcon size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
                         <Text style={styles.detailMetaText}>RPE: {selectedWorkoutSession.rpe}/10</Text>
                       </View>
                     )}
@@ -2782,19 +2826,41 @@ export const WorkoutsScreen: React.FC = () => {
         transparent={true}
         onRequestClose={() => setIsProgramSelectorVisible(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
           onPress={() => setIsProgramSelectorVisible(false)}
         >
           <TouchableWithoutFeedback>
-            <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            <View style={[styles.modalContent, { maxHeight: '85%' }]}>
               <View style={styles.modalHeaderRow}>
                 <Text style={styles.modalTitleText}>Choose Workout Program</Text>
-                <TouchableOpacity 
-                  onPress={() => setIsProgramSelectorVisible(false)}
-                >
+                <TouchableOpacity onPress={() => setIsProgramSelectorVisible(false)}>
                   <X size={20} color={COLORS.textLight} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Home / Gym tab toggle */}
+              <View style={styles.programSelectorTabs}>
+                <TouchableOpacity
+                  style={[styles.programSelectorTab, programSelectorTab === 'gym' && styles.programSelectorTabActive]}
+                  onPress={() => setProgramSelectorTab('gym')}
+                  activeOpacity={0.8}
+                >
+                  <DumbbellIcon size={14} color={programSelectorTab === 'gym' ? COLORS.primary : COLORS.textLight} />
+                  <Text style={[styles.programSelectorTabText, programSelectorTab === 'gym' && styles.programSelectorTabTextActive]}>
+                    Gym
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.programSelectorTab, programSelectorTab === 'home' && styles.programSelectorTabActive]}
+                  onPress={() => setProgramSelectorTab('home')}
+                  activeOpacity={0.8}
+                >
+                  <RunIcon size={14} color={programSelectorTab === 'home' ? COLORS.primary : COLORS.textLight} />
+                  <Text style={[styles.programSelectorTabText, programSelectorTab === 'home' && styles.programSelectorTabTextActive]}>
+                    Home
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -2804,33 +2870,45 @@ export const WorkoutsScreen: React.FC = () => {
                 </View>
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-                  {allPrograms.map((program) => (
-                    <TouchableOpacity
-                      key={program.id}
-                      style={[
-                        styles.programSelectCard,
-                        currentProgram?.id === program.id && styles.programSelectCardActive
-                      ]}
-                      onPress={() => handleSelectProgram(program.id)}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.programSelectHeader}>
-                        <Text style={styles.programSelectName}>{program.name}</Text>
-                        <View style={styles.programLevelBadge}>
-                          <Text style={styles.programLevelBadgeText}>
-                            {program.level || 'Beginner'}
+                  {allPrograms
+                    .filter((p) => (p.location || 'gym') === programSelectorTab)
+                    .map((program) => {
+                      const isActive = currentProgram?.id === program.id;
+                      const lvl = (program.level || 'beginner').toLowerCase();
+                      const levelColor = lvl === 'advanced' ? '#DC2626' : lvl === 'intermediate' ? '#EA580C' : '#059669';
+                      const levelBg   = lvl === 'advanced' ? '#FEF2F2' : lvl === 'intermediate' ? '#FFF7ED' : '#ECFDF5';
+                      return (
+                        <TouchableOpacity
+                          key={program.id}
+                          style={[styles.programSelectCard, isActive && styles.programSelectCardActive]}
+                          onPress={() => handleSelectProgram(program.id)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={styles.programSelectHeader}>
+                            <Text style={[styles.programSelectName, isActive && { color: COLORS.primary }]} numberOfLines={2}>
+                              {program.name}
+                            </Text>
+                            <View style={[styles.programLevelBadge, { backgroundColor: levelBg }]}>
+                              <Text style={[styles.programLevelBadgeText, { color: levelColor }]}>
+                                {program.level?.toUpperCase() || 'BEGINNER'}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.programSelectDesc} numberOfLines={2}>{program.description}</Text>
+                          <Text style={styles.programSelectDaysCount}>
+                            {program.days?.length || 0} training days / week
                           </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.programSelectDesc}>{program.description}</Text>
-                      <Text style={styles.programSelectDaysCount}>
-                        Schedule: {program.days?.length || 0} training days
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                  {allPrograms.length === 0 && (
-                    <Text style={{ textAlign: 'center', color: COLORS.textMuted, marginTop: 20 }}>
-                      No programs available.
+                          {isActive && (
+                            <View style={styles.programSelectActiveBadge}>
+                              <Text style={styles.programSelectActiveBadgeText}>Current Plan</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  {allPrograms.filter((p) => (p.location || 'gym') === programSelectorTab).length === 0 && !fetchingPrograms && (
+                    <Text style={{ textAlign: 'center', color: COLORS.textMuted, marginTop: 32, fontSize: 14 }}>
+                      No {programSelectorTab} programs available.
                     </Text>
                   )}
                 </ScrollView>
@@ -2977,7 +3055,7 @@ export const WorkoutsScreen: React.FC = () => {
             <View style={[styles.modalContent, { maxHeight: '90%' }]}>
               <View style={styles.modalHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Sparkles size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                  <CreationIcon size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
                   <Text style={styles.modalTitleText}>AI Workout Generator</Text>
                 </View>
                 <TouchableOpacity onPress={() => setIsGenModalVisible(false)}>
@@ -3107,7 +3185,7 @@ export const WorkoutsScreen: React.FC = () => {
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Sparkles size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <CreationIcon size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
                       <Text style={styles.saveCustomProgramBtnText}>Generate My Plan Now</Text>
                     </View>
                   )}
@@ -4279,12 +4357,63 @@ const styles = StyleSheet.create({
   // Plan tab layout styles
   planInfoCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 28,
+    padding: 20,
     marginBottom: 16,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.border,
-    ...SHADOWS.subtle,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.10,
+    shadowRadius: 18,
+    elevation: 5,
+  },
+  planCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  planLevelPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: '#ECFDF5',
+  },
+  planLevelText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: '#059669',
+  },
+  planDaysChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  planDaysChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textLight,
+  },
+  planLocationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  planLocationChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textLight,
   },
   planInfoTitleRow: {
     flexDirection: 'row',
@@ -4293,9 +4422,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   planProgramTitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '800',
     color: COLORS.text,
+    marginBottom: 6,
+    lineHeight: 26,
+    letterSpacing: -0.3,
   },
   planBadgeContainer: {
     backgroundColor: COLORS.primaryLight,
@@ -4309,42 +4441,51 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     letterSpacing: 0.5,
   },
+  planDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 16,
+  },
   planActionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 12,
+    marginBottom: 10,
   },
   planCardBtn: {
     flex: 1,
-    height: 38,
-    borderRadius: 12,
+    height: 46,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
   },
   planCardBtnSolid: {
     backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
   planCardBtnSolidText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   planCardBtnOutline: {
-    backgroundColor: '#F5F5F7',
-    borderWidth: 1,
-    borderColor: '#EAEAEA',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
   },
   planCardBtnOutlineText: {
     color: COLORS.text,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   planProgramDesc: {
     fontSize: 13,
     color: COLORS.textLight,
-    lineHeight: 18,
-    marginBottom: 16,
+    lineHeight: 19,
   },
 
   // Plan split day cards
@@ -4368,19 +4509,22 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   planDayBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.border,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 10,
   },
   planDayBadgeActive: {
     backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   planDayBadgeText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
     color: COLORS.textMuted,
   },
@@ -4388,9 +4532,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   planDayTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: COLORS.text,
+    letterSpacing: -0.2,
   },
   planDayTitleActive: {
     color: COLORS.primary,
@@ -4417,32 +4562,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: COLORS.surfaceLight,
-    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   planExName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: COLORS.text,
+    letterSpacing: -0.1,
   },
   planExDetails: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    marginTop: 2,
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 3,
     fontWeight: '500',
   },
   planExActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   planExActionBtn: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    width: 34,
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: COLORS.surfaceLight,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -4740,30 +4895,66 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
   },
-  programSelectCard: {
+  programSelectorTabs: {
+    flexDirection: 'row',
     backgroundColor: COLORS.surfaceLight,
-    borderRadius: 16,
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  programSelectorTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 11,
+    gap: 6,
+  },
+  programSelectorTabActive: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  programSelectorTabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textLight,
+  },
+  programSelectorTabTextActive: {
+    color: COLORS.primary,
+  },
+  programSelectCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   programSelectCardActive: {
     borderColor: COLORS.primary,
     borderWidth: 2,
+    backgroundColor: COLORS.primaryLight,
   },
   programSelectHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 6,
   },
   programSelectName: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: COLORS.text,
     flex: 1,
     marginRight: 8,
+    letterSpacing: -0.2,
   },
   programSelectDesc: {
     fontSize: 13,
@@ -4776,17 +4967,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.primary,
   },
-  programLevelBadge: {
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  programSelectActiveBadge: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  programLevelBadgeText: {
+  programSelectActiveBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.textMuted,
-    textTransform: 'uppercase',
+    color: '#FFFFFF',
+  },
+  programLevelBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    backgroundColor: '#ECFDF5',
+  },
+  programLevelBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.5,
   },
   runHistoryCard: {
     backgroundColor: '#FFFFFF',
@@ -4875,17 +5079,17 @@ const styles = StyleSheet.create({
   planCreateCustomBtn: {
     backgroundColor: COLORS.primaryLight,
     borderWidth: 1.5,
-    borderColor: COLORS.primary + '1F',
-    borderRadius: 12,
-    height: 40,
+    borderColor: COLORS.primary,
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    height: 46,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
-    marginTop: 10,
   },
   planCreateCustomBtnText: {
     color: COLORS.primary,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   levelSelectorContainer: {

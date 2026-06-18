@@ -18,26 +18,28 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAlert } from '../components/CustomAlert';
 import { COLORS, SHADOWS } from '../theme/colors';
 import {
-  Award,
   User,
   Settings,
-  Scale,
   Calendar,
-  Compass,
   Check,
   ChevronRight,
   ChevronDown,
   Plus,
   Edit2,
   X,
-  Target,
-  Flame,
-  Droplet,
   Camera,
   Trash2,
   Image as ImageIcon,
-  Ruler,
 } from 'lucide-react-native';
+import {
+  TrophyIcon,
+  ScaleIcon,
+  CompassIcon,
+  FireIcon,
+  WaterIcon,
+  RulerIcon,
+  TargetIcon,
+} from '../components/icons/fitness';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText, G } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
 import { programService } from '../services/programService';
@@ -739,13 +741,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             {/* Three column stats badge */}
             <View style={styles.biometricsRow}>
               <View style={styles.bioStatCell}>
-                <Scale size={20} color={COLORS.textLight} style={{ marginBottom: 4 }} />
+                <ScaleIcon size={20} color={COLORS.textLight} style={{ marginBottom: 4 }} />
                 <Text style={styles.bioStatLabel}>Weight</Text>
                 <Text style={styles.bioStatVal}>{profile?.weight || 75} kg</Text>
               </View>
               <View style={styles.dividerCol} />
               <View style={styles.bioStatCell}>
-                <Compass size={20} color={COLORS.textLight} style={{ marginBottom: 4 }} />
+                <CompassIcon size={20} color={COLORS.textLight} style={{ marginBottom: 4 }} />
                 <Text style={styles.bioStatLabel}>Height</Text>
                 <Text style={styles.bioStatVal}>{profile?.height || 178} cm</Text>
               </View>
@@ -763,14 +765,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             onPress={() => setIsMetricsModalVisible(true)}
             style={styles.logBiometricsBtn}
           >
-            <Scale size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <ScaleIcon size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
             <Text style={styles.logBiometricsBtnText}>Log Daily Biometrics</Text>
           </TouchableOpacity>
 
           {/* Coach Insight Message */}
           {analytics?.statusMessage && (
             <View style={styles.insightCard}>
-              <Award size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <TrophyIcon size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
               <Text style={styles.insightText}>{analytics.statusMessage}</Text>
             </View>
           )}
@@ -778,7 +780,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
           {/* SVG Weight Progression Curve Card */}
           <View style={styles.progressCard}>
             <View style={styles.progressHeaderRow}>
-              <Scale size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <ScaleIcon size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
               <Text style={styles.progressTitle}>Weight Transformation Curve (kg)</Text>
             </View>
 
@@ -844,7 +846,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             <View style={styles.targetItem}>
               <View style={styles.targetLeft}>
                 <View style={[styles.targetIconCircle, { backgroundColor: COLORS.primaryLight }]}>
-                  <Flame size={20} color={COLORS.primary} />
+                  <FireIcon size={20} color={COLORS.primary} />
                 </View>
                 <View>
                   <Text style={styles.targetName}>Daily Energy Target</Text>
@@ -857,7 +859,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             <View style={[styles.targetItem, { marginTop: 14 }]}>
               <View style={styles.targetLeft}>
                 <View style={[styles.targetIconCircle, { backgroundColor: '#E0F2FE' }]}>
-                  <Droplet size={20} color="#0284C7" />
+                  <WaterIcon size={20} color="#0284C7" />
                 </View>
                 <View>
                   <Text style={styles.targetName}>Daily Hydration Goal</Text>
@@ -1052,7 +1054,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                 activeOpacity={0.7}
               >
                 <View style={styles.accordionHeaderLeft}>
-                  <Scale size={18} color={activeSection === 'body' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
+                  <ScaleIcon size={18} color={activeSection === 'body' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
                   <Text style={[styles.accordionHeaderText, activeSection === 'body' && styles.accordionHeaderTextActive]}>
                     Body Metrics
                   </Text>
@@ -1133,7 +1135,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                 activeOpacity={0.7}
               >
                 <View style={styles.accordionHeaderLeft}>
-                  <Target size={18} color={activeSection === 'goals' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
+                  <TargetIcon size={18} color={activeSection === 'goals' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
                   <Text style={[styles.accordionHeaderText, activeSection === 'goals' && styles.accordionHeaderTextActive]}>
                     Goals & Preferences
                   </Text>
@@ -1256,7 +1258,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                 activeOpacity={0.7}
               >
                 <View style={styles.accordionHeaderLeft}>
-                  <Scale size={18} color={activeBiometricsSection === 'composition' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
+                  <ScaleIcon size={18} color={activeBiometricsSection === 'composition' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
                   <Text style={[styles.accordionHeaderText, activeBiometricsSection === 'composition' && styles.accordionHeaderTextActive]}>
                     Body Composition
                   </Text>
@@ -1317,7 +1319,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                 activeOpacity={0.7}
               >
                 <View style={styles.accordionHeaderLeft}>
-                  <Ruler size={18} color={activeBiometricsSection === 'circumference' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
+                  <RulerIcon size={18} color={activeBiometricsSection === 'circumference' ? COLORS.primary : COLORS.textLight} style={{ marginRight: 10 }} />
                   <Text style={[styles.accordionHeaderText, activeBiometricsSection === 'circumference' && styles.accordionHeaderTextActive]}>
                     Circumference Measurements
                   </Text>
