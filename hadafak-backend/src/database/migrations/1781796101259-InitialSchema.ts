@@ -4,6 +4,7 @@ export class InitialSchema1781796101259 implements MigrationInterface {
     name = 'InitialSchema1781796101259'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
         await queryRunner.query(`CREATE TABLE "equipment" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "name" character varying NOT NULL, CONSTRAINT "UQ_b44a87bec78c8cf13f5bb838577" UNIQUE ("name"), CONSTRAINT "PK_0722e1b9d6eb19f5874c1678740" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE TABLE "program_day_exercises" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "program_day_id" uuid NOT NULL, "exercise_id" uuid NOT NULL, "order" integer NOT NULL DEFAULT '1', "target_sets" integer NOT NULL DEFAULT '3', "target_reps_range" character varying NOT NULL DEFAULT '8-12', "target_rest_time" integer NOT NULL DEFAULT '90', CONSTRAINT "PK_dec71463cd0c83026cc1e002e57" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE TABLE "program_days" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "program_id" uuid NOT NULL, "day_number" integer NOT NULL, "title" character varying NOT NULL, CONSTRAINT "PK_cff1cb768e103fd904e79baf3e8" PRIMARY KEY ("id"))`);

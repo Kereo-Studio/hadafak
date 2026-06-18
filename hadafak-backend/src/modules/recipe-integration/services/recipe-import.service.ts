@@ -72,6 +72,71 @@ export class RecipeImportService {
     return savedJob;
   }
 
+  /**
+   * Synchronous import used by the database seeder. Unlike {@link startImport},
+   * this runs the full fetch → normalize → dedup → persist pipeline inline and
+   * resolves only once every recipe has been processed. Idempotent: recipes
+   * already imported (tracked via RecipeExternalMapping) are skipped.
+   */
+  async runSyncImport(
+    providerName: string,
+    options: {
+      limit?: number;
+      offset?: number;
+      query?: string;
+      similarityThreshold?: number;
+      skipDuplicates?: boolean;
+    },
+  ): Promise<{ imported: number; duplicates: number; failed: number }> {
+    const provider = this.getProvider(providerName);
+    const limit = options.limit ?? 10;
+    const offset = options.offset ?? 0;
+    const similarityThreshold = options.similarityThreshold ?? 0.75;
+    const skipDuplicates = options.skipDuplicates ?? true;
+
+    const result = { imported: 0, duplicates: 0, failed: 0 };
+
+    const externalRecipes = await provider.fetchRecipes({
+      limit,
+      offset,
+      query: options.query,
+    });
+
+    for (const rawRecipe of externalRecipes) {
+      try {
+        const existingMapping = await this.mappingRepository.findOne({
+          where: {
+            providerName: provider.getProviderName(),
+            externalId: rawRecipe.externalId,
+          },
+        });
+        if (existingMapping) {
+          result.duplicates++;
+          continue;
+        }
+
+        const normalized = this.normalizationService.normalizeRecipe(rawRecipe);
+
+        const duplicates =
+          await this.duplicateDetectionService.findPotentialDuplicates(
+            normalized,
+            similarityThreshold,
+          );
+        if (duplicates.length > 0 && skipDuplicates) {
+          result.duplicates++;
+          continue;
+        }
+
+        await this.saveImportedRecipe(normalized, provider.getProviderName());
+        result.imported++;
+      } catch {
+        result.failed++;
+      }
+    }
+
+    return result;
+  }
+
   private async runImportPipeline(
     jobId: string,
     dto: ImportRecipesDto,

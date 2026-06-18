@@ -7,8 +7,6 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as path from 'path';
-import { DataSource } from 'typeorm';
-import { Exercise } from './modules/exercises/entities/exercise.entity';
 
 import { json, urlencoded } from 'express';
 
@@ -62,19 +60,9 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
 
-  // Run db seeding if database has no exercises
-  try {
-    const dataSource = app.get(DataSource);
-    const exerciseCount = await dataSource.getRepository(Exercise).count();
-    if (exerciseCount === 0) {
-      console.log('Database appears empty. Seeding initial data...');
-      const { runSeeding } = await import('./database/seeds/seed.js');
-      await runSeeding(dataSource);
-      console.log('Seeding completed successfully!');
-    }
-  } catch (e) {
-    console.error('Error checking/seeding database on startup:', e);
-  }
+  // Note: database seeding is an explicit, deliberate operation — run
+  // `npm run db:seed` (or `db:fresh` for a clean rebuild). It is intentionally
+  // NOT triggered on startup so app boot stays fast and side-effect free.
 
   const port = configService.get<number>('app.port') || 3000;
   await app.listen(port, '0.0.0.0');
