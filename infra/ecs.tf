@@ -104,7 +104,7 @@ resource "aws_ecs_task_definition" "app" {
       environment = [
         { name = "PORT", value = "3000" },
         { name = "DATABASE_URL", value = var.database_url },
-        { name = "DATABASE_SYNCHRONIZE", value = "true" },
+        { name = "DATABASE_SYNCHRONIZE", value = tostring(var.database_synchronize) },
         { name = "JWT_SECRET", value = var.jwt_secret },
         { name = "JWT_ACCESS_EXPIRATION", value = "15m" },
         { name = "JWT_REFRESH_EXPIRATION", value = "7d" },

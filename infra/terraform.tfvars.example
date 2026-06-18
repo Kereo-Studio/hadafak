@@ -16,3 +16,6 @@ database_url = "postgresql://user:password@ep-something.region.aws.neon.tech/had
 
 # JWT configuration
 jwt_secret = "your-very-long-and-secure-jwt-secret-key" # CHANGE THIS!
+
+# Set to true only for the very first deploy to a brand new database, then back to false
+database_synchronize = false

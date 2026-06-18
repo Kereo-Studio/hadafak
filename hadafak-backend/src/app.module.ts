@@ -42,6 +42,8 @@ import { HealthController } from './health.controller';
           }),
           autoLoadEntities: true,
           synchronize: configService.get<boolean>('database.synchronize'),
+          migrationsRun: !configService.get<boolean>('database.synchronize'),
+          migrations: [__dirname + '/database/migrations/**/*{.ts,.js}'],
           logging: true,
           ssl: url ? { rejectUnauthorized: false } : false,
         };

@@ -74,4 +74,10 @@ variable "exercisedb_api_key" {
   default     = ""
 }
 
+variable "database_synchronize" {
+  type        = bool
+  description = "Enable TypeORM auto-synchronize (true only for initial setup, false in production)"
+  default     = false
+}
+
 
