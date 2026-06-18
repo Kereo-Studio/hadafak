@@ -170,7 +170,7 @@ export class WorkoutsService {
           order: { createdAt: 'DESC' },
         });
 
-        const sessionRpe = dto.rpe || 7;
+        const sessionRpe = dto.rpe ?? 5;
         let difficultyFeedback = DifficultyFeedback.OK;
         if (sessionRpe >= 1 && sessionRpe <= 3) {
           difficultyFeedback = DifficultyFeedback.EASY;
@@ -180,14 +180,31 @@ export class WorkoutsService {
 
         for (const log of logs) {
           try {
-            // Find target plan containing the exercise. If none, default to the latest plan.
+            const validSets = (log.sets || []).filter(s => s.reps > 0);
+            const completedSets = validSets.length;
+            const completedReps = validSets.reduce((sum, s) => sum + s.reps, 0);
+            const weightUsed = validSets.length > 0 ? Math.max(...validSets.map(s => s.weight)) : 0;
+
+            // Find target WorkoutPlan containing the exercise
             let targetPlan = plans.find(p => p.workoutExercises.some(we => we.exerciseId === log.exerciseId));
             if (!targetPlan && plans.length > 0) {
               targetPlan = plans[0];
             }
 
             if (!targetPlan) {
-              continue; // No plan found for user to adapt
+              // User works from a Program (no WorkoutPlan) — adapt the ProgramDayExercise targets
+              if (session.programDayId) {
+                await this.adaptationEngineService.adaptProgramExercise(
+                  userId,
+                  session.programDayId,
+                  log.exerciseId,
+                  difficultyFeedback,
+                  sessionRpe,
+                  completedReps,
+                  completedSets,
+                );
+              }
+              continue;
             }
 
             const workoutExercise = targetPlan.workoutExercises.find(we => we.exerciseId === log.exerciseId);
@@ -201,11 +218,6 @@ export class WorkoutsService {
                 plannedReps = (parseInt(workoutExercise.reps, 10) || 10) * plannedSets;
               }
             }
-
-            const validSets = (log.sets || []).filter(s => s.reps > 0);
-            const completedSets = validSets.length;
-            const completedReps = validSets.reduce((sum, s) => sum + s.reps, 0);
-            const weightUsed = validSets.length > 0 ? Math.max(...validSets.map(s => s.weight)) : 0;
 
             const mockPerfLog = {
               workoutId: targetPlan.id,

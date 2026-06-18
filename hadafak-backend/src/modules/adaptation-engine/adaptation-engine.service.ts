@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { WorkoutExercise } from '../workouts/entities/workout-exercise.entity';
 import { Profile, FitnessLevel } from '../profiles/entities/profile.entity';
 import { PerformanceLog, DifficultyFeedback } from '../performance-tracking/entities/performance-log.entity';
+import { ProgramDayExercise } from '../programs/entities/program-day-exercise.entity';
 
 @Injectable()
 export class AdaptationEngineService {
@@ -12,6 +13,8 @@ export class AdaptationEngineService {
     private readonly workoutExerciseRepository: Repository<WorkoutExercise>,
     @InjectRepository(Profile)
     private readonly profileRepository: Repository<Profile>,
+    @InjectRepository(ProgramDayExercise)
+    private readonly programDayExerciseRepository: Repository<ProgramDayExercise>,
   ) {}
 
   async adaptFromPerformance(userId: string, log: PerformanceLog): Promise<void> {
@@ -115,7 +118,76 @@ export class AdaptationEngineService {
     // Save progression changes back to WorkoutExercise
     workoutExercise.sets = currentSets;
     workoutExercise.weight = currentWeight > 0 ? currentWeight : null;
-    
+
     await this.workoutExerciseRepository.save(workoutExercise);
+  }
+
+  // Adapts ProgramDayExercise targets when the user works from a Program (not a WorkoutPlan)
+  async adaptProgramExercise(
+    userId: string,
+    programDayId: string,
+    exerciseId: string,
+    difficultyFeedback: DifficultyFeedback,
+    fatigueRating: number,
+    completedReps: number,
+    completedSets: number,
+  ): Promise<void> {
+    const profile = await this.profileRepository.findOne({ where: { userId } });
+    const userLevel = profile?.fitnessLevel || FitnessLevel.BEGINNER;
+
+    const pde = await this.programDayExerciseRepository.findOne({
+      where: { programDayId, exerciseId },
+    });
+
+    if (!pde) return;
+
+    let currentSets = pde.targetSets;
+    const repsStr = pde.targetRepsRange || '8-12';
+    let minReps = 8;
+    let maxReps = 12;
+    if (repsStr.includes('-')) {
+      const parts = repsStr.split('-');
+      minReps = parseInt(parts[0], 10) || 8;
+      maxReps = parseInt(parts[1], 10) || 12;
+    } else {
+      minReps = parseInt(repsStr, 10) || 8;
+      maxReps = minReps;
+    }
+
+    let maxAllowedSets = 3;
+    if (userLevel === FitnessLevel.INTERMEDIATE) maxAllowedSets = 4;
+    if (userLevel === FitnessLevel.ADVANCED) maxAllowedSets = 5;
+
+    if (difficultyFeedback === DifficultyFeedback.HARD || fatigueRating >= 7) {
+      // Too hard — reduce sets and lower rep ceiling
+      if (currentSets > 2) currentSets -= 1;
+      const newMin = Math.max(4, minReps - 2);
+      const newMax = Math.max(6, maxReps - 2);
+      pde.targetRepsRange = `${newMin}-${newMax}`;
+    } else if (difficultyFeedback === DifficultyFeedback.EASY) {
+      // Too easy — increase volume
+      if (completedReps >= maxReps * completedSets) {
+        if (currentSets < maxAllowedSets) {
+          currentSets += 1;
+        } else {
+          pde.targetRepsRange = `${minReps + 2}-${maxReps + 2}`;
+        }
+      } else {
+        if (currentSets < maxAllowedSets) currentSets += 1;
+      }
+    } else {
+      // OK — progressive overload if hitting the top of the rep range
+      const repsPerSet = completedSets > 0 ? completedReps / completedSets : 0;
+      if (repsPerSet >= maxReps) {
+        if (currentSets < maxAllowedSets) {
+          currentSets += 1;
+        } else {
+          pde.targetRepsRange = `${minReps + 1}-${maxReps + 2}`;
+        }
+      }
+    }
+
+    pde.targetSets = currentSets;
+    await this.programDayExerciseRepository.save(pde);
   }
 }

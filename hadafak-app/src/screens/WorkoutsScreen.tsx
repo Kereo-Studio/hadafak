@@ -14,6 +14,7 @@ import {
   RefreshControl,
   TouchableWithoutFeedback,
   Image,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
@@ -143,12 +144,24 @@ export const WorkoutsScreen: React.FC = () => {
   const [collapsedExercises, setCollapsedExercises] = useState<Record<string, boolean>>({});
   const [rpe, setRpe] = useState('5');
   const [sliderWidth, setSliderWidth] = useState(250);
+  const sliderWidthRef = useRef(250);
+  const sliderPageX = useRef(0);
+  const sliderRef = useRef<any>(null);
 
-  const handleSliderGesture = (locationX: number) => {
-    const ratio = Math.max(0, Math.min(1, locationX / sliderWidth));
-    const val = Math.round(ratio * 9) + 1; // 1 to 10
-    setRpe(val.toString());
-  };
+  const rpeSliderPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const x = Math.max(0, Math.min(sliderWidthRef.current, evt.nativeEvent.pageX - sliderPageX.current));
+        setRpe(String(Math.round((x / sliderWidthRef.current) * 9) + 1));
+      },
+      onPanResponderMove: (evt) => {
+        const x = Math.max(0, Math.min(sliderWidthRef.current, evt.nativeEvent.pageX - sliderPageX.current));
+        setRpe(String(Math.round((x / sliderWidthRef.current) * 9) + 1));
+      },
+    })
+  ).current;
 
   const getRpeColor = (num: number) => {
     if (num <= 3) return '#34C759'; // Easy: green
@@ -2590,12 +2603,17 @@ export const WorkoutsScreen: React.FC = () => {
 
             {/* Segmented 3-zone Slider */}
             <View
+              ref={sliderRef}
               style={styles.sliderContainer}
-              onLayout={(e) => setSliderWidth(e.nativeEvent.layout.width)}
-              onStartShouldSetResponder={() => true}
-              onMoveShouldSetResponder={() => true}
-              onResponderGrant={(evt) => handleSliderGesture(evt.nativeEvent.locationX)}
-              onResponderMove={(evt) => handleSliderGesture(evt.nativeEvent.locationX)}
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                setSliderWidth(w);
+                sliderWidthRef.current = w;
+                sliderRef.current?.measure((_: number, __: number, ___: number, ____: number, px: number) => {
+                  sliderPageX.current = px;
+                });
+              }}
+              {...rpeSliderPan.panHandlers}
             >
               {/* 3-zone colored track */}
               <View pointerEvents="none" style={styles.rpeTrackRow}>
