@@ -2579,18 +2579,17 @@ export const WorkoutsScreen: React.FC = () => {
               This will automatically adapt your program plan
             </Text>
 
-            {/* Selected Rating Indicator */}
-            <View style={styles.selectedRatingContainer}>
-              <Text style={[styles.selectedRatingNumber, { color: COLORS.primary }]}>
-                {rpe}
-              </Text>
-              <Text style={styles.selectedRatingLabel}>
+            {/* Zone Status Pill */}
+            <View style={[styles.rpeZonePill, { backgroundColor: getRpeColor(parseInt(rpe)) + '18' }]}>
+              <View style={[styles.rpeZoneDot, { backgroundColor: getRpeColor(parseInt(rpe)) }]} />
+              <Text style={[styles.rpeZonePillLabel, { color: getRpeColor(parseInt(rpe)) }]}>
                 {getRpeStatusText(parseInt(rpe))}
               </Text>
+              <Text style={styles.rpeZonePillNumber}> · {rpe} / 10</Text>
             </View>
 
-            {/* Custom Premium Slider Track - Draggable */}
-            <View 
+            {/* Segmented 3-zone Slider */}
+            <View
               style={styles.sliderContainer}
               onLayout={(e) => setSliderWidth(e.nativeEvent.layout.width)}
               onStartShouldSetResponder={() => true}
@@ -2598,56 +2597,58 @@ export const WorkoutsScreen: React.FC = () => {
               onResponderGrant={(evt) => handleSliderGesture(evt.nativeEvent.locationX)}
               onResponderMove={(evt) => handleSliderGesture(evt.nativeEvent.locationX)}
             >
-              {/* The pill track bar */}
-              <View pointerEvents="none" style={styles.sliderTrackLine}>
-                {/* Colored fill */}
-                <View 
-                  style={[
-                    styles.sliderTrackFill, 
-                    { 
-                      width: `${((parseInt(rpe) - 1) / 9) * 100}%`,
-                      backgroundColor: COLORS.primary 
-                    }
-                  ]} 
-                />
+              {/* 3-zone colored track */}
+              <View pointerEvents="none" style={styles.rpeTrackRow}>
+                <View style={[styles.rpeTrackSegment, {
+                  flex: 3,
+                  backgroundColor: '#34C759',
+                  opacity: parseInt(rpe) <= 3 ? 1 : 0.32,
+                  borderTopLeftRadius: 8,
+                  borderBottomLeftRadius: 8,
+                  marginRight: 3,
+                }]} />
+                <View style={[styles.rpeTrackSegment, {
+                  flex: 3,
+                  backgroundColor: '#FF9500',
+                  opacity: parseInt(rpe) >= 4 && parseInt(rpe) <= 6 ? 1 : parseInt(rpe) > 6 ? 0.42 : 0.18,
+                  marginHorizontal: 1,
+                }]} />
+                <View style={[styles.rpeTrackSegment, {
+                  flex: 4,
+                  backgroundColor: '#FF3B30',
+                  opacity: parseInt(rpe) >= 7 ? 1 : 0.18,
+                  borderTopRightRadius: 8,
+                  borderBottomRightRadius: 8,
+                  marginLeft: 3,
+                }]} />
               </View>
 
-              {/* Steps/Ticks & Floating Thumb */}
-              <View pointerEvents="none" style={styles.sliderNodesRow}>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-                  const isSelected = rpe === num.toString();
-                  const isPassed = parseInt(rpe) >= num;
-
-                  return (
-                    <View
-                      key={num}
-                      style={styles.sliderNodeCell}
-                    >
-                      {isSelected ? (
-                        <View style={[styles.sliderThumbFloating, { borderColor: COLORS.primary }]}>
-                          <View style={[styles.sliderThumbInnerDot, { backgroundColor: COLORS.primary }]} />
-                        </View>
-                      ) : (
-                        <View 
-                          style={[
-                            styles.sliderNodeIndicator,
-                            isPassed 
-                              ? { backgroundColor: COLORS.primary }
-                              : { backgroundColor: '#E2E8F0' }
-                          ]}
-                        />
-                      )}
-                    </View>
-                  );
-                })}
+              {/* Floating thumb with number */}
+              <View
+                pointerEvents="none"
+                style={[styles.rpeThumb, {
+                  left: ((parseInt(rpe) - 1) / 9) * (sliderWidth - 36),
+                  borderColor: getRpeColor(parseInt(rpe)),
+                  shadowColor: getRpeColor(parseInt(rpe)),
+                }]}
+              >
+                <Text style={[styles.rpeThumbText, { color: getRpeColor(parseInt(rpe)) }]}>{rpe}</Text>
               </View>
             </View>
 
-            {/* Slider Boundary Labels */}
-            <View style={styles.sliderBoundaryRow}>
-              <Text style={[styles.sliderBoundaryText, parseInt(rpe) <= 3 && { color: '#34C759', fontWeight: '800' }]}>Easy</Text>
-              <Text style={[styles.sliderBoundaryText, (parseInt(rpe) >= 4 && parseInt(rpe) <= 6) && { color: '#FF9500', fontWeight: '800' }]}>Moderate</Text>
-              <Text style={[styles.sliderBoundaryText, parseInt(rpe) >= 7 && { color: '#FF3B30', fontWeight: '800' }]}>Hard</Text>
+            {/* Zone boundary labels */}
+            <View style={styles.rpeLabelRow}>
+              <Text style={[styles.rpeLabelText, parseInt(rpe) <= 3 && { color: '#34C759', fontWeight: '800' }]}>Easy</Text>
+              <Text style={[styles.rpeLabelText, parseInt(rpe) >= 4 && parseInt(rpe) <= 6 && { color: '#FF9500', fontWeight: '800' }]}>Moderate</Text>
+              <Text style={[styles.rpeLabelText, parseInt(rpe) >= 7 && { color: '#FF3B30', fontWeight: '800' }]}>Hard</Text>
+            </View>
+
+            {/* Adaptation hint */}
+            <View style={[styles.adaptHintRow, { backgroundColor: getRpeColor(parseInt(rpe)) + '12' }]}>
+              <Zap size={12} color={getRpeColor(parseInt(rpe))} style={{ marginRight: 6 }} />
+              <Text style={[styles.adaptHintText, { color: getRpeColor(parseInt(rpe)) }]}>
+                {getRpeAdaptationText(parseInt(rpe))}
+              </Text>
             </View>
 
             <View style={styles.finishActionsRow}>
@@ -4101,91 +4102,97 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 24,
   },
-  selectedRatingContainer: {
+  rpeZonePill: {
+    flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     marginBottom: 20,
   },
-  selectedRatingNumber: {
-    fontSize: 48,
-    fontWeight: '900',
-    letterSpacing: -1,
+  rpeZoneDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 7,
   },
-  selectedRatingLabel: {
-    fontSize: 14,
+  rpeZonePillLabel: {
+    fontSize: 13,
     fontWeight: '800',
-    color: COLORS.textLight,
-    marginTop: 2,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
+  },
+  rpeZonePillNumber: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textMuted,
   },
   sliderContainer: {
     width: '100%',
-    height: 40,
-    justifyContent: 'center',
+    height: 52,
     position: 'relative',
-    marginVertical: 12,
+    justifyContent: 'center',
+    marginBottom: 10,
   },
-  sliderTrackLine: {
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    width: '100%',
-    overflow: 'hidden',
-  },
-  sliderTrackFill: {
-    height: '100%',
-  },
-  sliderNodesRow: {
+  rpeTrackRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    height: 14,
     width: '100%',
     position: 'absolute',
-    alignItems: 'center',
-    paddingHorizontal: 2,
+    left: 0,
+    right: 0,
   },
-  sliderNodeCell: {
-    width: 24,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  rpeTrackSegment: {
+    height: '100%',
   },
-  sliderNodeIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  sliderThumbFloating: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  rpeThumb: {
+    position: 'absolute',
+    top: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FFFFFF',
-    borderWidth: 2,
+    borderWidth: 2.5,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  sliderThumbInnerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  rpeThumbText: {
+    fontSize: 15,
+    fontWeight: '900',
   },
-  sliderBoundaryRow: {
+  rpeLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    paddingHorizontal: 8,
-    marginBottom: 32,
+    paddingHorizontal: 4,
+    marginBottom: 16,
   },
-  sliderBoundaryText: {
+  rpeLabelText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  adaptHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 28,
+  },
+  adaptHintText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+    lineHeight: 17,
   },
   finishActionsRow: {
     flexDirection: 'row',

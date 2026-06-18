@@ -1,29 +1,29 @@
-name: Remote Deploy HADAFAK Backend
+# name: Remote Deploy HADAFAK Backend
 
-on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'hadafak-backend/**'
-  workflow_dispatch:
+# on:
+#   push:
+#     branches: [ main ]
+#     paths:
+#       - 'hadafak-backend/**'
+#   workflow_dispatch:
 
-jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+# jobs:
+#   build-and-push:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#       - name: Log in to Docker Hub
+#         uses: docker/login-action@v3
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./hadafak-backend
-          file: ./hadafak-backend/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/hadafak-backend:latest
+#       - name: Build and Push Docker Image
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: ./hadafak-backend
+#           file: ./hadafak-backend/Dockerfile
+#           push: true
+#           tags: ${{ secrets.DOCKERHUB_USERNAME }}/hadafak-backend:latest
