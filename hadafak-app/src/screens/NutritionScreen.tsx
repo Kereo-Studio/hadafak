@@ -15,7 +15,8 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SHADOWS } from '../theme/colors';
+import { ThemeColors, SHADOWS } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import {
   Plus,
   Trash2,
@@ -79,6 +80,8 @@ interface LoggedMeal {
 }
 
 export const NutritionScreen: React.FC = () => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const { showAlert } = useAlert();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -107,8 +110,11 @@ export const NutritionScreen: React.FC = () => {
 
   // AI Fridge Generator states
   const [isFridgeModalVisible, setIsFridgeModalVisible] = useState(false);
+  const [fridgeStep, setFridgeStep] = useState<0 | 1>(0);
   const [fridgeIngredients, setFridgeIngredients] = useState('');
   const [fridgePrompt, setFridgePrompt] = useState('');
+  const [fridgeMealType, setFridgeMealType] = useState('');
+  const [fridgeDietTags, setFridgeDietTags] = useState<string[]>([]);
   const [isGeneratingRecipe, setIsGeneratingRecipe] = useState(false);
 
   // Logging Recipe states
@@ -248,15 +254,22 @@ export const NutritionScreen: React.FC = () => {
   }, [route.params?.openRecipeId, recipes]);
 
   // Load recipes from API
+  const LOW_CALORIE_THRESHOLD = 400;
+
   const fetchRecipes = async (queryText = '', tagVal = '') => {
     setLoadingRecipes(true);
     try {
       const params: any = {};
       if (queryText) params.query = queryText;
-      if (tagVal) params.tag = tagVal;
+      if (tagVal && tagVal !== 'Low-Calories') params.tag = tagVal;
 
       const res = await api.get('/recipes', { params });
-      setRecipes(res.data || []);
+      const data: any[] = res.data || [];
+      setRecipes(
+        tagVal === 'Low-Calories'
+          ? data.filter((r) => r.calories <= LOW_CALORIE_THRESHOLD)
+          : data
+      );
     } catch (err) {
       console.warn('Error fetching recipes:', err);
     } finally {
@@ -292,23 +305,24 @@ export const NutritionScreen: React.FC = () => {
         .map((i) => i.trim())
         .filter((i) => i.length > 0);
 
+      const builtPrompt = [
+        fridgeMealType ? `Meal type: ${fridgeMealType}` : '',
+        fridgeDietTags.length ? `Dietary preferences: ${fridgeDietTags.join(', ')}` : '',
+        fridgePrompt.trim(),
+      ].filter(Boolean).join('. ');
+
       const res = await api.post('/recipes/generate-ai', {
         ingredients: ingList,
-        prompt: fridgePrompt.trim() || undefined,
+        prompt: builtPrompt || undefined,
       });
 
       if (res.data) {
-        showAlert({
-          title: 'Recipe Generated!',
-          message: 'Your AI recipe was successfully created.',
-          why: 'A new recipe matching your ingredients has been saved directly to your personalized catalog.',
-          actionGuide: 'Review the steps, preparation details, and nutritional macros below.',
-          type: 'success',
-        });
         setFridgeIngredients('');
         setFridgePrompt('');
+        setFridgeMealType('');
+        setFridgeDietTags([]);
+        setFridgeStep(0);
         setIsFridgeModalVisible(false);
-        // Refresh catalog list and open detail of the newly generated recipe
         await fetchRecipes(recipesQuery, selectedRecipeTag);
         handleOpenRecipeDetail(res.data);
       }
@@ -317,7 +331,7 @@ export const NutritionScreen: React.FC = () => {
         title: 'Generation Failed',
         message: 'Failed to generate your recipe.',
         why: err.response?.data?.message || 'The AI service experienced an error or is temporarily offline.',
-        actionGuide: 'Check your internet connection, adjust your ingredient list, and submit the request again.',
+        actionGuide: 'Check your internet connection, adjust your ingredient list, and try again.',
         type: 'error',
       });
     } finally {
@@ -1338,9 +1352,7 @@ export const NutritionScreen: React.FC = () => {
                 { label: 'All Recipes', value: '' },
                 { label: 'High-Protein', value: 'High-Protein' },
                 { label: 'Low-Carb', value: 'Low-Carb' },
-                { label: 'Vegan', value: 'Vegan' },
-                { label: 'Keto', value: 'Keto' },
-                { label: 'High-Fiber', value: 'High-Fiber' },
+                { label: 'Low-Calories', value: 'Low-Calories' },
               ].map((tagItem) => {
                 const isSelected = selectedRecipeTag === tagItem.value;
                 return (
@@ -1965,131 +1977,191 @@ export const NutritionScreen: React.FC = () => {
         visible={isFridgeModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setIsFridgeModalVisible(false)}
+        onRequestClose={() => { setIsFridgeModalVisible(false); setFridgeStep(0); }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <CreationIcon size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.modalTitle}>AI Fridge Recipe Builder</Text>
+          <View style={[styles.modalContent, styles.aiSheetContent]}>
+
+            {/* Loading overlay */}
+            {isGeneratingRecipe ? (
+              <View style={styles.aiGeneratingOverlay}>
+                <View style={styles.aiGeneratingIconRing}>
+                  <CreationIcon size={40} color={COLORS.primary} />
+                </View>
+                <Text style={styles.aiGeneratingTitle}>Gemini is crafting your recipe</Text>
+                <Text style={styles.aiGeneratingSubtitle}>This usually takes a few seconds…</Text>
+                <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 24 }} />
               </View>
-              <TouchableOpacity
-                onPress={() => setIsFridgeModalVisible(false)}
-                style={styles.modalCloseCircle}
-              >
-                <X size={20} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
+            ) : (
+              <>
+                {/* Drag pill */}
+                <View style={styles.sheetDragPill} />
 
-            <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-              <Text style={styles.fridgeHelperText}>
-                List ingredients you have in your fridge (separated by commas). Our culinary AI will formulate a customized meal that hits correct macronutrient proportions.
-              </Text>
+                {/* Header */}
+                <View style={styles.aiSheetHeader}>
+                  <View style={styles.aiSheetHeaderLeft}>
+                    <View style={styles.aiSheetIconBadge}>
+                      <CreationIcon size={18} color={COLORS.primary} />
+                    </View>
+                    <View>
+                      <Text style={styles.aiSheetTitle}>AI Recipe Builder</Text>
+                      <Text style={styles.aiSheetSubtitle}>Powered by Gemini 2.0 Flash</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => { setIsFridgeModalVisible(false); setFridgeStep(0); }}
+                    style={styles.modalCloseCircle}
+                  >
+                    <X size={18} color={COLORS.text} />
+                  </TouchableOpacity>
+                </View>
 
-              <Text style={styles.inputLabel}>Ingredients in my Fridge</Text>
-              <TextInput
-                style={[styles.modalTextInput, { height: 60, textAlignVertical: 'top', paddingTop: 8 }]}
-                placeholder="Selected ingredients will appear here..."
-                placeholderTextColor={COLORS.textMuted}
-                value={fridgeIngredients}
-                onChangeText={setFridgeIngredients}
-                multiline
-              />
-
-              {/* Category-based Ingredient Selector */}
-              <Text style={[styles.inputLabel, { marginTop: 12, fontSize: 13, color: COLORS.textMuted }]}>
-                Tap ingredients to add/remove:
-              </Text>
-              {[
-                {
-                  category: 'Proteins',
-                  items: ['Chicken', 'Beef', 'Egg', 'Tofu', 'Turkey', 'Salmon', 'Tuna'],
-                },
-                {
-                  category: 'Carbs & Grains',
-                  items: ['Oats', 'Rice', 'Sweet Potato', 'Pasta', 'Quinoa', 'Bread'],
-                },
-                {
-                  category: 'Produce & Veggies',
-                  items: ['Banana', 'Broccoli', 'Spinach', 'Garlic', 'Tomato', 'Onion', 'Avocado'],
-                },
-                {
-                  category: 'Dairy & Extras',
-                  items: ['Milk', 'Greek Yogurt', 'Cheese', 'Olive Oil', 'Butter', 'Soy Sauce'],
-                },
-              ].map((group) => (
-                <View key={group.category} style={{ marginTop: 10 }}>
-                  <Text style={styles.fridgeGroupTitle}>{group.category}</Text>
-                  <View style={styles.quickTagsWrapper}>
-                    {group.items.map((ing) => {
-                      const lowerIng = ing.toLowerCase();
-                      const currentList = fridgeIngredients
-                        .split(',')
-                        .map((x) => x.trim().toLowerCase())
-                        .filter(Boolean);
-                      const isSelected = currentList.includes(lowerIng);
-                      return (
-                        <TouchableOpacity
-                          key={ing}
-                          style={[
-                            styles.quickIngTag,
-                            isSelected && {
-                              backgroundColor: COLORS.primaryLight,
-                              borderColor: COLORS.primary,
-                            },
-                          ]}
-                          onPress={() => {
-                            let newList: string[];
-                            if (isSelected) {
-                              newList = currentList.filter((x) => x !== lowerIng);
-                            } else {
-                              newList = [...currentList, lowerIng];
-                            }
-                            setFridgeIngredients(newList.join(', '));
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Text
-                            style={[
-                              styles.quickIngTagText,
-                              isSelected && { color: COLORS.primary, fontWeight: '700' },
-                            ]}
-                          >
-                            {isSelected ? '✓' : '+'} {ing}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                {/* Step indicator */}
+                <View style={styles.aiStepRow}>
+                  <View style={styles.aiStepItem}>
+                    <View style={[styles.aiStepDot, fridgeStep === 0 && styles.aiStepDotActive]}>
+                      {fridgeStep > 0 && <Check size={10} color="#FFF" />}
+                    </View>
+                    <Text style={[styles.aiStepLabel, fridgeStep === 0 && { color: COLORS.primary }]}>Ingredients</Text>
+                  </View>
+                  <View style={styles.aiStepLine} />
+                  <View style={styles.aiStepItem}>
+                    <View style={[styles.aiStepDot, fridgeStep === 1 && styles.aiStepDotActive]} />
+                    <Text style={[styles.aiStepLabel, fridgeStep === 1 && { color: COLORS.primary }]}>Preferences</Text>
                   </View>
                 </View>
-              ))}
 
-              <Text style={[styles.inputLabel, { marginTop: 16 }]}>Special prompt / style preference (Optional)</Text>
-              <TextInput
-                style={styles.modalTextInput}
-                placeholder="e.g. Low-carb diet, under 15 mins, spicy soy flavor"
-                placeholderTextColor={COLORS.textMuted}
-                value={fridgePrompt}
-                onChangeText={setFridgePrompt}
-              />
+                {/* Step 1 — Ingredients */}
+                {fridgeStep === 0 && (
+                  <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
+                    <Text style={styles.aiSheetSectionTitle}>What's in your fridge?</Text>
+                    <Text style={styles.aiSheetSectionDesc}>Tap to select ingredients you have available.</Text>
 
-              <TouchableOpacity
-                style={[styles.fridgeSubmitBtn, isGeneratingRecipe && { opacity: 0.6 }]}
-                onPress={handleGenerateAiRecipe}
-                disabled={isGeneratingRecipe}
-                activeOpacity={0.8}
-              >
-                {isGeneratingRecipe ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <>
-                    <CreationIcon size={18} color="#FFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.fridgeSubmitText}>Generate AI Recipe</Text>
-                  </>
+                    {[
+                      { category: '🥩  Proteins', items: ['Chicken', 'Beef', 'Egg', 'Tofu', 'Turkey', 'Salmon', 'Tuna'] },
+                      { category: '🌾  Carbs & Grains', items: ['Oats', 'Rice', 'Sweet Potato', 'Pasta', 'Quinoa', 'Bread'] },
+                      { category: '🥦  Produce & Veggies', items: ['Banana', 'Broccoli', 'Spinach', 'Garlic', 'Tomato', 'Onion', 'Avocado'] },
+                      { category: '🧀  Dairy & Extras', items: ['Milk', 'Greek Yogurt', 'Cheese', 'Olive Oil', 'Butter', 'Soy Sauce'] },
+                    ].map((group) => (
+                      <View key={group.category} style={{ marginTop: 16 }}>
+                        <Text style={styles.aiIngGroupTitle}>{group.category}</Text>
+                        <View style={styles.quickTagsWrapper}>
+                          {group.items.map((ing) => {
+                            const lowerIng = ing.toLowerCase();
+                            const currentList = fridgeIngredients.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+                            const isSelected = currentList.includes(lowerIng);
+                            return (
+                              <TouchableOpacity
+                                key={ing}
+                                style={[styles.aiIngChip, isSelected && styles.aiIngChipSelected]}
+                                onPress={() => {
+                                  const newList = isSelected
+                                    ? currentList.filter((x) => x !== lowerIng)
+                                    : [...currentList, lowerIng];
+                                  setFridgeIngredients(newList.join(', '));
+                                }}
+                                activeOpacity={0.75}
+                              >
+                                {isSelected && <Check size={11} color={COLORS.primary} style={{ marginRight: 4 }} />}
+                                <Text style={[styles.aiIngChipText, isSelected && styles.aiIngChipTextSelected]}>{ing}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ))}
+
+                    <Text style={[styles.aiSheetSectionTitle, { marginTop: 20 }]}>Or type custom ingredients</Text>
+                    <TextInput
+                      style={[styles.aiTextInput, { minHeight: 52, textAlignVertical: 'top' }]}
+                      placeholder="e.g. lemon, chili flakes, coconut milk…"
+                      placeholderTextColor={COLORS.textMuted}
+                      value={fridgeIngredients}
+                      onChangeText={setFridgeIngredients}
+                      multiline
+                    />
+                  </ScrollView>
                 )}
-              </TouchableOpacity>
-            </ScrollView>
+
+                {/* Step 2 — Preferences */}
+                {fridgeStep === 1 && (
+                  <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
+                    <Text style={styles.aiSheetSectionTitle}>Meal type</Text>
+                    <View style={styles.aiMealTypeRow}>
+                      {['Breakfast', 'Lunch', 'Dinner', 'Snack'].map((mt) => (
+                        <TouchableOpacity
+                          key={mt}
+                          style={[styles.aiMealTypeChip, fridgeMealType === mt && styles.aiMealTypeChipSelected]}
+                          onPress={() => setFridgeMealType(fridgeMealType === mt ? '' : mt)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.aiMealTypeText, fridgeMealType === mt && styles.aiMealTypeTextSelected]}>{mt}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={[styles.aiSheetSectionTitle, { marginTop: 20 }]}>Dietary preferences</Text>
+                    <View style={styles.quickTagsWrapper}>
+                      {['High-Protein', 'Low-Carb', 'Low-Calories', 'Quick', 'Meal-Prep'].map((tag) => {
+                        const isOn = fridgeDietTags.includes(tag);
+                        return (
+                          <TouchableOpacity
+                            key={tag}
+                            style={[styles.aiIngChip, isOn && styles.aiIngChipSelected]}
+                            onPress={() => setFridgeDietTags(isOn ? fridgeDietTags.filter((t) => t !== tag) : [...fridgeDietTags, tag])}
+                            activeOpacity={0.75}
+                          >
+                            {isOn && <Check size={11} color={COLORS.primary} style={{ marginRight: 4 }} />}
+                            <Text style={[styles.aiIngChipText, isOn && styles.aiIngChipTextSelected]}>{tag}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    <Text style={[styles.aiSheetSectionTitle, { marginTop: 20 }]}>
+                      Special requests{' '}
+                      <Text style={{ fontWeight: '400', color: COLORS.textMuted }}>(optional)</Text>
+                    </Text>
+                    <TextInput
+                      style={styles.aiTextInput}
+                      placeholder="e.g. under 15 mins, spicy, no gluten…"
+                      placeholderTextColor={COLORS.textMuted}
+                      value={fridgePrompt}
+                      onChangeText={setFridgePrompt}
+                    />
+                  </ScrollView>
+                )}
+
+                {/* Bottom action row */}
+                <View style={styles.aiSheetActions}>
+                  {fridgeStep === 1 && (
+                    <TouchableOpacity style={styles.aiBackBtn} onPress={() => setFridgeStep(0)}>
+                      <Text style={styles.aiBackBtnText}>← Back</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={[
+                      styles.aiNextBtn,
+                      fridgeStep === 0 && { flex: 1 },
+                      fridgeStep === 0 && !fridgeIngredients.trim() && { opacity: 0.45 },
+                    ]}
+                    onPress={fridgeStep === 0 ? () => setFridgeStep(1) : handleGenerateAiRecipe}
+                    disabled={fridgeStep === 0 && !fridgeIngredients.trim()}
+                    activeOpacity={0.8}
+                  >
+                    {fridgeStep === 0 ? (
+                      <Text style={styles.aiNextBtnText}>Next  ��</Text>
+                    ) : (
+                      <>
+                        <CreationIcon size={16} color="#FFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.aiNextBtnText}>Generate Recipe</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
           </View>
         </View>
       </Modal>
@@ -2141,7 +2213,7 @@ export const NutritionScreen: React.FC = () => {
               />
 
               <TouchableOpacity
-                style={[styles.fridgeSubmitBtn, { marginTop: 24 }, isLoggingRecipe && { opacity: 0.6 }]}
+                style={[styles.aiNextBtn, { marginTop: 24 }, isLoggingRecipe && { opacity: 0.6 }]}
                 onPress={handleConfirmLogRecipe}
                 disabled={isLoggingRecipe}
                 activeOpacity={0.8}
@@ -2149,7 +2221,7 @@ export const NutritionScreen: React.FC = () => {
                 {isLoggingRecipe ? (
                   <ActivityIndicator size="small" color="#FFF" />
                 ) : (
-                  <Text style={styles.fridgeSubmitText}>Confirm & Log to Diary</Text>
+                  <Text style={styles.aiNextBtnText}>Confirm & Log to Diary</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -2587,7 +2659,7 @@ export const NutritionScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   loadingContainer: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -2863,52 +2935,234 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Fridge Modal / General
-  fridgeHelperText: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    lineHeight: 18,
+  // AI Recipe Builder Sheet
+  aiSheetContent: {
+    height: '90%',
+    backgroundColor: COLORS.background,
+  },
+  sheetDragPill: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+    alignSelf: 'center',
     marginBottom: 16,
+  },
+  aiSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  aiSheetHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  aiSheetIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aiSheetTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: COLORS.text,
+  },
+  aiSheetSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    marginTop: 1,
+  },
+  aiStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  aiStepItem: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  aiStepDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aiStepDotActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primaryLight,
+  },
+  aiStepLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 8,
+    marginBottom: 20,
+  },
+  aiStepLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+  },
+  aiSheetSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  aiSheetSectionDesc: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginBottom: 4,
+  },
+  aiIngGroupTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    marginBottom: 8,
   },
   quickTagsWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 4,
+    marginBottom: 4,
+    gap: 8,
   },
-  quickIngTag: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  quickIngTagText: {
-    fontSize: 12,
-    color: COLORS.text,
-    fontWeight: '700',
-  },
-  fridgeSubmitBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  aiIngChip: {
     flexDirection: 'row',
-    marginTop: 16,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
   },
-  fridgeSubmitText: {
-    color: '#FFFFFF',
+  aiIngChipSelected: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  aiIngChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+  },
+  aiIngChipTextSelected: {
+    color: COLORS.primary,
+  },
+  aiTextInput: {
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: COLORS.text,
+    marginTop: 8,
+  },
+  aiMealTypeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  aiMealTypeChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  aiMealTypeChipSelected: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  aiMealTypeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+  },
+  aiMealTypeTextSelected: {
+    color: COLORS.primary,
+  },
+  aiSheetActions: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    marginTop: 8,
+  },
+  aiBackBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aiBackBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  aiNextBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aiNextBtnText: {
     fontSize: 15,
     fontWeight: '800',
+    color: '#FFFFFF',
   },
-  fridgeGroupTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+  aiGeneratingOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  aiGeneratingIconRing: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+  aiGeneratingTitle: {
+    fontSize: 18,
+    fontWeight: '900',
     color: COLORS.text,
-    marginTop: 8,
-    marginBottom: 4,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  aiGeneratingSubtitle: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   portionScalerCard: {
     backgroundColor: '#FAFAFA',

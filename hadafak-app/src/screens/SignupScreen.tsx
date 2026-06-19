@@ -9,7 +9,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { ChevronLeft } from 'lucide-react-native';
@@ -27,6 +28,8 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   onNavigateToLogin,
   onSignupSuccess,
 }) => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -204,7 +207,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

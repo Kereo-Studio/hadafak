@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import { Button } from '../components/Button';
 import { TrophyIcon } from '../components/icons/fitness';
 
@@ -17,6 +18,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onNavigateToLogin,
   onNavigateToSignup,
 }) => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   return (
     <SafeAreaView style={styles.container}>
       {/* Soft decorative background shapes */}
@@ -65,7 +68,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

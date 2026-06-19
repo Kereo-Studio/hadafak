@@ -33,7 +33,13 @@ export class ProgramsService {
           },
         },
       },
-      order: { createdAt: 'ASC' },
+      order: {
+        createdAt: 'ASC',
+        days: {
+          dayNumber: 'ASC',
+          exercises: { order: 'ASC' },
+        },
+      },
     });
   }
 
@@ -45,6 +51,12 @@ export class ProgramsService {
           exercises: {
             exercise: true,
           },
+        },
+      },
+      order: {
+        days: {
+          dayNumber: 'ASC',
+          exercises: { order: 'ASC' },
         },
       },
     });

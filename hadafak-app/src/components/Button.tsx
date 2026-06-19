@@ -1,6 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
-import { COLORS } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 
 interface ButtonProps {
   title: string;
@@ -21,6 +22,8 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
 }) => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const isPrimary = variant === 'primary';
   const isOutline = variant === 'outline';
   const isText = variant === 'text';
@@ -59,7 +62,7 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   button: {
     height: 56,
     borderRadius: 28, // Complete pill shape matching Figma design

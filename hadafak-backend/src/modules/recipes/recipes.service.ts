@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, ILike, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { Recipe, RecipeSource } from './entities/recipe.entity';
@@ -9,6 +9,7 @@ import { GenerateAiRecipeDto } from './dto/generate-ai-recipe.dto';
 import { SubstituteIngredientDto } from './dto/substitute-ingredient.dto';
 import { NutritionService } from '../nutrition/nutrition.service';
 import { Food, FoodSource } from '../nutrition/entities/food.entity';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
 export class RecipesService {
@@ -182,62 +183,68 @@ export class RecipesService {
   }
 
   async generateAiRecipe(userId: string, dto: GenerateAiRecipeDto): Promise<Recipe> {
-    // Scaffold/Mock AI response using database foods to ensure integration
-    const chickenSearch = await this.nutritionService.searchFoods('chicken');
-    const broccoliSearch = await this.nutritionService.searchFoods('broccoli');
-    const oatsSearch = await this.nutritionService.searchFoods('oats');
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) throw new InternalServerErrorException('Gemini API key is not configured.');
 
-    const chickenId = chickenSearch[0]?.id || undefined;
-    const broccoliId = broccoliSearch[0]?.id || undefined;
-    const oatsId = oatsSearch[0]?.id || undefined;
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-    // Determine mock outputs depending on user input keywords
-    let title = 'AI Loaded Stir Fry Chicken';
-    let description = 'A protein-packed garlic and soy glaze stir fry combining tender chicken breast and broccoli.';
-    let prepTime = 10;
-    let cookTime = 15;
-    let servings = 2;
-    let instructions = [
-      'Slice the chicken breast into bite-sized cubes.',
-      'Steam the broccoli in salted water for 3 minutes.',
-      'Heat oil in a pan, sauté chicken until golden brown.',
-      'Toss in broccoli, add low sodium soy sauce, and serve hot.',
-    ];
-    let tags = ['High-Protein', 'Low-Carb', 'AI-Generated'];
-    let ingredients = [
-      { foodId: chickenId, customName: 'Chicken Breast', amount: 3.0, unit: '100g' },
-      { foodId: broccoliId, customName: 'Broccoli', amount: 1.5, unit: '100g' },
-      { foodId: undefined, customName: 'Light Soy Sauce', amount: 1, unit: 'tbsp' },
-    ];
+    const ingredientList = dto.ingredients.join(', ');
+    const extraPrompt = dto.prompt ? `\nExtra requirements: ${dto.prompt}` : '';
 
-    if (dto.ingredients.some((i) => i.toLowerCase().includes('oat') || i.toLowerCase().includes('banana'))) {
-      title = 'AI High-Protein Banana Oats Slurry';
-      description = 'A fiber-rich oatmeal blend sweetened with natural banana sugars, perfect for pre-workout energy.';
-      prepTime = 5;
-      cookTime = 5;
-      servings = 1;
-      instructions = [
-        'Cook the oats in boiling milk or water for 3 minutes.',
-        'Mash half a banana and stir it into the oatmeal.',
-        'Top with sliced almonds and cinnamon powder.',
-      ];
-      tags = ['High-Fiber', 'Pre-Workout', 'AI-Generated'];
-      ingredients = [
-        { foodId: oatsId, customName: 'Whole Grain Oats', amount: 0.8, unit: '100g' },
-        { foodId: undefined, customName: 'Banana', amount: 1, unit: 'medium' },
-        { foodId: undefined, customName: 'Almond Milk', amount: 200, unit: 'ml' },
-      ];
+    const systemPrompt = `You are a professional nutritionist and chef. Create one healthy recipe using ONLY the provided ingredients (you may add basic pantry items like salt, pepper, oil, water).
+Available ingredients: ${ingredientList}${extraPrompt}
+
+Respond with ONLY a valid JSON object — no markdown, no explanation, just raw JSON:
+{
+  "title": "Recipe Name",
+  "description": "One to two sentence description",
+  "prepTime": <number in minutes>,
+  "cookTime": <number in minutes>,
+  "servings": <number>,
+  "instructions": ["Step 1", "Step 2", "Step 3"],
+  "tags": ["tag1", "tag2"],
+  "ingredients": [
+    { "name": "Ingredient Name", "amount": <number>, "unit": "g | ml | tbsp | tsp | cup | piece | medium | slice" }
+  ]
+}
+Valid tags (use 1-3 that apply): High-Protein, Low-Carb, Low-Calories, Pre-Workout, Post-Workout, Quick, Meal-Prep, AI-Generated
+Always include "AI-Generated" in tags. Use realistic amounts and cooking times.`;
+
+    let parsed: any;
+    try {
+      const result = await model.generateContent(systemPrompt);
+      let text = result.response.text().trim();
+      // Strip markdown code fences if Gemini wraps the JSON
+      text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      parsed = JSON.parse(text);
+    } catch (err: any) {
+      throw new InternalServerErrorException(err?.message ?? 'Failed to generate recipe with AI. Please try again.');
     }
 
+    // Map each AI ingredient name to a DB food record where possible
+    const mappedIngredients = await Promise.all(
+      (parsed.ingredients as any[]).map(async (ing) => {
+        const matches = await this.nutritionService.searchFoods(ing.name);
+        const food = matches[0];
+        return {
+          foodId: food?.id ?? undefined,
+          customName: ing.name,
+          amount: Number(ing.amount) || 1,
+          unit: ing.unit || 'g',
+        };
+      }),
+    );
+
     return this.createRecipe(userId, {
-      title,
-      description,
-      instructions,
-      prepTime,
-      cookTime,
-      servings,
-      tags,
-      ingredients,
+      title: parsed.title,
+      description: parsed.description,
+      instructions: parsed.instructions,
+      prepTime: parsed.prepTime,
+      cookTime: parsed.cookTime,
+      servings: parsed.servings,
+      tags: parsed.tags,
+      ingredients: mappedIngredients,
     }, RecipeSource.AI);
   }
 

@@ -18,7 +18,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
-import { COLORS, SHADOWS } from '../theme/colors';
+import { ThemeColors, SHADOWS } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import {
   Play,
   Check,
@@ -122,6 +123,8 @@ interface WorkoutHistoryItem {
 }
 
 export const WorkoutsScreen: React.FC = () => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const { showAlert } = useAlert();
   const route = useRoute<any>();
   const [loading, setLoading] = useState(true);
@@ -2184,8 +2187,10 @@ export const WorkoutsScreen: React.FC = () => {
                       </TouchableOpacity>
                     </View>
 
-                    {/* Render split days */}
-                    {currentProgram.days?.map((day: any, dIdx: number) => {
+                    {/* Render split days (sorted by day number) */}
+                    {[...(currentProgram.days || [])]
+                      .sort((a: any, b: any) => (a.dayNumber || 0) - (b.dayNumber || 0))
+                      .map((day: any, dIdx: number) => {
                       const totalDays = currentProgram.days?.length || 1;
                       let isDayActive = false;
                       if (history.length > 0) {
@@ -3592,7 +3597,7 @@ export const WorkoutsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   loadingContainer: {
     flex: 1,
     backgroundColor: COLORS.background,

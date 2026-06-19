@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, TextInputProps } from 'react-native';
-import { COLORS } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import * as Icons from 'lucide-react-native';
 
 interface InputProps extends TextInputProps {
@@ -19,6 +20,8 @@ export const Input: React.FC<InputProps> = ({
   style,
   ...props
 }) => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const [isFocused, setIsFocused] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(!secureTextEntry);
 
@@ -78,7 +81,7 @@ export const Input: React.FC<InputProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   container: {
     marginBottom: 18,
     width: '100%',

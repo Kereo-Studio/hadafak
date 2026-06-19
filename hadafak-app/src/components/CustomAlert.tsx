@@ -10,7 +10,8 @@ import {
   TouchableWithoutFeedback,
   ScrollView,
 } from 'react-native';
-import { COLORS, SHADOWS } from '../theme/colors';
+import { ThemeColors, SHADOWS } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import { AlertCircle, CheckCircle2, Info, AlertTriangle } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -46,6 +47,8 @@ export const useAlert = () => {
 };
 
 export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const [visible, setVisible] = useState(false);
   const [options, setOptions] = useState<AlertOptions | null>(null);
   
@@ -250,7 +253,7 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'center',

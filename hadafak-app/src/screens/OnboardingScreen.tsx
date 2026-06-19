@@ -11,7 +11,8 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import { api } from '../services/api';
 import { ChevronRight } from 'lucide-react-native';
 import { TargetIcon, TrophyIcon, CompassIcon } from '../components/icons/fitness';
@@ -21,6 +22,8 @@ interface OnboardingScreenProps {
 }
 
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [goal, setGoal] = useState<'lose_fat' | 'gain_muscle' | 'stay_active' | 'athletic'>('stay_active');
   const [age, setAge] = useState('');
@@ -259,7 +262,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,

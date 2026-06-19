@@ -8,7 +8,8 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { COLORS, SHADOWS } from '../theme/colors';
+import { ThemeColors, SHADOWS } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import { AlertCircle, CheckCircle2, Inbox } from 'lucide-react-native';
 
 interface StateFeedbackProps {
@@ -30,6 +31,8 @@ export const StateFeedback: React.FC<StateFeedbackProps> = ({
   icon,
   containerStyle,
 }) => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   if (type === 'loading') {
     return (
       <View style={[styles.centerContainer, containerStyle]}>
@@ -105,7 +108,7 @@ export const StateFeedback: React.FC<StateFeedbackProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   centerContainer: {
     flex: 1,
     justifyContent: 'center',

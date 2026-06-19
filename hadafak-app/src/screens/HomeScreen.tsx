@@ -20,7 +20,8 @@ import { pedometerService, getLocalTodaySteps, saveLocalTodaySteps } from '../ut
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '../components/CustomAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { COLORS } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -122,6 +123,8 @@ const MiniProgressCircle: React.FC<{
 };
 
 export const HomeScreen: React.FC = () => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const navigation = useNavigation<any>();
   const { showAlert } = useAlert();
   const [selectedActivity, setSelectedActivity] = useState<string>('cycling');
@@ -1631,7 +1634,7 @@ export const HomeScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,

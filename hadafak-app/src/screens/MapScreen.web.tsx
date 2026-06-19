@@ -14,7 +14,8 @@ import {
   Clock, Ghost, Eye, Check, ChevronUp, ChevronDown,
 } from 'lucide-react-native';
 import { LightningIcon, FireIcon } from '../components/icons/fitness';
-import { COLORS } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import { api } from '../services/api';
 
 const { width } = Dimensions.get('window');
@@ -129,6 +130,8 @@ const getGhostDistanceAtTime = (
 };
 
 export const MapScreen: React.FC = () => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const { showAlert } = useAlert();
   const [selectedTheme, setSelectedTheme] = useState<MapThemeKey>('aubergine');
   const [showThemeSelector, setShowThemeSelector] = useState(false);
@@ -780,7 +783,7 @@ export const MapScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',

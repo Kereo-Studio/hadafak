@@ -85,6 +85,14 @@ export class ProfilesService {
           },
         },
       },
+      order: {
+        currentProgram: {
+          days: {
+            dayNumber: 'ASC',
+            exercises: { order: 'ASC' },
+          },
+        },
+      },
     });
     if (!profile) {
       throw new NotFoundException(`Profile for user ${userId} not found`);

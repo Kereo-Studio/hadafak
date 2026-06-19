@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
-import { COLORS } from './src/theme/colors';
+import { ThemeColors } from './src/theme/colors';
+import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { SignupScreen } from './src/screens/SignupScreen';
@@ -24,7 +25,9 @@ type AuthState = 'loading' | 'welcome' | 'login' | 'signup' | 'onboarding' | 'au
 
 const Tab = createBottomTabNavigator();
 
-export default function App() {
+function AppContent() {
+  const { colors: COLORS, isDark } = useTheme();
+  const styles = getStyles(COLORS);
   const [authState, setAuthState] = useState<AuthState>('loading');
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -106,7 +109,7 @@ export default function App() {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <StatusBar style="auto" />
+          <StatusBar style={isDark ? "light" : "dark"} />
         </View>
       );
     }
@@ -114,7 +117,7 @@ export default function App() {
     if (authState === 'welcome') {
       return (
         <View style={styles.container}>
-          <StatusBar style="dark" />
+          <StatusBar style={isDark ? "light" : "dark"} />
           <WelcomeScreen
             onNavigateToLogin={() => setAuthState('login')}
             onNavigateToSignup={() => setAuthState('signup')}
@@ -126,7 +129,7 @@ export default function App() {
     if (authState === 'login') {
       return (
         <View style={styles.container}>
-          <StatusBar style="dark" />
+          <StatusBar style={isDark ? "light" : "dark"} />
           <LoginScreen
             onBack={() => setAuthState('welcome')}
             onNavigateToSignup={() => setAuthState('signup')}
@@ -139,7 +142,7 @@ export default function App() {
     if (authState === 'signup') {
       return (
         <View style={styles.container}>
-          <StatusBar style="dark" />
+          <StatusBar style={isDark ? "light" : "dark"} />
           <SignupScreen
             onBack={() => setAuthState('welcome')}
             onNavigateToLogin={() => setAuthState('login')}
@@ -152,7 +155,7 @@ export default function App() {
     if (authState === 'onboarding') {
       return (
         <View style={styles.container}>
-          <StatusBar style="dark" />
+          <StatusBar style={isDark ? "light" : "dark"} />
           <OnboardingScreen
             onComplete={() => setAuthState('authenticated')}
           />
@@ -162,7 +165,7 @@ export default function App() {
 
     return (
       <NavigationContainer>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? "light" : "dark"} />
         <Tab.Navigator
           screenOptions={{
             headerShown: false,
@@ -239,7 +242,15 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

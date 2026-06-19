@@ -15,7 +15,8 @@ import {
   Clock, Ghost, Eye, Check, ChevronUp, ChevronDown,
 } from 'lucide-react-native';
 import { LightningIcon, FireIcon, TrophyIcon } from '../components/icons/fitness';
-import { COLORS } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
+import { useThemeColors } from '../theme/ThemeContext';
 import { api } from '../services/api';
 import { storage } from '../utils/storage';
 import { BACKGROUND_LOCATION_TASK } from '../utils/backgroundTasks';
@@ -166,6 +167,8 @@ const getGhostDistanceAtTime = (
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export const MapScreen: React.FC = () => {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const { showAlert } = useAlert();
   // Map Styling Theme State
   const [selectedTheme, setSelectedTheme] = useState<MapThemeKey>('aubergine');
@@ -918,24 +921,47 @@ export const MapScreen: React.FC = () => {
           onPress={() => toggleCard(!cardExpanded)}
           activeOpacity={0.6}
         >
+          <View style={styles.dragHandle} />
           {cardExpanded ? (
-            <ChevronDown size={22} color={COLORS.textMuted} />
+            <ChevronDown size={16} color={COLORS.textMuted} style={{ marginTop: 6 }} />
           ) : (
-            <ChevronUp size={22} color={COLORS.textMuted} />
+            <ChevronUp size={16} color={COLORS.textMuted} style={{ marginTop: 6 }} />
           )}
         </TouchableOpacity>
 
         <ScrollView scrollEnabled={cardExpanded} contentContainerStyle={styles.scrollContent}>
+          {/* Run status pill */}
+          <View style={styles.runStatusRow}>
+            <View style={[
+              styles.runStatusPill,
+              status === 'running' && styles.runStatusPillRunning,
+              status === 'paused' && styles.runStatusPillPaused,
+            ]}>
+              <View style={[
+                styles.runStatusDot,
+                status === 'running' && { backgroundColor: '#16A34A' },
+                status === 'paused' && { backgroundColor: '#EA580C' },
+              ]} />
+              <Text style={[
+                styles.runStatusText,
+                status === 'running' && { color: '#16A34A' },
+                status === 'paused' && { color: '#EA580C' },
+              ]}>
+                {status === 'running' ? 'Recording' : status === 'paused' ? 'Paused' : 'Ready to run'}
+              </Text>
+            </View>
+          </View>
+
           {/* Main Primary Metrics Summary (Always Visible) */}
           <View style={styles.mainMetricsRow}>
             <View style={styles.metricItem}>
               <Text style={styles.metricValLarge}>{distKm.toFixed(2)}</Text>
-              <Text style={styles.metricLabel}>Distance (km)</Text>
+              <Text style={styles.metricLabel}>Distance · km</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
               <Text style={styles.metricValLarge}>{formatTime(elapsed)}</Text>
-              <Text style={styles.metricLabel}>Time Elapsed</Text>
+              <Text style={styles.metricLabel}>Time elapsed</Text>
             </View>
           </View>
 
@@ -944,39 +970,48 @@ export const MapScreen: React.FC = () => {
             <Animated.View style={styles.expandableContent}>
               <View style={styles.secondaryStatsGrid}>
                 <View style={styles.statCard}>
-                  <LightningIcon size={18} color={COLORS.primary} />
+                  <View style={[styles.statIconChip, { backgroundColor: '#F5ECF4' }]}>
+                    <LightningIcon size={16} color={COLORS.primary} />
+                  </View>
                   <View style={styles.statCardMeta}>
                     <Text style={styles.statCardValue}>{formatPace(distKm, elapsed)}</Text>
-                    <Text style={styles.statCardLabel}>Current Pace</Text>
+                    <Text style={styles.statCardLabel}>Current pace</Text>
                   </View>
                 </View>
                 <View style={styles.statCard}>
-                  <FireIcon size={18} color="#FF6B6B" />
+                  <View style={[styles.statIconChip, { backgroundColor: '#FEF0EE' }]}>
+                    <FireIcon size={16} color="#E1654E" />
+                  </View>
                   <View style={styles.statCardMeta}>
                     <Text style={styles.statCardValue}>{calories}</Text>
-                    <Text style={styles.statCardLabel}>Calories Burned</Text>
+                    <Text style={styles.statCardLabel}>Calories</Text>
                   </View>
                 </View>
                 <View style={styles.statCard}>
-                  <Clock size={18} color="#4D96FF" />
+                  <View style={[styles.statIconChip, { backgroundColor: '#ECF1FB' }]}>
+                    <Clock size={16} color="#3F6FD1" />
+                  </View>
                   <View style={styles.statCardMeta}>
                     <Text style={styles.statCardValue}>
                       {currentSpeed > 0 ? (currentSpeed * 3.6).toFixed(1) : '0.0'}
                     </Text>
-                    <Text style={styles.statCardLabel}>Speed (km/h)</Text>
+                    <Text style={styles.statCardLabel}>Speed · km/h</Text>
                   </View>
                 </View>
                 <TouchableOpacity
                   style={[styles.statCard, ghostRun && styles.ghostCardActive]}
                   onPress={() => setShowGhostPicker(true)}
                   disabled={status !== 'idle'}
+                  activeOpacity={0.7}
                 >
-                  <Ghost size={18} color={ghostRun ? COLORS.primary : COLORS.textLight} />
+                  <View style={[styles.statIconChip, { backgroundColor: ghostRun ? COLORS.primary : '#EEF1F5' }]}>
+                    <Ghost size={16} color={ghostRun ? '#FFFFFF' : COLORS.textLight} />
+                  </View>
                   <View style={styles.statCardMeta}>
                     <Text style={[styles.statCardValue, ghostRun && { color: COLORS.primary }]}>
                       {ghostRun ? 'Active' : 'Off'}
                     </Text>
-                    <Text style={styles.statCardLabel}>Ghost Runner</Text>
+                    <Text style={styles.statCardLabel}>Ghost runner</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -1205,7 +1240,7 @@ export const MapScreen: React.FC = () => {
 };
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -1314,27 +1349,61 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    shadowColor: '#000000',
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
+    shadowOpacity: 0.12,
+    shadowRadius: 28,
     elevation: 16,
     zIndex: 200,
   },
   dragHandleContainer: {
     width: '100%',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   dragHandle: {
-    width: 44,
+    width: 40,
     height: 5,
     borderRadius: 3,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#E2E8F0',
   },
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: Platform.OS === 'ios' ? 32 : 20,
+  },
+
+  // Run status pill (bottom sheet)
+  runStatusRow: {
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  runStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: COLORS.surfaceLight,
+  },
+  runStatusPillRunning: {
+    backgroundColor: '#ECFDF3',
+  },
+  runStatusPillPaused: {
+    backgroundColor: '#FFF4ED',
+  },
+  runStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: COLORS.textMuted,
+  },
+  runStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textLight,
+    letterSpacing: 0.3,
   },
 
   // Main metrics
@@ -1342,7 +1411,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 22,
     paddingVertical: 4,
   },
   metricItem: {
@@ -1350,20 +1419,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   metricValLarge: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: '900',
     color: COLORS.text,
+    letterSpacing: -1.5,
+    fontVariant: ['tabular-nums'],
   },
   metricLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    fontWeight: '600',
-    marginTop: 4,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '700',
+    marginTop: 6,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   metricDivider: {
     width: 1,
-    height: 50,
-    backgroundColor: '#E5E7EB',
+    height: 46,
+    backgroundColor: COLORS.border,
   },
 
   // Expandable content
@@ -1379,31 +1452,47 @@ const styles = StyleSheet.create({
   statCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     padding: 14,
     width: (width - 52) / 2,
     gap: 12,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: COLORS.border,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   ghostCardActive: {
-    borderColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
     backgroundColor: COLORS.primaryLight,
+  },
+  statIconChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statCardMeta: {
     flex: 1,
   },
   statCardValue: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
     color: COLORS.text,
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
   },
   statCardLabel: {
     fontSize: 10,
-    color: COLORS.textLight,
-    fontWeight: '600',
-    marginTop: 2,
+    color: COLORS.textMuted,
+    fontWeight: '700',
+    marginTop: 3,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
 
   ghostStatusAlert: {
@@ -1466,12 +1555,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.primary,
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 18,
+    borderRadius: 18,
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32,
+    shadowRadius: 16,
     elevation: 8,
   },
   buttonActionGroup: {
@@ -1484,8 +1573,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.primaryLight,
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: 18,
+    borderRadius: 18,
     borderWidth: 1.5,
     borderColor: COLORS.primary,
   },
@@ -1494,10 +1583,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#EF4444',
-    paddingVertical: 16,
-    borderRadius: 16,
-    shadowColor: '#EF4444',
+    backgroundColor: '#E1654E',
+    paddingVertical: 18,
+    borderRadius: 18,
+    shadowColor: '#E1654E',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -1507,6 +1596,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+    letterSpacing: 0.3,
   },
 
   ghostMarker: {

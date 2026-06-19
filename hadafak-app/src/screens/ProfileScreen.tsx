@@ -16,7 +16,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAlert } from '../components/CustomAlert';
-import { COLORS, SHADOWS } from '../theme/colors';
+import { ThemeColors, SHADOWS } from '../theme/colors';
+import { useTheme, useThemeColors } from '../theme/ThemeContext';
 import {
   User,
   Settings,
@@ -92,6 +93,9 @@ interface ProfileScreenProps {
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
+  const { isDark, toggle: toggleTheme } = useTheme();
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
   const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -100,7 +104,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [weightUnit, setWeightUnit] = useState('kg');
 
   const handleClearCache = () => {
@@ -1517,19 +1520,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                   />
                 </View>
 
-                <View style={styles.settingsRow}>
-                  <View>
-                    <Text style={styles.settingsLabel}>Dark Mode (Beta)</Text>
-                    <Text style={styles.settingsSublabel}>Toggle experimental dark mode</Text>
-                  </View>
-                  <Switch
-                    value={darkModeEnabled}
-                    onValueChange={setDarkModeEnabled}
-                    trackColor={{ false: '#D1D1D6', true: COLORS.primary }}
-                    thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
-                  />
-                </View>
-
                 <View style={[styles.settingsRow, { borderBottomWidth: 0 }]}>
                   <View>
                     <Text style={styles.settingsLabel}>Weight Unit</Text>
@@ -1604,7 +1594,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   loadingContainer: {
     flex: 1,
     backgroundColor: COLORS.background,
