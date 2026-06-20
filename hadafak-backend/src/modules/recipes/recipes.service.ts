@@ -239,10 +239,17 @@ Always include "AI-Generated" in tags. Use realistic amounts and cooking times.`
     const json = await response.json();
     let parsed: any;
     try {
-      const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-      parsed = JSON.parse(text);
-    } catch {
+      const rawText: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      // Gemini with responseMimeType:'application/json' may return a JSON string or already-parsed object
+      parsed = typeof rawText === 'string' ? JSON.parse(rawText) : rawText;
+    } catch (parseErr) {
+      console.error('[RecipesService] Gemini parse error:', parseErr, 'Raw response:', JSON.stringify(json));
       throw new InternalServerErrorException('Failed to parse Gemini response. Please try again.');
+    }
+
+    if (!parsed || !Array.isArray(parsed.ingredients)) {
+      console.error('[RecipesService] Unexpected Gemini response shape:', JSON.stringify(parsed));
+      throw new InternalServerErrorException('Gemini returned an unexpected recipe format. Please try again.');
     }
 
     // Map each AI ingredient name to a DB food record where possible
@@ -259,16 +266,21 @@ Always include "AI-Generated" in tags. Use realistic amounts and cooking times.`
       }),
     );
 
-    return this.createRecipe(userId, {
-      title: parsed.title,
-      description: parsed.description,
-      instructions: parsed.instructions,
-      prepTime: parsed.prepTime,
-      cookTime: parsed.cookTime,
-      servings: parsed.servings,
-      tags: parsed.tags,
-      ingredients: mappedIngredients,
-    }, RecipeSource.AI);
+    try {
+      return await this.createRecipe(userId, {
+        title: parsed.title,
+        description: parsed.description,
+        instructions: parsed.instructions,
+        prepTime: parsed.prepTime,
+        cookTime: parsed.cookTime,
+        servings: parsed.servings,
+        tags: parsed.tags,
+        ingredients: mappedIngredients,
+      }, RecipeSource.AI);
+    } catch (saveErr) {
+      console.error('[RecipesService] createRecipe failed:', saveErr);
+      throw new InternalServerErrorException('Failed to save generated recipe. Please try again.');
+    }
   }
 
   async substituteIngredient(userId: string, dto: SubstituteIngredientDto) {
