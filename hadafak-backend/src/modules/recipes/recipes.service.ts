@@ -37,8 +37,10 @@ export class RecipesService {
       if (ing.foodId) {
         try {
           foodItem = await this.nutritionService.getFoodById(ing.foodId);
-          // Scale macros based on ingredient amount (scaled per serving unit / 100g)
-          const scale = Number(ing.amount) || 0;
+          // Amount is in grams; food macros are per servingSize (default 100g)
+          const grams = Number(ing.amount) || 0;
+          const servingSize = Number(foodItem.servingSize) || 100;
+          const scale = grams / servingSize;
           calories += (Number(foodItem.calories) || 0) * scale;
           protein += (Number(foodItem.protein) || 0) * scale;
           carbs += (Number(foodItem.carbs) || 0) * scale;
@@ -68,10 +70,10 @@ export class RecipesService {
       source,
       tags: dto.tags || [],
       creatorId: userId,
-      calories: Math.round(calories / servings),
-      protein: Math.round((protein / servings) * 10) / 10,
-      carbs: Math.round((carbs / servings) * 10) / 10,
-      fat: Math.round((fat / servings) * 10) / 10,
+      calories: Math.min(Math.round(calories / servings), 9999),
+      protein: Math.min(Math.round((protein / servings) * 10) / 10, 999),
+      carbs: Math.min(Math.round((carbs / servings) * 10) / 10, 999),
+      fat: Math.min(Math.round((fat / servings) * 10) / 10, 999),
     });
 
     const savedRecipe = await this.recipeRepository.save(recipe);
