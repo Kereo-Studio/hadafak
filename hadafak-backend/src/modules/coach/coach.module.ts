@@ -9,6 +9,7 @@ import { Food } from '../nutrition/entities/food.entity';
 import { Profile } from '../profiles/entities/profile.entity';
 import { CoachService } from './coach.service';
 import { CoachController } from './coach.controller';
+import { AuthModule } from '../auth/auth.module';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { ProgressModule } from '../progress/progress.module';
 
@@ -23,6 +24,7 @@ import { ProgressModule } from '../progress/progress.module';
       Profile,
     ]),
     ConfigModule,
+    AuthModule,
     ProfilesModule,
     ProgressModule,
   ],
