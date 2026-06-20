@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, Inject, forwardRef, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository, Between, ILike, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { Recipe, RecipeSource } from './entities/recipe.entity';
 import { RecipeIngredient } from './entities/recipe-ingredient.entity';
@@ -9,7 +10,6 @@ import { GenerateAiRecipeDto } from './dto/generate-ai-recipe.dto';
 import { SubstituteIngredientDto } from './dto/substitute-ingredient.dto';
 import { NutritionService } from '../nutrition/nutrition.service';
 import { Food, FoodSource } from '../nutrition/entities/food.entity';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
 export class RecipesService {
@@ -20,6 +20,7 @@ export class RecipesService {
     private readonly recipeIngredientRepository: Repository<RecipeIngredient>,
     @Inject(forwardRef(() => NutritionService))
     private readonly nutritionService: NutritionService,
+    private readonly configService: ConfigService,
   ) {}
 
   async createRecipe(userId: string | null, dto: CreateRecipeDto, source: RecipeSource = RecipeSource.USER): Promise<Recipe> {
@@ -183,43 +184,65 @@ export class RecipesService {
   }
 
   async generateAiRecipe(userId: string, dto: GenerateAiRecipeDto): Promise<Recipe> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    const apiKey = this.configService.get<string>('app.geminiApiKey');
     if (!apiKey) throw new InternalServerErrorException('Gemini API key is not configured.');
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const ingredientList = dto.ingredients.join(', ');
     const extraPrompt = dto.prompt ? `\nExtra requirements: ${dto.prompt}` : '';
 
-    const systemPrompt = `You are a professional nutritionist and chef. Create one healthy recipe using ONLY the provided ingredients (you may add basic pantry items like salt, pepper, oil, water).
+    const prompt = `You are a professional nutritionist and chef. Create one healthy recipe using ONLY the provided ingredients (you may add basic pantry items like salt, pepper, oil, water).
 Available ingredients: ${ingredientList}${extraPrompt}
 
-Respond with ONLY a valid JSON object — no markdown, no explanation, just raw JSON:
+Respond with ONLY a valid JSON object matching this schema:
 {
   "title": "Recipe Name",
   "description": "One to two sentence description",
-  "prepTime": <number in minutes>,
-  "cookTime": <number in minutes>,
-  "servings": <number>,
+  "prepTime": 10,
+  "cookTime": 20,
+  "servings": 2,
   "instructions": ["Step 1", "Step 2", "Step 3"],
   "tags": ["tag1", "tag2"],
   "ingredients": [
-    { "name": "Ingredient Name", "amount": <number>, "unit": "g | ml | tbsp | tsp | cup | piece | medium | slice" }
+    { "name": "Ingredient Name", "amount": 200, "unit": "g" }
   ]
 }
 Valid tags (use 1-3 that apply): High-Protein, Low-Carb, Low-Calories, Pre-Workout, Post-Workout, Quick, Meal-Prep, AI-Generated
 Always include "AI-Generated" in tags. Use realistic amounts and cooking times.`;
 
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json' },
+    };
+
+    let response: Response = null as any;
+    let delay = 1000;
+    for (let i = 0; i < 3; i++) {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) break;
+      if (response.status === 429 || response.status === 503) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 2;
+      } else {
+        throw new InternalServerErrorException(`Gemini API error: ${response.status}`);
+      }
+    }
+
+    if (!response.ok) {
+      throw new InternalServerErrorException(`Gemini API unavailable after retries (${response.status})`);
+    }
+
+    const json = await response.json();
     let parsed: any;
     try {
-      const result = await model.generateContent(systemPrompt);
-      let text = result.response.text().trim();
-      // Strip markdown code fences if Gemini wraps the JSON
-      text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
       parsed = JSON.parse(text);
-    } catch (err: any) {
-      throw new InternalServerErrorException(err?.message ?? 'Failed to generate recipe with AI. Please try again.');
+    } catch {
+      throw new InternalServerErrorException('Failed to parse Gemini response. Please try again.');
     }
 
     // Map each AI ingredient name to a DB food record where possible

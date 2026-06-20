@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { Recipe } from './entities/recipe.entity';
 import { RecipeIngredient } from './entities/recipe-ingredient.entity';
 import { RecipesService } from './recipes.service';
@@ -10,6 +11,7 @@ import { NutritionModule } from '../nutrition/nutrition.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Recipe, RecipeIngredient]),
+    ConfigModule,
     AuthModule,
     NutritionModule,
   ],

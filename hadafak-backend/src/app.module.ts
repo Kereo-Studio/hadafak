@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import { UsersModule } from './modules/users/users.module';
@@ -18,6 +19,7 @@ import { RunsModule } from './modules/runs/runs.module';
 import { PerformanceTrackingModule } from './modules/performance-tracking/performance-tracking.module';
 import { WorkoutGenerationModule } from './modules/workout-generation/workout-generation.module';
 import { AdaptationEngineModule } from './modules/adaptation-engine/adaptation-engine.module';
+import { CoachModule } from './modules/coach/coach.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -26,6 +28,7 @@ import { HealthController } from './health.controller';
       isGlobal: true,
       load: [appConfig, databaseConfig],
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -64,6 +67,7 @@ import { HealthController } from './health.controller';
     PerformanceTrackingModule,
     WorkoutGenerationModule,
     AdaptationEngineModule,
+    CoachModule,
   ],
   controllers: [HealthController],
 })

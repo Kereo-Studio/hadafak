@@ -249,47 +249,60 @@ export const WorkoutsScreen: React.FC = () => {
     }
   };
 
-  const renderMiniRoutePath = (coords: { latitude: number; longitude: number }[]) => {
+  const renderRouteHero = (coords: { latitude: number; longitude: number }[], width: number) => {
     if (!coords || coords.length < 2) return null;
-    
+
     let minLat = Infinity, maxLat = -Infinity;
     let minLng = Infinity, maxLng = -Infinity;
-    
     coords.forEach(pt => {
       if (pt.latitude < minLat) minLat = pt.latitude;
       if (pt.latitude > maxLat) maxLat = pt.latitude;
       if (pt.longitude < minLng) minLng = pt.longitude;
       if (pt.longitude > maxLng) maxLng = pt.longitude;
     });
-    
-    const latSpan = maxLat - minLat;
-    const lngSpan = maxLng - minLng;
-    const maxSpan = Math.max(latSpan, lngSpan);
-    
-    if (maxSpan === 0) return null;
-    
-    const size = 50;
-    const padding = 4;
-    const innerSize = size - padding * 2;
-    
-    const points = coords.map(pt => {
-      const x = padding + ((pt.longitude - minLng) / maxSpan) * innerSize;
-      const y = padding + (1 - (pt.latitude - minLat) / maxSpan) * innerSize;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
-    
-    const pathData = `M ${points.join(' L ')}`;
-    
+
+    const latSpan = maxLat - minLat || 0.0001;
+    const lngSpan = maxLng - minLng || 0.0001;
+    const svgW = width;
+    const svgH = 130;
+    const pad = 20;
+
+    // Preserve aspect ratio — fit within padded canvas
+    const scaleX = (svgW - pad * 2) / lngSpan;
+    const scaleY = (svgH - pad * 2) / latSpan;
+    const scale = Math.min(scaleX, scaleY);
+    const offsetX = (svgW - lngSpan * scale) / 2;
+    const offsetY = (svgH - latSpan * scale) / 2;
+
+    const pts = coords.map(pt => ({
+      x: offsetX + (pt.longitude - minLng) * scale,
+      y: svgH - (offsetY + (pt.latitude - minLat) * scale),
+    }));
+
+    const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    const start = pts[0];
+    const end = pts[pts.length - 1];
+
     return (
-      <Svg width={size} height={size} style={styles.miniRouteSvg}>
-        <Path
-          d={pathData}
-          fill="none"
-          stroke={COLORS.primary}
-          strokeWidth={3}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+      <Svg width={svgW} height={svgH}>
+        <Defs>
+          <LinearGradient id="routeBg" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#0F1115" stopOpacity="1" />
+            <Stop offset="1" stopColor="#161A22" stopOpacity="1" />
+          </LinearGradient>
+        </Defs>
+        {/* Background */}
+        <Path d={`M0,0 L${svgW},0 L${svgW},${svgH} L0,${svgH} Z`} fill="url(#routeBg)" />
+        {/* Glow trail */}
+        <Path d={pathD} fill="none" stroke={COLORS.primary} strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" opacity={0.18} />
+        {/* Main trail */}
+        <Path d={pathD} fill="none" stroke={COLORS.primary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+        {/* Start dot */}
+        <Circle cx={start.x} cy={start.y} r={5} fill="#22C55E" />
+        <Circle cx={start.x} cy={start.y} r={9} fill="#22C55E" opacity={0.25} />
+        {/* End dot */}
+        <Circle cx={end.x} cy={end.y} r={5} fill={COLORS.primary} />
+        <Circle cx={end.x} cy={end.y} r={9} fill={COLORS.primary} opacity={0.25} />
       </Svg>
     );
   };
@@ -338,49 +351,59 @@ export const WorkoutsScreen: React.FC = () => {
 
           const calories = Math.round(distanceKm * 70);
 
+          const hasRoute = run.routeCoordinates && run.routeCoordinates.length >= 2;
+
           return (
             <View key={run.id} style={styles.runHistoryCard}>
-              <View style={styles.runCardHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.runCardTitle} numberOfLines={1}>{run.title || 'Outdoor Run'}</Text>
-                  <Text style={styles.runCardDate}>{formatRunDate(run.startTime)}</Text>
-                </View>
-                <View style={styles.miniRouteContainer}>
-                  {renderMiniRoutePath(run.routeCoordinates) || (
-                    <View style={styles.miniRoutePlaceholder}>
-                      <TrophyIcon size={16} color={COLORS.textMuted} />
-                    </View>
-                  )}
+              {/* Route hero */}
+              <View style={styles.runRouteHero}>
+                {hasRoute ? (
+                  renderRouteHero(run.routeCoordinates, 340)
+                ) : (
+                  <View style={styles.runRouteHeroPlaceholder}>
+                    <TrophyIcon size={28} color={COLORS.primary} />
+                    <Text style={styles.runRouteHeroPlaceholderText}>No GPS data</Text>
+                  </View>
+                )}
+                {/* Distance badge overlay */}
+                <View style={styles.runDistanceBadge}>
+                  <Text style={styles.runDistanceBadgeText}>{distanceKm.toFixed(2)} km</Text>
                 </View>
               </View>
 
+              {/* Title + date */}
+              <View style={styles.runCardInfo}>
+                <Text style={styles.runCardTitle} numberOfLines={1}>{run.title || 'Outdoor Run'}</Text>
+                <Text style={styles.runCardDate}>{formatRunDate(run.startTime)}</Text>
+              </View>
+
+              {/* Stats row */}
               <View style={styles.runStatsRow}>
                 <View style={styles.runStatColumn}>
-                  <Text style={styles.runStatValue}>{distanceKm.toFixed(2)}</Text>
-                  <Text style={styles.runStatLabel}>Dist (km)</Text>
-                </View>
-                <View style={styles.runStatColumn}>
                   <Text style={styles.runStatValue}>{formatRunDuration(durationSeconds)}</Text>
-                  <Text style={styles.runStatLabel}>Time</Text>
+                  <Text style={styles.runStatLabel}>Duration</Text>
                 </View>
+                <View style={styles.runStatDivider} />
                 <View style={styles.runStatColumn}>
                   <Text style={styles.runStatValue}>{paceStr}</Text>
-                  <Text style={styles.runStatLabel}>Pace (/km)</Text>
+                  <Text style={styles.runStatLabel}>Pace /km</Text>
                 </View>
+                <View style={styles.runStatDivider} />
                 <View style={styles.runStatColumn}>
                   <Text style={styles.runStatValue}>{calories}</Text>
                   <Text style={styles.runStatLabel}>kcal</Text>
                 </View>
               </View>
 
+              {/* Footer */}
               <View style={styles.runCardFooter}>
                 <TouchableOpacity
                   style={styles.runDeleteBtn}
                   onPress={() => handleDeleteRun(run.id)}
                   activeOpacity={0.7}
                 >
-                  <Trash2 size={16} color={COLORS.error} />
-                  <Text style={styles.runDeleteText}>Delete</Text>
+                  <Trash2 size={14} color={COLORS.error} />
+                  <Text style={styles.runDeleteText}>Delete run</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -4998,22 +5021,56 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.5,
   },
   runHistoryCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surfaceLight,
     borderRadius: 20,
-    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E8ECF2',
+    borderColor: COLORS.border,
+    overflow: 'hidden',
     ...SHADOWS.card,
   },
-  runCardHeader: {
-    flexDirection: 'row',
+  runRouteHero: {
+    width: '100%',
+    height: 130,
+    backgroundColor: '#0F1115',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  runRouteHeroPlaceholder: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  runRouteHeroPlaceholderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  runDistanceBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  runDistanceBadgeText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    fontVariant: ['tabular-nums'],
+  },
+  runCardInfo: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
   },
   runCardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.text,
   },
@@ -5023,63 +5080,55 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     color: COLORS.textMuted,
     marginTop: 2,
   },
-  miniRouteContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: '#F9FAFB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  miniRouteSvg: {
-    backgroundColor: '#F5ECF4',
-  },
-  miniRoutePlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   runStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#F1F5F9',
+    borderTopColor: COLORS.border,
+    marginTop: 8,
+  },
+  runStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: COLORS.border,
   },
   runStatColumn: {
     flex: 1,
     alignItems: 'center',
   },
   runStatValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
     color: COLORS.text,
+    fontVariant: ['tabular-nums'],
   },
   runStatLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.textLight,
-    marginTop: 2,
+    color: COLORS.textMuted,
+    marginTop: 3,
+    letterSpacing: 0.3,
   },
   runCardFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   runDeleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
+    gap: 5,
   },
   runDeleteText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.error,
-    marginLeft: 6,
   },
   planCreateCustomBtn: {
     backgroundColor: COLORS.primaryLight,

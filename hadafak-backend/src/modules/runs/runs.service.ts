@@ -75,8 +75,8 @@ export class RunsService {
     return this.runSessionRepository.save(runSession);
   }
 
-  // Get summary of all runs (excludes heavy coordinate paths for speed)
-  async findAll(userId: string): Promise<Omit<RunSession, 'routeCoordinates'>[]> {
+  // Get summary of all runs (includes route coordinates for path rendering)
+  async findAll(userId: string): Promise<RunSession[]> {
     return this.runSessionRepository.find({
       where: { userId },
       select: {
@@ -90,6 +90,7 @@ export class RunsService {
         distanceKm: true,
         avgPaceMinPerKm: true,
         caloriesBurned: true,
+        routeCoordinates: true,
         createdAt: true,
       },
       order: { startTime: 'DESC' },

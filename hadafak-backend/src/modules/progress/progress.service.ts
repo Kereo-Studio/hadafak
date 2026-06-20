@@ -5,6 +5,7 @@ import { BodyMetricLog } from './entities/body-metric-log.entity';
 import { ProgressPhoto, PhotoAngle } from './entities/progress-photo.entity';
 import { LogMetricDto } from './dto/log-metric.dto';
 import { ProfilesService } from '../profiles/profiles.service';
+import { FitnessGoal } from '../profiles/entities/profile.entity';
 import { S3Service } from '../../common/services/s3.service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -247,6 +248,72 @@ export class ProgressService {
       // Profile not found, fallback standard
     }
 
+    // 5. Transformation Prediction
+    let prediction: {
+      targetWeight: number;
+      estimatedDays: number;
+      estimatedDate: string;
+      weeklyRate: number;
+      plateau: boolean;
+    } | null = null;
+
+    try {
+      const profile = await this.profilesService.findByUserId(userId);
+      const goal = profile?.goal;
+      const needsLoss = goal === FitnessGoal.LOSE_FAT || goal === FitnessGoal.FAT_LOSS;
+      const needsGain =
+        goal === FitnessGoal.GAIN_MUSCLE ||
+        goal === FitnessGoal.HYPERTROPHY ||
+        goal === FitnessGoal.STRENGTH;
+
+      if ((needsLoss || needsGain) && logs.length >= 2) {
+        const recentLogs = logs.slice(-4);
+        const n = recentLogs.length;
+        // Linear regression: x = day index, y = weight
+        const xs = recentLogs.map((_, i) => i);
+        const ys = recentLogs.map((l) => Number(l.weight));
+        const sumX = xs.reduce((a, b) => a + b, 0);
+        const sumY = ys.reduce((a, b) => a + b, 0);
+        const sumXY = xs.reduce((a, i) => a + i * ys[i], 0);
+        const sumX2 = xs.reduce((a, i) => a + i * i, 0);
+        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX); // kg/entry
+        // Estimate days between entries
+        const firstDate = new Date(recentLogs[0].date).getTime();
+        const lastDate = new Date(recentLogs[n - 1].date).getTime();
+        const avgDaysBetween = n > 1 ? (lastDate - firstDate) / (1000 * 60 * 60 * 24) / (n - 1) : 7;
+        const weeklyRate = (slope / avgDaysBetween) * 7; // kg/week
+
+        const targetWeight = needsLoss ? currentWeight - 10 : currentWeight + 5;
+        const plateau = Math.abs(weeklyRate) < 0.05;
+
+        if (!plateau) {
+          const estimatedDays = Math.round(
+            Math.abs((targetWeight - currentWeight) / weeklyRate) * 7,
+          );
+          const estimatedDate = new Date(Date.now() + estimatedDays * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split('T')[0];
+          prediction = {
+            targetWeight: Math.round(targetWeight * 10) / 10,
+            estimatedDays,
+            estimatedDate,
+            weeklyRate: Math.round(weeklyRate * 100) / 100,
+            plateau: false,
+          };
+        } else {
+          prediction = {
+            targetWeight: Math.round(targetWeight * 10) / 10,
+            estimatedDays: 0,
+            estimatedDate: '',
+            weeklyRate: Math.round(weeklyRate * 100) / 100,
+            plateau: true,
+          };
+        }
+      }
+    } catch {
+      // prediction stays null
+    }
+
     return {
       hasData: true,
       currentWeight,
@@ -256,6 +323,7 @@ export class ProgressService {
       statusMessage,
       weightTrend: movingAverages,
       bodyComposition: bodyCompHistory,
+      prediction,
     };
   }
 

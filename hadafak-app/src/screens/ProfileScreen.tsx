@@ -843,6 +843,38 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             </View>
           </View>
 
+          {/* Transformation Prediction Card */}
+          {analytics?.prediction && (
+            <View style={styles.predictionCard}>
+              <View style={styles.predictionHeader}>
+                <TargetIcon size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.predictionTitle}>Transformation Prediction</Text>
+              </View>
+              {analytics.prediction.plateau ? (
+                <Text style={styles.predictionBody}>
+                  Your weight has been stable lately — consider adjusting your calories or training intensity.
+                </Text>
+              ) : (
+                <>
+                  <Text style={styles.predictionBody}>
+                    At your current pace, you could reach{' '}
+                    <Text style={styles.predictionHighlight}>{analytics.prediction.targetWeight} kg</Text>
+                    {' '}in{' '}
+                    <Text style={styles.predictionHighlight}>{analytics.prediction.estimatedDays} days</Text>
+                  </Text>
+                  <View style={styles.predictionMeta}>
+                    <Text style={styles.predictionMetaText}>
+                      Est. {new Date(analytics.prediction.estimatedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Text>
+                    <Text style={styles.predictionMetaText}>
+                      {analytics.prediction.weeklyRate > 0 ? '+' : ''}{analytics.prediction.weeklyRate} kg/week
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          )}
+
           {/* Daily Target Parameters overview */}
           <Text style={styles.sectionTitle}>Calculated Targets</Text>
           <View style={styles.targetsCard}>
@@ -1855,6 +1887,49 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     color: COLORS.text,
     fontWeight: '600',
     lineHeight: 16,
+  },
+  predictionCard: {
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    ...SHADOWS.card,
+  },
+  predictionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  predictionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  predictionBody: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    fontWeight: '500',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  predictionHighlight: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  predictionMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  predictionMetaText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '600',
   },
   // Progression curve
   progressCard: {

@@ -14,6 +14,8 @@ import {
   Alert,
   Platform,
   AppState,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import { pedometerService, getLocalTodaySteps, saveLocalTodaySteps } from '../utils/pedometerService';
@@ -33,6 +35,8 @@ import {
   Trash2,
   Utensils,
   BookOpen,
+  Sparkles,
+  Send,
 } from 'lucide-react-native';
 import {
   BikeIcon,
@@ -237,6 +241,30 @@ export const HomeScreen: React.FC = () => {
   const [selectedWorkoutSession, setSelectedWorkoutSession] = useState<any | null>(null);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
 
+  // AI Coach state
+  const [coachInsight, setCoachInsight] = useState<any | null>(null);
+  const [isCoachChatVisible, setIsCoachChatVisible] = useState(false);
+  const [coachMessages, setCoachMessages] = useState<{ role: 'user' | 'coach'; text: string }[]>([]);
+  const [coachInput, setCoachInput] = useState('');
+  const [coachSending, setCoachSending] = useState(false);
+
+  const handleSendCoachMessage = async () => {
+    const text = coachInput.trim();
+    if (!text || coachSending) return;
+    setCoachMessages((prev) => [...prev, { role: 'user', text }]);
+    setCoachInput('');
+    setCoachSending(true);
+    try {
+      const res = await api.post('/coach/chat', { message: text });
+      const reply = res.data?.reply || "Sorry, I couldn't respond right now.";
+      setCoachMessages((prev) => [...prev, { role: 'coach', text: reply }]);
+    } catch (err) {
+      setCoachMessages((prev) => [...prev, { role: 'coach', text: 'Something went wrong. Please try again.' }]);
+    } finally {
+      setCoachSending(false);
+    }
+  };
+
   const handleDeleteSession = async (id: string) => {
     try {
       setLoading(true);
@@ -311,7 +339,7 @@ export const HomeScreen: React.FC = () => {
 
 
       // Run calls in parallel to ensure high performance
-      const [authRes, stepsRes, nutritionRes, workoutsRes, runsRes, recipesRes, progressRes] = await Promise.allSettled([
+      const [authRes, stepsRes, nutritionRes, workoutsRes, runsRes, recipesRes, progressRes, coachRes] = await Promise.allSettled([
         api.get('/auth/me'),
         api.get(`/steps/today?date=${todayStr}`),
         api.get(`/nutrition/logs/today?date=${todayStr}`),
@@ -319,7 +347,15 @@ export const HomeScreen: React.FC = () => {
         api.get('/runs'),
         api.get('/recipes'),
         api.get('/progress/analytics'),
+        api.get('/coach/insight'),
       ]);
+
+      // Coach insight (may be null if no analysis yet)
+      if (coachRes.status === 'fulfilled' && coachRes.value.data) {
+        setCoachInsight(coachRes.value.data);
+      } else {
+        setCoachInsight(null);
+      }
 
       // 1. Map user greeting and avatar image
       if (profile && profile.user) {
@@ -1024,6 +1060,28 @@ export const HomeScreen: React.FC = () => {
         </ScrollView>
 
         <View style={styles.contentPadding}>
+          {/* Section: AI Coach */}
+          <TouchableOpacity
+            style={styles.coachCard}
+            activeOpacity={0.9}
+            onPress={() => setIsCoachChatVisible(true)}
+          >
+            <View style={styles.coachHeaderRow}>
+              <View style={styles.coachIconBadge}>
+                <Sparkles size={16} color="#FFFFFF" />
+              </View>
+              <Text style={styles.coachTitle}>Coach</Text>
+              <View style={{ flex: 1 }} />
+              <View style={styles.coachChatPill}>
+                <Text style={styles.coachChatPillText}>Chat</Text>
+                <Send size={12} color={COLORS.primary} style={{ marginLeft: 4 }} />
+              </View>
+            </View>
+            <Text style={styles.coachMessage}>
+              {coachInsight?.message || 'Your coach is getting ready — log your workouts and weight to get personalized weekly guidance.'}
+            </Text>
+          </TouchableOpacity>
+
           {/* Section: My Plan */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionHeader}>My Plan</Text>
@@ -1630,6 +1688,85 @@ export const HomeScreen: React.FC = () => {
           </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
+
+      {/* AI Coach Chat Modal */}
+      <Modal
+        visible={isCoachChatVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsCoachChatVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.coachSheetOverlay}>
+            <View style={styles.coachSheet}>
+              <View style={styles.coachSheetHeader}>
+                <View style={styles.coachIconBadge}>
+                  <Sparkles size={16} color="#FFFFFF" />
+                </View>
+                <Text style={styles.coachSheetTitle}>Your AI Coach</Text>
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity onPress={() => setIsCoachChatVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <X size={22} color={COLORS.textLight} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.coachChatScroll}
+                contentContainerStyle={styles.coachChatContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                {coachMessages.length === 0 && (
+                  <View style={styles.coachEmptyBubble}>
+                    <Text style={styles.coachEmptyText}>
+                      Ask me anything — about your training, nutrition, recovery, or how you're feeling today.
+                    </Text>
+                  </View>
+                )}
+                {coachMessages.map((m, idx) => (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.coachBubble,
+                      m.role === 'user' ? styles.coachBubbleUser : styles.coachBubbleCoach,
+                    ]}
+                  >
+                    <Text style={m.role === 'user' ? styles.coachBubbleUserText : styles.coachBubbleCoachText}>
+                      {m.text}
+                    </Text>
+                  </View>
+                ))}
+                {coachSending && (
+                  <View style={[styles.coachBubble, styles.coachBubbleCoach]}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                  </View>
+                )}
+              </ScrollView>
+
+              <View style={styles.coachInputRow}>
+                <TextInput
+                  style={styles.coachInput}
+                  placeholder="Message your coach..."
+                  placeholderTextColor={COLORS.textMuted}
+                  value={coachInput}
+                  onChangeText={setCoachInput}
+                  multiline
+                  onSubmitEditing={handleSendCoachMessage}
+                />
+                <TouchableOpacity
+                  style={[styles.coachSendBtn, (!coachInput.trim() || coachSending) && styles.coachSendBtnDisabled]}
+                  onPress={handleSendCoachMessage}
+                  disabled={!coachInput.trim() || coachSending}
+                >
+                  <Send size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1638,6 +1775,162 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  // AI Coach card
+  coachCard: {
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  coachHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  coachIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  coachTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  coachChatPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  coachChatPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  coachMessage: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textLight,
+    fontWeight: '500',
+  },
+  // Coach chat sheet
+  coachSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  coachSheet: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    height: '78%',
+    paddingTop: 16,
+    paddingHorizontal: 18,
+    paddingBottom: 12,
+  },
+  coachSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: 12,
+  },
+  coachSheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  coachChatScroll: {
+    flex: 1,
+  },
+  coachChatContent: {
+    paddingBottom: 12,
+    gap: 10,
+  },
+  coachEmptyBubble: {
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 8,
+  },
+  coachEmptyText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textLight,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  coachBubble: {
+    maxWidth: '82%',
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  coachBubbleUser: {
+    alignSelf: 'flex-end',
+    backgroundColor: COLORS.primary,
+    borderBottomRightRadius: 6,
+  },
+  coachBubbleCoach: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.surfaceLight,
+    borderBottomLeftRadius: 6,
+  },
+  coachBubbleUserText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  coachBubbleCoachText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  coachInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  coachInput: {
+    flex: 1,
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    fontSize: 14,
+    color: COLORS.text,
+    maxHeight: 110,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  coachSendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coachSendBtnDisabled: {
+    opacity: 0.4,
   },
   loadingContainer: {
     flex: 1,
