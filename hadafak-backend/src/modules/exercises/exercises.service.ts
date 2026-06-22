@@ -8,6 +8,9 @@ import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
 import { normalizeExerciseName } from './utils/normalize';
 import { ExternalSyncService } from './external-sync.service';
+import { EXERCISE_GIF_MAP } from './exercise-gif-map';
+
+const S3_BASE = 'https://hadafak-uploads-production-e8zxio.s3.eu-central-1.amazonaws.com';
 
 @Injectable()
 export class ExercisesService {
@@ -24,6 +27,16 @@ export class ExercisesService {
     private readonly equipmentRepository: Repository<Equipment>,
     private readonly syncService: ExternalSyncService,
   ) {}
+
+  private resolveGifUrl(exercise: Exercise): void {
+    if (!exercise.externalId) return;
+    const datasetPath = EXERCISE_GIF_MAP[exercise.externalId];
+    if (datasetPath) {
+      exercise.gifUrl = `${S3_BASE}/${datasetPath}`;
+    } else if (!exercise.gifUrl || exercise.gifUrl.includes('hadafak-uploads-production-0diewr')) {
+      exercise.gifUrl = `/api/v1/exercises/image/${exercise.externalId}`;
+    }
+  }
 
   private clearCache() {
     this.cache.clear();
@@ -134,6 +147,7 @@ export class ExercisesService {
       .take(limit);
 
     const [data, total] = await queryBuilder.getManyAndCount();
+    data.forEach((ex) => this.resolveGifUrl(ex));
     const result = { data, total, page, limit };
 
     this.cache.set(cacheKey, {
@@ -156,6 +170,7 @@ export class ExercisesService {
     if (!exercise) {
       throw new NotFoundException(`Exercise with ID ${id} not found`);
     }
+    this.resolveGifUrl(exercise);
     return exercise;
   }
 
