@@ -19,8 +19,13 @@ import { ExternalSyncService } from './external-sync.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
+import { EXERCISE_GIF_MAP } from './exercise-gif-map';
 import * as fs from 'fs';
 import * as path from 'path';
+
+const S3_BUCKET = 'hadafak-uploads-production-e8zxio';
+const S3_REGION = 'eu-central-1';
+const S3_BASE = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com`;
 
 @ApiTags('Exercises')
 @Controller('exercises')
@@ -112,7 +117,14 @@ export class ExercisesController {
     const fallbackUrl = 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=360&auto=format&fit=crop';
 
     try {
-      // 1. Check if we already have it cached locally
+      // 1. Serve directly from pre-loaded S3 dataset (instant, no API calls)
+      const datasetGifPath = EXERCISE_GIF_MAP[externalId];
+      if (datasetGifPath) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        return res.redirect(`${S3_BASE}/${datasetGifPath}`);
+      }
+
+      // 2. Check local disk cache
       const uploadDir = path.join(process.cwd(), 'uploads', 'exercises');
       const localPath = path.join(uploadDir, `${externalId}.gif`);
       if (fs.existsSync(localPath)) {
@@ -121,15 +133,13 @@ export class ExercisesController {
         return res.sendFile(localPath);
       }
 
-      // 2. If not, trigger the download & cache logic!
+      // 3. Download from ExerciseDB and cache in S3
       try {
         const cachedUrl = await this.syncService.downloadAndCacheGif(externalId);
         if (cachedUrl) {
           if (cachedUrl.startsWith('http')) {
-            // S3 URL - Redirect the client
             return res.redirect(cachedUrl);
           } else {
-            // Local path - Send the file
             res.setHeader('Content-Type', 'image/gif');
             res.setHeader('Cache-Control', 'public, max-age=31536000');
             return res.sendFile(path.join(process.cwd(), cachedUrl));
@@ -139,7 +149,7 @@ export class ExercisesController {
         console.warn(`Cache attempt failed for ${externalId}: ${cacheErr.message}`);
       }
 
-      // 3. Fallback: If caching mechanism fails/is incomplete, fetch directly
+      // 4. Fallback: fetch directly from ExerciseDB and stream
       const apiKey = process.env.EXERCISEDB_API_KEY;
       if (!apiKey) {
         return res.redirect(fallbackUrl);

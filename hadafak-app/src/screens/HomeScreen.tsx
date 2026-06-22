@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,9 @@ import {
   AppState,
   TextInput,
   KeyboardAvoidingView,
+  Keyboard,
+  Pressable,
+  Animated,
 } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import { pedometerService, getLocalTodaySteps, saveLocalTodaySteps } from '../utils/pedometerService';
@@ -247,18 +250,57 @@ export const HomeScreen: React.FC = () => {
   const [coachMessages, setCoachMessages] = useState<{ role: 'user' | 'coach'; text: string }[]>([]);
   const [coachInput, setCoachInput] = useState('');
   const [coachSending, setCoachSending] = useState(false);
+  const coachScrollRef = useRef<any>(null);
+  const coachInputRef = useRef<any>(null);
+  const dot1Anim = useRef(new Animated.Value(0)).current;
+  const dot2Anim = useRef(new Animated.Value(0)).current;
+  const dot3Anim = useRef(new Animated.Value(0)).current;
 
-  const handleSendCoachMessage = async () => {
-    const text = coachInput.trim();
+  const COACH_SUGGESTIONS = [
+    "How should I train this week?",
+    "What should I eat today?",
+    "I'm feeling low energy",
+    "Help me stay motivated",
+  ];
+
+  const scrollCoachToBottom = useCallback(() => {
+    setTimeout(() => coachScrollRef.current?.scrollToEnd({ animated: true }), 80);
+  }, []);
+
+  useEffect(() => {
+    if (isCoachChatVisible) scrollCoachToBottom();
+  }, [coachMessages, coachSending, isCoachChatVisible]);
+
+  useEffect(() => {
+    if (!coachSending) return;
+    const pulse = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.delay(600 - delay),
+        ]),
+      );
+    const a1 = pulse(dot1Anim, 0);
+    const a2 = pulse(dot2Anim, 150);
+    const a3 = pulse(dot3Anim, 300);
+    a1.start(); a2.start(); a3.start();
+    return () => { a1.stop(); a2.stop(); a3.stop(); dot1Anim.setValue(0); dot2Anim.setValue(0); dot3Anim.setValue(0); };
+  }, [coachSending]);
+
+  const handleSendCoachMessage = async (overrideText?: string) => {
+    const text = (overrideText ?? coachInput).trim();
     if (!text || coachSending) return;
     setCoachMessages((prev) => [...prev, { role: 'user', text }]);
     setCoachInput('');
+    Keyboard.dismiss();
     setCoachSending(true);
     try {
       const res = await api.post('/coach/chat', { message: text });
       const reply = res.data?.reply || "Sorry, I couldn't respond right now.";
       setCoachMessages((prev) => [...prev, { role: 'coach', text: reply }]);
-    } catch (err) {
+    } catch {
       setCoachMessages((prev) => [...prev, { role: 'coach', text: 'Something went wrong. Please try again.' }]);
     } finally {
       setCoachSending(false);
@@ -1694,75 +1736,126 @@ export const HomeScreen: React.FC = () => {
         visible={isCoachChatVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setIsCoachChatVisible(false)}
+        onRequestClose={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }}
       >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View style={styles.coachSheetOverlay}>
-            <View style={styles.coachSheet}>
-              <View style={styles.coachSheetHeader}>
-                <View style={styles.coachIconBadge}>
-                  <Sparkles size={16} color="#FFFFFF" />
-                </View>
-                <Text style={styles.coachSheetTitle}>Your AI Coach</Text>
-                <View style={{ flex: 1 }} />
-                <TouchableOpacity onPress={() => setIsCoachChatVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <X size={22} color={COLORS.textLight} />
-                </TouchableOpacity>
-              </View>
+        {/* Backdrop — tap to close */}
+        <Pressable style={styles.coachBackdrop} onPress={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }} />
 
-              <ScrollView
-                style={styles.coachChatScroll}
-                contentContainerStyle={styles.coachChatContent}
-                keyboardShouldPersistTaps="handled"
+        {/* Sheet sits above keyboard via KeyboardAvoidingView wrapping only the sheet */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.coachSheetWrapper}
+        >
+          <View style={styles.coachSheet}>
+            {/* Drag handle */}
+            <View style={styles.coachDragHandle} />
+
+            {/* Header */}
+            <View style={styles.coachSheetHeader}>
+              <View style={styles.coachIconBadge}>
+                <Sparkles size={15} color="#FFFFFF" />
+              </View>
+              <View style={{ marginLeft: 10 }}>
+                <Text style={styles.coachSheetTitle}>AI Coach</Text>
+                <Text style={styles.coachSheetSubtitle}>Powered by Gemini</Text>
+              </View>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity
+                onPress={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={styles.coachCloseBtn}
               >
-                {coachMessages.length === 0 && (
-                  <View style={styles.coachEmptyBubble}>
-                    <Text style={styles.coachEmptyText}>
-                      Ask me anything — about your training, nutrition, recovery, or how you're feeling today.
-                    </Text>
+                <X size={18} color={COLORS.textLight} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Messages */}
+            <ScrollView
+              ref={coachScrollRef}
+              style={styles.coachChatScroll}
+              contentContainerStyle={styles.coachChatContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={scrollCoachToBottom}
+            >
+              {/* Empty state with suggestion chips */}
+              {coachMessages.length === 0 && (
+                <View style={styles.coachEmptyState}>
+                  <View style={styles.coachEmptyIconWrap}>
+                    <Sparkles size={28} color={COLORS.primary} />
                   </View>
-                )}
-                {coachMessages.map((m, idx) => (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.coachBubble,
-                      m.role === 'user' ? styles.coachBubbleUser : styles.coachBubbleCoach,
-                    ]}
-                  >
+                  <Text style={styles.coachEmptyTitle}>Your personal coach</Text>
+                  <Text style={styles.coachEmptyText}>
+                    Ask me about training, nutrition, recovery, or anything fitness-related.
+                  </Text>
+                  <View style={styles.coachSuggestionsRow}>
+                    {COACH_SUGGESTIONS.map((s) => (
+                      <TouchableOpacity
+                        key={s}
+                        style={styles.coachSuggestionChip}
+                        onPress={() => handleSendCoachMessage(s)}
+                      >
+                        <Text style={styles.coachSuggestionText}>{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Message bubbles */}
+              {coachMessages.map((m, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.coachBubbleWrap,
+                    m.role === 'user' ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' },
+                  ]}
+                >
+                  <View style={[styles.coachBubble, m.role === 'user' ? styles.coachBubbleUser : styles.coachBubbleCoach]}>
                     <Text style={m.role === 'user' ? styles.coachBubbleUserText : styles.coachBubbleCoachText}>
                       {m.text}
                     </Text>
                   </View>
-                ))}
-                {coachSending && (
-                  <View style={[styles.coachBubble, styles.coachBubbleCoach]}>
-                    <ActivityIndicator size="small" color={COLORS.primary} />
-                  </View>
-                )}
-              </ScrollView>
+                </View>
+              ))}
 
-              <View style={styles.coachInputRow}>
-                <TextInput
-                  style={styles.coachInput}
-                  placeholder="Message your coach..."
-                  placeholderTextColor={COLORS.textMuted}
-                  value={coachInput}
-                  onChangeText={setCoachInput}
-                  multiline
-                  onSubmitEditing={handleSendCoachMessage}
-                />
-                <TouchableOpacity
-                  style={[styles.coachSendBtn, (!coachInput.trim() || coachSending) && styles.coachSendBtnDisabled]}
-                  onPress={handleSendCoachMessage}
-                  disabled={!coachInput.trim() || coachSending}
-                >
-                  <Send size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
+              {/* Animated typing dots */}
+              {coachSending && (
+                <View style={[styles.coachBubbleWrap, { alignItems: 'flex-start' }]}>
+                  <View style={[styles.coachBubble, styles.coachBubbleCoach, styles.coachTypingBubble]}>
+                    {[dot1Anim, dot2Anim, dot3Anim].map((anim, i) => (
+                      <Animated.View
+                        key={i}
+                        style={[styles.coachDot, { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] }]}
+                      />
+                    ))}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Input row */}
+            <View style={styles.coachInputRow}>
+              <TextInput
+                ref={coachInputRef}
+                style={styles.coachInput}
+                placeholder="Message your coach..."
+                placeholderTextColor={COLORS.textMuted}
+                value={coachInput}
+                onChangeText={setCoachInput}
+                multiline
+                returnKeyType="send"
+                blurOnSubmit={false}
+                onSubmitEditing={() => handleSendCoachMessage()}
+              />
+              <TouchableOpacity
+                style={[styles.coachSendBtn, (!coachInput.trim() || coachSending) && styles.coachSendBtnDisabled]}
+                onPress={() => handleSendCoachMessage()}
+                disabled={!coachInput.trim() || coachSending}
+                activeOpacity={0.8}
+              >
+                <Send size={17} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -1826,45 +1919,88 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     fontWeight: '500',
   },
   // Coach chat sheet
-  coachSheetOverlay: {
-    flex: 1,
+  coachBackdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
+  },
+  coachSheetWrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   coachSheet: {
     backgroundColor: COLORS.background,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    height: '78%',
-    paddingTop: 16,
-    paddingHorizontal: 18,
-    paddingBottom: 12,
+    maxHeight: '88%',
+    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+  },
+  coachDragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 6,
   },
   coachSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    marginBottom: 12,
   },
   coachSheetTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.text,
+    lineHeight: 19,
+  },
+  coachSheetSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.textMuted,
+  },
+  coachCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.surfaceLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   coachChatScroll: {
-    flex: 1,
+    maxHeight: 420,
   },
   coachChatContent: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
     paddingBottom: 12,
-    gap: 10,
+    gap: 8,
   },
-  coachEmptyBubble: {
-    backgroundColor: COLORS.surfaceLight,
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 8,
+  // Empty state
+  coachEmptyState: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  coachEmptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  coachEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 6,
   },
   coachEmptyText: {
     fontSize: 13,
@@ -1872,22 +2008,58 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     color: COLORS.textLight,
     fontWeight: '500',
     textAlign: 'center',
+    paddingHorizontal: 12,
+    marginBottom: 20,
+  },
+  coachSuggestionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  coachSuggestionChip: {
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  coachSuggestionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  // Bubbles
+  coachBubbleWrap: {
+    width: '100%',
   },
   coachBubble: {
-    maxWidth: '82%',
+    maxWidth: '80%',
     borderRadius: 18,
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
   coachBubbleUser: {
-    alignSelf: 'flex-end',
     backgroundColor: COLORS.primary,
-    borderBottomRightRadius: 6,
+    borderBottomRightRadius: 5,
   },
   coachBubbleCoach: {
-    alignSelf: 'flex-start',
     backgroundColor: COLORS.surfaceLight,
-    borderBottomLeftRadius: 6,
+    borderBottomLeftRadius: 5,
+  },
+  coachTypingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  coachDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: COLORS.textMuted,
   },
   coachBubbleUserText: {
     fontSize: 14,
@@ -1901,11 +2073,13 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     color: COLORS.text,
     fontWeight: '500',
   },
+  // Input
   coachInputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
     paddingTop: 10,
+    paddingHorizontal: 18,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
@@ -1914,23 +2088,23 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     backgroundColor: COLORS.surfaceLight,
     borderRadius: 22,
     paddingHorizontal: 16,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    paddingVertical: Platform.OS === 'ios' ? 11 : 8,
     fontSize: 14,
     color: COLORS.text,
-    maxHeight: 110,
+    maxHeight: 100,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   coachSendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   coachSendBtnDisabled: {
-    opacity: 0.4,
+    opacity: 0.35,
   },
   loadingContainer: {
     flex: 1,
