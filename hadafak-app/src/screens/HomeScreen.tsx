@@ -40,6 +40,7 @@ import {
   BookOpen,
   Sparkles,
   Send,
+  Bot,
 } from 'lucide-react-native';
 import {
   BikeIcon,
@@ -1110,7 +1111,7 @@ export const HomeScreen: React.FC = () => {
           >
             <View style={styles.coachHeaderRow}>
               <View style={styles.coachIconBadge}>
-                <Sparkles size={16} color="#FFFFFF" />
+                <Bot size={16} color="#FFFFFF" />
               </View>
               <Text style={styles.coachTitle}>Coach</Text>
               <View style={{ flex: 1 }} />
@@ -1738,14 +1739,13 @@ export const HomeScreen: React.FC = () => {
         transparent
         onRequestClose={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }}
       >
-        {/* Backdrop — tap to close */}
-        <Pressable style={styles.coachBackdrop} onPress={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }} />
-
-        {/* Sheet sits above keyboard via KeyboardAvoidingView wrapping only the sheet */}
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.coachSheetWrapper}
+          style={styles.coachModalOuter}
         >
+          {/* Dimmed backdrop — tap above sheet to close */}
+          <Pressable style={{ flex: 1 }} onPress={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }} />
+
           <View style={styles.coachSheet}>
             {/* Drag handle */}
             <View style={styles.coachDragHandle} />
@@ -1753,7 +1753,7 @@ export const HomeScreen: React.FC = () => {
             {/* Header */}
             <View style={styles.coachSheetHeader}>
               <View style={styles.coachIconBadge}>
-                <Sparkles size={15} color="#FFFFFF" />
+                <Bot size={15} color="#FFFFFF" />
               </View>
               <View style={{ marginLeft: 10 }}>
                 <Text style={styles.coachSheetTitle}>AI Coach</Text>
@@ -1782,7 +1782,7 @@ export const HomeScreen: React.FC = () => {
               {coachMessages.length === 0 && (
                 <View style={styles.coachEmptyState}>
                   <View style={styles.coachEmptyIconWrap}>
-                    <Sparkles size={28} color={COLORS.primary} />
+                    <Bot size={28} color={COLORS.primary} />
                   </View>
                   <Text style={styles.coachEmptyTitle}>Your personal coach</Text>
                   <Text style={styles.coachEmptyText}>
@@ -1860,6 +1860,7 @@ export const HomeScreen: React.FC = () => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
     </SafeAreaView>
   );
 };
@@ -1919,15 +1920,10 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     fontWeight: '500',
   },
   // Coach chat sheet
-  coachBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+  coachModalOuter: {
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  coachSheetWrapper: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    justifyContent: 'flex-end',
   },
   coachSheet: {
     backgroundColor: COLORS.background,
@@ -1973,7 +1969,7 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
   },
   coachChatScroll: {
-    maxHeight: 420,
+    flex: 1,
   },
   coachChatContent: {
     paddingHorizontal: 18,
