@@ -33,6 +33,15 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
 
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sign in / sign up with a Google ID token' })
+  @ApiResponse({ status: 200, description: 'Successfully authenticated with Google.' })
+  @ApiResponse({ status: 401, description: 'Invalid Google ID token.' })
+  async google(@Body('idToken') idToken: string) {
+    return this.authService.googleLogin(idToken);
+  }
+
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh JWT access tokens' })

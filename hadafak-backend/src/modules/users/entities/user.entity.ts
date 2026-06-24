@@ -27,6 +27,13 @@ export class User {
   @Column({ name: 'avatar_url', nullable: true })
   avatarUrl?: string;
 
+  // 'local' for email/password, 'google' for Google sign-in.
+  @Column({ default: 'local' })
+  provider: string;
+
+  @Column({ name: 'google_id', nullable: true, unique: true })
+  googleId?: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

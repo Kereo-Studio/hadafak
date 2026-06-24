@@ -2,12 +2,15 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { OAuth2Client } from 'google-auth-library';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly googleClient = new OAuth2Client();
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -39,6 +42,47 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user.id, user.email);
     
+    const { password, ...userResponse } = user;
+    return {
+      user: userResponse,
+      ...tokens,
+    };
+  }
+
+  async googleLogin(idToken: string) {
+    if (!idToken) {
+      throw new UnauthorizedException('Missing Google ID token');
+    }
+
+    const audience = [
+      this.configService.get<string>('app.googleClientIdWeb'),
+      this.configService.get<string>('app.googleClientIdIos'),
+      this.configService.get<string>('app.googleClientIdAndroid'),
+    ].filter((id): id is string => !!id);
+
+    let payload;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({ idToken, audience });
+      payload = ticket.getPayload();
+    } catch {
+      throw new UnauthorizedException('Invalid Google ID token');
+    }
+
+    if (!payload?.email || !payload.sub) {
+      throw new UnauthorizedException('Google account is missing an email');
+    }
+    if (payload.email_verified === false) {
+      throw new UnauthorizedException('Google email is not verified');
+    }
+
+    const user = await this.usersService.findOrCreateGoogleUser({
+      googleId: payload.sub,
+      email: payload.email,
+      name: payload.name,
+      avatarUrl: payload.picture,
+    });
+
+    const tokens = await this.generateTokens(user.id, user.email);
     const { password, ...userResponse } = user;
     return {
       user: userResponse,
