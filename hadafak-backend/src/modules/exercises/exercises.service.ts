@@ -10,7 +10,7 @@ import { normalizeExerciseName } from './utils/normalize';
 import { ExternalSyncService } from './external-sync.service';
 import { EXERCISE_GIF_MAP } from './exercise-gif-map';
 
-const S3_BASE = 'https://hadafak-uploads-production-e8zxio.s3.eu-central-1.amazonaws.com';
+const S3_BASE = 'https://hadafak-uploads-production-6jjwk7.s3.eu-central-1.amazonaws.com';
 
 @Injectable()
 export class ExercisesService {

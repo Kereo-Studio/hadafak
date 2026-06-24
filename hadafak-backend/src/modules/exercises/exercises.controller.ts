@@ -23,7 +23,7 @@ import { EXERCISE_GIF_MAP } from './exercise-gif-map';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const S3_BUCKET = 'hadafak-uploads-production-e8zxio';
+const S3_BUCKET = 'hadafak-uploads-production-6jjwk7';
 const S3_REGION = 'eu-central-1';
 const S3_BASE = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com`;
 
