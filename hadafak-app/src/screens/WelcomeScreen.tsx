@@ -1,10 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet, Dimensions, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Dimensions, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemeColors } from '../theme/colors';
 import { useThemeColors } from '../theme/ThemeContext';
 import { Button } from '../components/Button';
+import { GoogleButton } from '../components/GoogleButton';
 import { TrophyIcon } from '../components/icons/fitness';
+import { signInWithGoogle } from '../services/googleAuth';
 
 const { width } = Dimensions.get('window');
 const logoImg = require('../../assets/hadafaklogo-nobg.png');
@@ -12,14 +14,34 @@ const logoImg = require('../../assets/hadafaklogo-nobg.png');
 interface WelcomeScreenProps {
   onNavigateToLogin: () => void;
   onNavigateToSignup: () => void;
+  onAuthSuccess: () => void;
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onNavigateToLogin,
   onNavigateToSignup,
+  onAuthSuccess,
 }) => {
   const COLORS = useThemeColors();
   const styles = getStyles(COLORS);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    if (googleLoading) return;
+    setGoogleLoading(true);
+    try {
+      const result = await signInWithGoogle();
+      if (result === 'success') {
+        onAuthSuccess();
+      }
+    } catch (err) {
+      console.warn('Google sign-in failed:', err);
+      Alert.alert('Sign-in failed', 'Could not sign in with Google. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Soft decorative background shapes */}
@@ -57,6 +79,14 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             onPress={onNavigateToLogin}
             variant="outline"
           />
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <GoogleButton onPress={handleGoogleSignIn} loading={googleLoading} />
         </View>
 
         {/* Bottom Footer Info */}
@@ -158,6 +188,22 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   },
   signupButton: {
     marginBottom: 4,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 6,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+  },
+  dividerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textMuted,
   },
   footerText: {
     fontSize: 12,

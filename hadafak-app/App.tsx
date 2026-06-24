@@ -15,6 +15,7 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { CoachChatScreen } from './src/screens/CoachChatScreen';
 import { storage } from './src/utils/storage';
 import { api, registerLogoutCallback } from './src/services/api';
+import { configureGoogleSignIn, signOutGoogle } from './src/services/googleAuth';
 
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -36,6 +37,7 @@ function AppContent() {
 
   // Check login status on launch
   useEffect(() => {
+    configureGoogleSignIn();
     registerLogoutCallback(() => {
       handleLogout();
     });
@@ -75,6 +77,7 @@ function AppContent() {
   const handleLogout = async () => {
     setAuthState('loading');
     try {
+      await signOutGoogle();
       await storage.deleteItem('access_token');
       await storage.deleteItem('refresh_token');
       setUserEmail(null);
@@ -124,6 +127,7 @@ function AppContent() {
           <WelcomeScreen
             onNavigateToLogin={() => setAuthState('login')}
             onNavigateToSignup={() => setAuthState('signup')}
+            onAuthSuccess={handleAuthSuccess}
           />
         </View>
       );
