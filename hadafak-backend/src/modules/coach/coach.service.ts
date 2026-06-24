@@ -243,43 +243,74 @@ Respond with ONLY valid JSON:
     return memory;
   }
 
+  // Tried in order — fall through to the next when one is overloaded (503).
+  private static readonly GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+
   private async callGemini<T>(prompt: string): Promise<T> {
     const apiKey = this.configService.get<string>('app.geminiApiKey');
     if (!apiKey) throw new InternalServerErrorException('Gemini API key not configured.');
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const payload = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' },
     };
 
-    let response: Response = null as any;
-    let delay = 1000;
-    for (let i = 0; i < 3; i++) {
-      response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (response.ok) break;
-      if (response.status === 429 || response.status === 503) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay *= 2;
-      } else {
-        throw new InternalServerErrorException(`Gemini API error: ${response.status}`);
+    let lastStatus = 0;
+    for (const model of CoachService.GEMINI_MODELS) {
+      const result = await this.tryGeminiModel<T>(model, apiKey, payload);
+      if (result.ok) return result.value;
+      lastStatus = result.status;
+      // transient (429/503) — fall through to the next model; otherwise fail fast
+      if (result.status !== 429 && result.status !== 503) {
+        throw new InternalServerErrorException(`Gemini API error: ${result.status}`);
       }
     }
 
-    if (!response.ok) {
-      throw new InternalServerErrorException(`Gemini API unavailable after retries (${response.status})`);
+    throw new InternalServerErrorException(`Gemini API unavailable after retries (${lastStatus})`);
+  }
+
+  // Retries one model up to 3 times with exponential backoff on 429/503 + network errors.
+  private async tryGeminiModel<T>(
+    model: string,
+    apiKey: string,
+    payload: unknown,
+  ): Promise<{ ok: true; value: T } | { ok: false; status: number }> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    let delay = 1000;
+    let lastStatus = 503;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 2;
+        continue;
+      }
+
+      if (response.ok) {
+        const json = await response.json();
+        const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        try {
+          return { ok: true, value: JSON.parse(text) as T };
+        } catch {
+          throw new InternalServerErrorException('Failed to parse Gemini response.');
+        }
+      }
+
+      lastStatus = response.status;
+      if (response.status !== 429 && response.status !== 503) {
+        return { ok: false, status: response.status };
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay *= 2;
     }
 
-    const json = await response.json();
-    try {
-      const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-      return JSON.parse(text) as T;
-    } catch {
-      throw new InternalServerErrorException('Failed to parse Gemini response.');
-    }
+    return { ok: false, status: lastStatus };
   }
 }
