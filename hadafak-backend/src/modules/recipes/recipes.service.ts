@@ -211,41 +211,14 @@ Respond with ONLY a valid JSON object matching this schema:
 Valid tags (use 1-3 that apply): High-Protein, Low-Carb, Low-Calories, Pre-Workout, Post-Workout, Quick, Meal-Prep, AI-Generated
 Always include "AI-Generated" in tags. Use realistic amounts and cooking times.`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    const payload = {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json' },
-    };
+    const rawText = await this.callGeminiText(apiKey, prompt);
 
-    let response: Response = null as any;
-    let delay = 1000;
-    for (let i = 0; i < 3; i++) {
-      response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (response.ok) break;
-      if (response.status === 429 || response.status === 503) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay *= 2;
-      } else {
-        throw new InternalServerErrorException(`Gemini API error: ${response.status}`);
-      }
-    }
-
-    if (!response.ok) {
-      throw new InternalServerErrorException(`Gemini API unavailable after retries (${response.status})`);
-    }
-
-    const json = await response.json();
     let parsed: any;
     try {
-      const rawText: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
       // Gemini with responseMimeType:'application/json' may return a JSON string or already-parsed object
       parsed = typeof rawText === 'string' ? JSON.parse(rawText) : rawText;
     } catch (parseErr) {
-      console.error('[RecipesService] Gemini parse error:', parseErr, 'Raw response:', JSON.stringify(json));
+      console.error('[RecipesService] Gemini parse error:', parseErr, 'Raw response:', rawText);
       throw new InternalServerErrorException('Failed to parse Gemini response. Please try again.');
     }
 
@@ -322,6 +295,70 @@ Always include "AI-Generated" in tags. Use realistic amounts and cooking times.`
         fat: Math.round(Number(match.fat) * suggestedAmount * 10) / 10,
       },
     };
+  }
+
+  // Tried in order — fall through to the next when one is overloaded (503).
+  private static readonly GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+
+  private async callGeminiText(apiKey: string, prompt: string): Promise<string> {
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json' },
+    };
+
+    let lastStatus = 0;
+    for (const model of RecipesService.GEMINI_MODELS) {
+      const result = await this.tryGeminiModel(model, apiKey, payload);
+      if (result.ok) return result.text;
+      lastStatus = result.status;
+      // transient (429/503) — fall through to the next model; otherwise fail fast
+      if (result.status !== 429 && result.status !== 503) {
+        throw new InternalServerErrorException(`Gemini API error: ${result.status}`);
+      }
+    }
+
+    throw new InternalServerErrorException(`Gemini API unavailable after retries (${lastStatus})`);
+  }
+
+  // Retries one model up to 3 times with exponential backoff on 429/503 + network errors.
+  private async tryGeminiModel(
+    model: string,
+    apiKey: string,
+    payload: unknown,
+  ): Promise<{ ok: true; text: string } | { ok: false; status: number }> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    let delay = 1000;
+    let lastStatus = 503;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 2;
+        continue;
+      }
+
+      if (response.ok) {
+        const json = await response.json();
+        const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        return { ok: true, text };
+      }
+
+      lastStatus = response.status;
+      if (response.status !== 429 && response.status !== 503) {
+        return { ok: false, status: response.status };
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay *= 2;
+    }
+
+    return { ok: false, status: lastStatus };
   }
 
   private populateDynamicTags(recipe: Recipe): void {
