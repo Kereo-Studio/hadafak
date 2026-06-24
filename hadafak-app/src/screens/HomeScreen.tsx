@@ -66,7 +66,7 @@ import { api, API_BASE_URL } from '../services/api';
 import { StateFeedback } from '../components/StateFeedback';
 import { storage } from '../utils/storage';
 
-const { width } = Dimensions.get('window');
+const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const CARDIO_EXERCISES = [
   { id: 'cycling', name: 'Cycling', icon: BikeIcon, type: 'cycling', category: 'run' },
@@ -1739,7 +1739,10 @@ export const HomeScreen: React.FC = () => {
         transparent
         onRequestClose={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }}
       >
-        <View style={styles.coachModalOuter}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.coachModalOuter}
+        >
           {/* Dimmed backdrop — tap above sheet to close */}
           <Pressable style={{ flex: 1 }} onPress={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }} />
 
@@ -1831,35 +1834,31 @@ export const HomeScreen: React.FC = () => {
               )}
             </ScrollView>
 
-            {/* Input row — KAV here only so sheet height never changes */}
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            >
-              <View style={styles.coachInputRow}>
-                <TextInput
-                  ref={coachInputRef}
-                  style={styles.coachInput}
-                  placeholder="Message your coach..."
-                  placeholderTextColor={COLORS.textMuted}
-                  value={coachInput}
-                  onChangeText={setCoachInput}
-                  multiline
-                  returnKeyType="send"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => handleSendCoachMessage()}
-                />
-                <TouchableOpacity
-                  style={[styles.coachSendBtn, (!coachInput.trim() || coachSending) && styles.coachSendBtnDisabled]}
-                  onPress={() => handleSendCoachMessage()}
-                  disabled={!coachInput.trim() || coachSending}
-                  activeOpacity={0.8}
-                >
-                  <Send size={17} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
+            {/* Input row */}
+            <View style={styles.coachInputRow}>
+              <TextInput
+                ref={coachInputRef}
+                style={styles.coachInput}
+                placeholder="Message your coach..."
+                placeholderTextColor={COLORS.textMuted}
+                value={coachInput}
+                onChangeText={setCoachInput}
+                multiline
+                returnKeyType="send"
+                blurOnSubmit={false}
+                onSubmitEditing={() => handleSendCoachMessage()}
+              />
+              <TouchableOpacity
+                style={[styles.coachSendBtn, (!coachInput.trim() || coachSending) && styles.coachSendBtnDisabled]}
+                onPress={() => handleSendCoachMessage()}
+                disabled={!coachInput.trim() || coachSending}
+                activeOpacity={0.8}
+              >
+                <Send size={17} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
     </SafeAreaView>
@@ -1930,7 +1929,7 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     backgroundColor: COLORS.background,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    height: '82%',
+    height: SCREEN_HEIGHT * 0.82,
     flexDirection: 'column',
   },
   coachDragHandle: {
