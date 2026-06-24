@@ -34,9 +34,19 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       if (result === 'success') {
         onAuthSuccess();
       }
-    } catch (err) {
-      console.warn('Google sign-in failed:', err);
-      Alert.alert('Sign-in failed', 'Could not sign in with Google. Please try again.');
+    } catch (err: any) {
+      // Surface the real reason so we can tell Google-side vs backend-side failures apart.
+      const googleCode = err?.code; // e.g. DEVELOPER_ERROR, PLAY_SERVICES_NOT_AVAILABLE
+      const httpStatus = err?.response?.status; // backend /auth/google failure
+      const serverMsg = err?.response?.data?.message;
+      const detail =
+        serverMsg ||
+        (googleCode ? `Google error: ${googleCode}` : null) ||
+        (httpStatus ? `Server ${httpStatus}` : null) ||
+        err?.message ||
+        'Unknown error';
+      console.warn('Google sign-in failed:', { googleCode, httpStatus, serverMsg, message: err?.message });
+      Alert.alert('Sign-in failed', String(detail));
     } finally {
       setGoogleLoading(false);
     }

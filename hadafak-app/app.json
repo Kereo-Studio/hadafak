@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/hadafaklogo-nobg.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -53,7 +53,7 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/hadafaklogo-nobg.png"
     },
     "plugins": [
       "expo-secure-store",
