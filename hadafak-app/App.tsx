@@ -12,11 +12,13 @@ import { WorkoutsScreen } from './src/screens/WorkoutsScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { NutritionScreen } from './src/screens/NutritionScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { CoachChatScreen } from './src/screens/CoachChatScreen';
 import { storage } from './src/utils/storage';
 import { api, registerLogoutCallback } from './src/services/api';
 
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MapPin, Play, Apple, Award, Home } from 'lucide-react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider } from './src/components/CustomAlert';
@@ -24,6 +26,7 @@ import { AlertProvider } from './src/components/CustomAlert';
 type AuthState = 'loading' | 'welcome' | 'login' | 'signup' | 'onboarding' | 'authenticated';
 
 const Tab = createBottomTabNavigator();
+const RootStack = createNativeStackNavigator();
 
 function AppContent() {
   const { colors: COLORS, isDark } = useTheme();
@@ -166,69 +169,80 @@ function AppContent() {
     return (
       <NavigationContainer>
         <StatusBar style={isDark ? "light" : "dark"} />
-        <Tab.Navigator
-          screenOptions={{
-            headerShown: false,
-            tabBarStyle: styles.tabBar,
-            tabBarActiveTintColor: COLORS.primary,
-            tabBarInactiveTintColor: COLORS.textMuted,
-          }}
-        >
-          {/* Tab 1: Home Dashboard */}
-          <Tab.Screen
-            name="Home"
-            component={HomeScreen}
-            options={{
-              tabBarIcon: ({ color }) => <Home size={24} color={color} />,
-              tabBarLabel: () => null,
-            }}
-          />
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+          <RootStack.Screen name="MainTabs">
+            {() => (
+              <Tab.Navigator
+                screenOptions={{
+                  headerShown: false,
+                  tabBarStyle: styles.tabBar,
+                  tabBarActiveTintColor: COLORS.primary,
+                  tabBarInactiveTintColor: COLORS.textMuted,
+                }}
+              >
+                {/* Tab 1: Home Dashboard */}
+                <Tab.Screen
+                  name="Home"
+                  component={HomeScreen}
+                  options={{
+                    tabBarIcon: ({ color }) => <Home size={24} color={color} />,
+                    tabBarLabel: () => null,
+                  }}
+                />
 
-          {/* Tab 2: GPS Route tracker */}
-          <Tab.Screen
-            name="Map"
-            component={MapScreen}
-            options={{
-              tabBarIcon: ({ color }) => <MapPin size={24} color={color} />,
-              tabBarLabel: () => null,
-            }}
-          />
+                {/* Tab 2: GPS Route tracker */}
+                <Tab.Screen
+                  name="Map"
+                  component={MapScreen}
+                  options={{
+                    tabBarIcon: ({ color }) => <MapPin size={24} color={color} />,
+                    tabBarLabel: () => null,
+                  }}
+                />
 
-          {/* Tab 3: Central workouts button (Renders custom play circle) */}
-          <Tab.Screen
-            name="Workouts"
-            component={WorkoutsScreen}
-            options={{
-              tabBarIcon: () => (
-                <View style={styles.centerPlayButton}>
-                  <Play size={24} color={COLORS.textInverse} fill={COLORS.textInverse} style={{ marginLeft: 3 }} />
-                </View>
-              ),
-              tabBarLabel: () => null,
-            }}
-          />
+                {/* Tab 3: Central workouts button (Renders custom play circle) */}
+                <Tab.Screen
+                  name="Workouts"
+                  component={WorkoutsScreen}
+                  options={{
+                    tabBarIcon: () => (
+                      <View style={styles.centerPlayButton}>
+                        <Play size={24} color={COLORS.textInverse} fill={COLORS.textInverse} style={{ marginLeft: 3 }} />
+                      </View>
+                    ),
+                    tabBarLabel: () => null,
+                  }}
+                />
 
-          {/* Tab 4: AI Nutrition */}
-          <Tab.Screen
-            name="Nutrition"
-            component={NutritionScreen}
-            options={{
-              tabBarIcon: ({ color }) => <Apple size={24} color={color} />,
-              tabBarLabel: () => null,
-            }}
-          />
+                {/* Tab 4: AI Nutrition */}
+                <Tab.Screen
+                  name="Nutrition"
+                  component={NutritionScreen}
+                  options={{
+                    tabBarIcon: ({ color }) => <Apple size={24} color={color} />,
+                    tabBarLabel: () => null,
+                  }}
+                />
 
-          {/* Tab 5: Profile & Stats */}
-          <Tab.Screen
-            name="Profile"
-            options={{
-              tabBarIcon: ({ color }) => <Award size={24} color={color} />,
-              tabBarLabel: () => null,
-            }}
-          >
-            {(props) => <ProfileScreen {...props} onLogout={handleLogout} />}
-          </Tab.Screen>
-        </Tab.Navigator>
+                {/* Tab 5: Profile & Stats */}
+                <Tab.Screen
+                  name="Profile"
+                  options={{
+                    tabBarIcon: ({ color }) => <Award size={24} color={color} />,
+                    tabBarLabel: () => null,
+                  }}
+                >
+                  {(props) => <ProfileScreen {...props} onLogout={handleLogout} />}
+                </Tab.Screen>
+              </Tab.Navigator>
+            )}
+          </RootStack.Screen>
+          <RootStack.Screen
+            name="CoachChat"
+            component={CoachChatScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+        </RootStack.Navigator>
       </NavigationContainer>
     );
   };

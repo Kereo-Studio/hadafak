@@ -14,11 +14,6 @@ import {
   Alert,
   Platform,
   AppState,
-  TextInput,
-  KeyboardAvoidingView,
-  Keyboard,
-  Pressable,
-  Animated,
 } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import { pedometerService, getLocalTodaySteps, saveLocalTodaySteps } from '../utils/pedometerService';
@@ -66,7 +61,7 @@ import { api, API_BASE_URL } from '../services/api';
 import { StateFeedback } from '../components/StateFeedback';
 import { storage } from '../utils/storage';
 
-const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const CARDIO_EXERCISES = [
   { id: 'cycling', name: 'Cycling', icon: BikeIcon, type: 'cycling', category: 'run' },
@@ -245,68 +240,8 @@ export const HomeScreen: React.FC = () => {
   const [selectedWorkoutSession, setSelectedWorkoutSession] = useState<any | null>(null);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
 
-  // AI Coach state
+  // AI Coach insight (card preview only — chat lives in CoachChatScreen)
   const [coachInsight, setCoachInsight] = useState<any | null>(null);
-  const [isCoachChatVisible, setIsCoachChatVisible] = useState(false);
-  const [coachMessages, setCoachMessages] = useState<{ role: 'user' | 'coach'; text: string }[]>([]);
-  const [coachInput, setCoachInput] = useState('');
-  const [coachSending, setCoachSending] = useState(false);
-  const coachScrollRef = useRef<any>(null);
-  const coachInputRef = useRef<any>(null);
-  const dot1Anim = useRef(new Animated.Value(0)).current;
-  const dot2Anim = useRef(new Animated.Value(0)).current;
-  const dot3Anim = useRef(new Animated.Value(0)).current;
-
-  const COACH_SUGGESTIONS = [
-    "How should I train this week?",
-    "What should I eat today?",
-    "I'm feeling low energy",
-    "Help me stay motivated",
-  ];
-
-  const scrollCoachToBottom = useCallback(() => {
-    setTimeout(() => coachScrollRef.current?.scrollToEnd({ animated: true }), 80);
-  }, []);
-
-  useEffect(() => {
-    if (isCoachChatVisible) scrollCoachToBottom();
-  }, [coachMessages, coachSending, isCoachChatVisible]);
-
-  useEffect(() => {
-    if (!coachSending) return;
-    const pulse = (dot: Animated.Value, delay: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
-          Animated.delay(600 - delay),
-        ]),
-      );
-    const a1 = pulse(dot1Anim, 0);
-    const a2 = pulse(dot2Anim, 150);
-    const a3 = pulse(dot3Anim, 300);
-    a1.start(); a2.start(); a3.start();
-    return () => { a1.stop(); a2.stop(); a3.stop(); dot1Anim.setValue(0); dot2Anim.setValue(0); dot3Anim.setValue(0); };
-  }, [coachSending]);
-
-  const handleSendCoachMessage = async (overrideText?: string) => {
-    const text = (overrideText ?? coachInput).trim();
-    if (!text || coachSending) return;
-    setCoachMessages((prev) => [...prev, { role: 'user', text }]);
-    setCoachInput('');
-    Keyboard.dismiss();
-    setCoachSending(true);
-    try {
-      const res = await api.post('/coach/chat', { message: text });
-      const reply = res.data?.reply || "Sorry, I couldn't respond right now.";
-      setCoachMessages((prev) => [...prev, { role: 'coach', text: reply }]);
-    } catch {
-      setCoachMessages((prev) => [...prev, { role: 'coach', text: 'Something went wrong. Please try again.' }]);
-    } finally {
-      setCoachSending(false);
-    }
-  };
 
   const handleDeleteSession = async (id: string) => {
     try {
@@ -1107,7 +1042,7 @@ export const HomeScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.coachCard}
             activeOpacity={0.9}
-            onPress={() => setIsCoachChatVisible(true)}
+            onPress={() => navigation.navigate('CoachChat')}
           >
             <View style={styles.coachHeaderRow}>
               <View style={styles.coachIconBadge}>
@@ -1732,135 +1667,6 @@ export const HomeScreen: React.FC = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* AI Coach Chat Modal */}
-      <Modal
-        visible={isCoachChatVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.coachModalOuter}
-        >
-          {/* Dimmed backdrop — tap above sheet to close */}
-          <Pressable style={{ flex: 1 }} onPress={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }} />
-
-          <View style={styles.coachSheet}>
-            {/* Drag handle */}
-            <View style={styles.coachDragHandle} />
-
-            {/* Header */}
-            <View style={styles.coachSheetHeader}>
-              <View style={styles.coachIconBadge}>
-                <Bot size={15} color="#FFFFFF" />
-              </View>
-              <View style={{ marginLeft: 10 }}>
-                <Text style={styles.coachSheetTitle}>AI Coach</Text>
-                <Text style={styles.coachSheetSubtitle}>Powered by Gemini</Text>
-              </View>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity
-                onPress={() => { setIsCoachChatVisible(false); Keyboard.dismiss(); }}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                style={styles.coachCloseBtn}
-              >
-                <X size={18} color={COLORS.textLight} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Messages */}
-            <ScrollView
-              ref={coachScrollRef}
-              style={styles.coachChatScroll}
-              contentContainerStyle={styles.coachChatContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              onContentSizeChange={scrollCoachToBottom}
-            >
-              {/* Empty state with suggestion chips */}
-              {coachMessages.length === 0 && (
-                <View style={styles.coachEmptyState}>
-                  <View style={styles.coachEmptyIconWrap}>
-                    <Bot size={28} color={COLORS.primary} />
-                  </View>
-                  <Text style={styles.coachEmptyTitle}>Your personal coach</Text>
-                  <Text style={styles.coachEmptyText}>
-                    Ask me about training, nutrition, recovery, or anything fitness-related.
-                  </Text>
-                  <View style={styles.coachSuggestionsRow}>
-                    {COACH_SUGGESTIONS.map((s) => (
-                      <TouchableOpacity
-                        key={s}
-                        style={styles.coachSuggestionChip}
-                        onPress={() => handleSendCoachMessage(s)}
-                      >
-                        <Text style={styles.coachSuggestionText}>{s}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Message bubbles */}
-              {coachMessages.map((m, idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.coachBubbleWrap,
-                    m.role === 'user' ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' },
-                  ]}
-                >
-                  <View style={[styles.coachBubble, m.role === 'user' ? styles.coachBubbleUser : styles.coachBubbleCoach]}>
-                    <Text style={m.role === 'user' ? styles.coachBubbleUserText : styles.coachBubbleCoachText}>
-                      {m.text}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-
-              {/* Animated typing dots */}
-              {coachSending && (
-                <View style={[styles.coachBubbleWrap, { alignItems: 'flex-start' }]}>
-                  <View style={[styles.coachBubble, styles.coachBubbleCoach, styles.coachTypingBubble]}>
-                    {[dot1Anim, dot2Anim, dot3Anim].map((anim, i) => (
-                      <Animated.View
-                        key={i}
-                        style={[styles.coachDot, { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] }]}
-                      />
-                    ))}
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-
-            {/* Input row */}
-            <View style={styles.coachInputRow}>
-              <TextInput
-                ref={coachInputRef}
-                style={styles.coachInput}
-                placeholder="Message your coach..."
-                placeholderTextColor={COLORS.textMuted}
-                value={coachInput}
-                onChangeText={setCoachInput}
-                multiline
-                returnKeyType="send"
-                blurOnSubmit={false}
-                onSubmitEditing={() => handleSendCoachMessage()}
-              />
-              <TouchableOpacity
-                style={[styles.coachSendBtn, (!coachInput.trim() || coachSending) && styles.coachSendBtnDisabled]}
-                onPress={() => handleSendCoachMessage()}
-                disabled={!coachInput.trim() || coachSending}
-                activeOpacity={0.8}
-              >
-                <Send size={17} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
     </SafeAreaView>
   );
 };
@@ -1918,193 +1724,6 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     lineHeight: 19,
     color: COLORS.textLight,
     fontWeight: '500',
-  },
-  // Coach chat sheet
-  coachModalOuter: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  coachSheet: {
-    backgroundColor: COLORS.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    height: SCREEN_HEIGHT * 0.82,
-    flexDirection: 'column',
-  },
-  coachDragHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.border,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  coachSheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.border,
-  },
-  coachSheetTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  coachSheetSubtitle: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-    marginTop: 1,
-  },
-  coachCloseBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: COLORS.surfaceLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coachChatScroll: {
-    flex: 1,
-  },
-  coachChatContent: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 12,
-    gap: 10,
-    flexGrow: 1,
-  },
-  // Empty state
-  coachEmptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-  },
-  coachEmptyIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  coachEmptyTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  coachEmptyText: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: COLORS.textMuted,
-    fontWeight: '400',
-    textAlign: 'center',
-    marginBottom: 28,
-  },
-  coachSuggestionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  coachSuggestionChip: {
-    backgroundColor: COLORS.surfaceLight,
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  coachSuggestionText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  // Bubbles
-  coachBubbleWrap: {
-    width: '100%',
-  },
-  coachBubble: {
-    maxWidth: '80%',
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  coachBubbleUser: {
-    backgroundColor: COLORS.primary,
-    borderBottomRightRadius: 5,
-  },
-  coachBubbleCoach: {
-    backgroundColor: COLORS.surfaceLight,
-    borderBottomLeftRadius: 5,
-  },
-  coachTypingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  coachDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: COLORS.textMuted,
-  },
-  coachBubbleUserText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#FFFFFF',
-    fontWeight: '500',
-  },
-  coachBubbleCoachText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: COLORS.text,
-    fontWeight: '500',
-  },
-  // Input
-  coachInputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
-    paddingHorizontal: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.border,
-  },
-  coachInput: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceLight,
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
-    fontSize: 15,
-    color: COLORS.text,
-    maxHeight: 100,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  coachSendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coachSendBtnDisabled: {
-    opacity: 0.35,
   },
   loadingContainer: {
     flex: 1,
