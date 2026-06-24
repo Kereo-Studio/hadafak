@@ -9,10 +9,15 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  AfterLoad,
 } from 'typeorm';
 import { ExerciseLog } from '../../workouts/entities/exercise-log.entity';
 import { MuscleGroup } from './muscle-group.entity';
 import { Equipment } from './equipment.entity';
+import { EXERCISE_GIF_MAP } from '../exercise-gif-map';
+
+const S3_BASE = 'https://hadafak-uploads-production-6jjwk7.s3.eu-central-1.amazonaws.com';
+const DEAD_BUCKETS = ['hadafak-uploads-production-0diewr', 'hadafak-uploads-production-e8zxio'];
 
 export enum ExerciseDifficulty {
   BEGINNER = 'beginner',
@@ -90,4 +95,18 @@ export class Exercise {
 
   @OneToMany(() => ExerciseLog, (log) => log.exercise)
   logs: ExerciseLog[];
+
+  @AfterLoad()
+  resolveGifUrl() {
+    if (this.externalId) {
+      const datasetPath = EXERCISE_GIF_MAP[this.externalId];
+      if (datasetPath) {
+        this.gifUrl = `${S3_BASE}/${datasetPath}`;
+        return;
+      }
+    }
+    if (this.gifUrl && DEAD_BUCKETS.some((b) => this.gifUrl!.includes(b))) {
+      this.gifUrl = this.externalId ? `/api/v1/exercises/image/${this.externalId}` : undefined;
+    }
+  }
 }
