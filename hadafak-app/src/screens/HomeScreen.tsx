@@ -36,6 +36,8 @@ import {
   Sparkles,
   Send,
   Bot,
+  Minus,
+  Plus,
 } from 'lucide-react-native';
 import {
   BikeIcon,
@@ -188,6 +190,21 @@ export const HomeScreen: React.FC = () => {
   // Duration Modal selector state
   const [isDurationModalVisible, setIsDurationModalVisible] = useState(false);
   const [selectedActivityType, setSelectedActivityType] = useState<string | null>(null);
+  const [durationCustomMode, setDurationCustomMode] = useState(false);
+  const [customMinutes, setCustomMinutes] = useState(20);
+
+  const closeDurationModal = () => {
+    setIsDurationModalVisible(false);
+    setDurationCustomMode(false);
+    setCustomMinutes(20);
+  };
+
+  const confirmDuration = (mins: number) => {
+    closeDurationModal();
+    if (selectedActivityType) {
+      handleActivitySelect(selectedActivityType, mins);
+    }
+  };
 
   // Suggested Recipes state
   const [suggestedRecipes, setSuggestedRecipes] = useState<any[]>([]);
@@ -1410,45 +1427,107 @@ export const HomeScreen: React.FC = () => {
         visible={isDurationModalVisible}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setIsDurationModalVisible(false)}
+        onRequestClose={closeDurationModal}
       >
         <TouchableOpacity
           style={styles.durationModalOverlay}
           activeOpacity={1}
-          onPress={() => setIsDurationModalVisible(false)}
+          onPress={closeDurationModal}
         >
           <TouchableWithoutFeedback>
             <View style={styles.durationModalContainer}>
-              <Text style={styles.durationModalTitle}>Select Activity Duration</Text>
-              <Text style={styles.durationModalSubtitle}>
-                Choose how long you did this exercise:
-              </Text>
+              {(() => {
+                const activeExercise = CARDIO_EXERCISES.find((e) => e.id === selectedActivityType);
+                const ActivityIcon = activeExercise?.icon;
+                return (
+                  <View style={styles.durationHeader}>
+                    <View style={styles.durationIconBadge}>
+                      {ActivityIcon ? (
+                        <ActivityIcon size={22} color={COLORS.primary} />
+                      ) : (
+                        <Clock size={22} color={COLORS.primary} />
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.durationModalTitle}>{activeExercise?.name ?? 'Activity'}</Text>
+                      <Text style={styles.durationModalSubtitle}>How long did you go?</Text>
+                    </View>
+                  </View>
+                );
+              })()}
 
-              <View style={styles.durationOptionsGrid}>
-                {[15, 30, 45, 60].map((mins) => (
+              {!durationCustomMode ? (
+                <>
+                  {/* Preset options */}
+                  <View style={styles.durationOptionsRow}>
+                    {[
+                      { label: '15 min', value: 15 },
+                      { label: '30 min', value: 30 },
+                      { label: '1 hour', value: 60 },
+                    ].map((opt) => (
+                      <TouchableOpacity
+                        key={opt.value}
+                        style={styles.durationOptionCard}
+                        activeOpacity={0.85}
+                        onPress={() => confirmDuration(opt.value)}
+                      >
+                        <Text style={styles.durationOptionValue}>{opt.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Custom option */}
                   <TouchableOpacity
-                    key={mins}
-                    style={styles.durationOptionCard}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      setIsDurationModalVisible(false);
-                      if (selectedActivityType) {
-                        handleActivitySelect(selectedActivityType, mins);
-                      }
-                    }}
+                    style={styles.durationCustomTrigger}
+                    activeOpacity={0.85}
+                    onPress={() => setDurationCustomMode(true)}
                   >
-                    <Text style={styles.durationOptionValue}>{mins}</Text>
-                    <Text style={styles.durationOptionLabel}>Minutes</Text>
+                    <Clock size={18} color={COLORS.primary} />
+                    <Text style={styles.durationCustomTriggerText}>Custom duration</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
+                </>
+              ) : (
+                <>
+                  {/* Custom stepper */}
+                  <View style={styles.durationStepperRow}>
+                    <TouchableOpacity
+                      style={styles.stepperButton}
+                      activeOpacity={0.8}
+                      onPress={() => setCustomMinutes((m) => Math.max(5, m - 5))}
+                    >
+                      <Minus size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+
+                    <View style={styles.stepperValueWrap}>
+                      <Text style={styles.stepperValue}>{customMinutes}</Text>
+                      <Text style={styles.stepperUnit}>minutes</Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.stepperButton}
+                      activeOpacity={0.8}
+                      onPress={() => setCustomMinutes((m) => Math.min(180, m + 5))}
+                    >
+                      <Plus size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.durationConfirmButton}
+                    activeOpacity={0.9}
+                    onPress={() => confirmDuration(customMinutes)}
+                  >
+                    <Text style={styles.durationConfirmText}>Log {customMinutes} min</Text>
+                  </TouchableOpacity>
+                </>
+              )}
 
               <TouchableOpacity
                 style={styles.durationCancelButton}
                 activeOpacity={0.8}
-                onPress={() => setIsDurationModalVisible(false)}
+                onPress={() => (durationCustomMode ? setDurationCustomMode(false) : closeDurationModal())}
               >
-                <Text style={styles.durationCancelText}>Cancel</Text>
+                <Text style={styles.durationCancelText}>{durationCustomMode ? 'Back' : 'Cancel'}</Text>
               </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
@@ -2335,58 +2414,118 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   },
   durationModalContainer: {
     backgroundColor: COLORS.background,
-    borderRadius: 24,
-    padding: 24,
-    width: '85%',
-    maxWidth: 340,
-    alignItems: 'center',
+    borderRadius: 28,
+    padding: 22,
+    width: '88%',
+    maxWidth: 360,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
-    shadowRadius: 20,
+    shadowRadius: 24,
     elevation: 8,
+  },
+  durationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 22,
+  },
+  durationIconBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   durationModalTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: COLORS.text,
-    textAlign: 'center',
   },
   durationModalSubtitle: {
     fontSize: 13,
     color: COLORS.textMuted,
-    marginTop: 6,
-    marginBottom: 20,
-    textAlign: 'center',
+    marginTop: 2,
+    fontWeight: '500',
   },
-  durationOptionsGrid: {
+  durationOptionsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    width: '100%',
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 12,
   },
   durationOptionCard: {
     flex: 1,
-    minWidth: '45%',
     backgroundColor: COLORS.surfaceLight,
     borderWidth: 1.5,
     borderColor: COLORS.border,
     borderRadius: 16,
-    paddingVertical: 16,
+    paddingVertical: 18,
     alignItems: 'center',
   },
   durationOptionValue: {
-    fontSize: 22,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.primary,
   },
-  durationOptionLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
+  durationCustomTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 15,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    marginBottom: 6,
+  },
+  durationCustomTriggerText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  durationStepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  stepperButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperValueWrap: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  stepperValue: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: COLORS.text,
+    lineHeight: 46,
+  },
+  stepperUnit: {
+    fontSize: 12,
     fontWeight: '600',
-    marginTop: 4,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  durationConfirmButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  durationConfirmText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   durationCancelButton: {
     paddingVertical: 12,

@@ -33,7 +33,7 @@ import {
   IconHourglass,
   IconSparkles,
   IconShoe,
-  IconRepeat,
+  IconJumpRope,
 } from '@tabler/icons-react-native';
 
 interface IconProps {
@@ -62,7 +62,7 @@ export const BikeIcon       = wrap(IconBike);
 export const SwimIcon       = wrap(IconSwimming);
 export const HikingIcon     = wrap(IconMountain);
 export const RowingIcon     = wrap(IconKayak);
-export const JumpRopeIcon   = wrap(IconRepeat);
+export const JumpRopeIcon   = wrap(IconJumpRope);
 export const EllipticalIcon = wrap(IconRun);
 export const TreadmillIcon  = wrap(IconRun);
 export const YogaIcon       = wrap(IconYoga);
