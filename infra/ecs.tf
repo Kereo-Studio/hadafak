@@ -113,7 +113,10 @@ resource "aws_ecs_task_definition" "app" {
         { name = "FATSECRET_CLIENT_ID", value = var.fatsecret_client_id },
         { name = "FATSECRET_CLIENT_SECRET", value = var.fatsecret_client_secret },
         { name = "GEMINI_API_KEY", value = var.gemini_api_key },
-        { name = "EXERCISEDB_API_KEY", value = var.exercisedb_api_key }
+        { name = "EXERCISEDB_API_KEY", value = var.exercisedb_api_key },
+        { name = "GOOGLE_CLIENT_ID_WEB", value = var.google_client_id_web },
+        { name = "GOOGLE_CLIENT_ID_IOS", value = var.google_client_id_ios },
+        { name = "GOOGLE_CLIENT_ID_ANDROID", value = var.google_client_id_android }
       ]
       logConfiguration = {
         logDriver = "awslogs"

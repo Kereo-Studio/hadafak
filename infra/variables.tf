@@ -74,6 +74,24 @@ variable "exercisedb_api_key" {
   default     = ""
 }
 
+variable "google_client_id_web" {
+  type        = string
+  description = "Google OAuth Web client ID — primary ID-token audience"
+  default     = ""
+}
+
+variable "google_client_id_ios" {
+  type        = string
+  description = "Google OAuth iOS client ID"
+  default     = ""
+}
+
+variable "google_client_id_android" {
+  type        = string
+  description = "Google OAuth Android client ID"
+  default     = ""
+}
+
 variable "database_synchronize" {
   type        = bool
   description = "Enable TypeORM auto-synchronize (true only for initial setup, false in production)"
