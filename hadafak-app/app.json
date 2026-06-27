@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "hadafak-app",
-    "slug": "hadafak-app",
+    "name": "Hadafak",
+    "slug": "Hadafak",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/hadafaklogo-nobg.png",
+    "icon": "./assets/hadafaklogo-nobg-2.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/hadafaklogo-nobg.png",
+      "image": "./assets/hadafaklogo-nobg-2.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -31,7 +31,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/hadafaklogo-nobg.png",
+        "foregroundImage": "./assets/hadafaklogo-nobg-2.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -53,7 +53,7 @@
       }
     },
     "web": {
-      "favicon": "./assets/hadafaklogo-nobg.png"
+      "favicon": "./assets/hadafaklogo-nobg-2.png"
     },
     "plugins": [
       "expo-secure-store",
