@@ -164,11 +164,22 @@ export class WorkoutsService {
       // Trigger adaptation engine when session is completed
       // Adjusts sets/reps/weight on the user's workout plan based on performance
       if (dto.completed) {
-        const plans = await this.workoutPlanRepository.find({
-          where: { userId },
-          relations: { workoutExercises: true },
-          order: { createdAt: 'DESC' },
-        });
+        // Prefetch profile, plans, and program day exercises in parallel
+        const [profile, plans, programDayExercises] = await Promise.all([
+          this.adaptationEngineService.getProfile(userId),
+          this.workoutPlanRepository.find({
+            where: { userId },
+            relations: { workoutExercises: true },
+            order: { createdAt: 'DESC' },
+          }),
+          session.programDayId
+            ? this.adaptationEngineService.getProgramDayExercises(session.programDayId)
+            : Promise.resolve([]),
+        ]);
+
+        const programDayExercisesMap = new Map(
+          (programDayExercises || []).map(pde => [pde.exerciseId, pde])
+        );
 
         const sessionRpe = dto.rpe ?? 5;
         let difficultyFeedback = DifficultyFeedback.OK;
@@ -178,7 +189,7 @@ export class WorkoutsService {
           difficultyFeedback = DifficultyFeedback.HARD;
         }
 
-        for (const log of logs) {
+        const adaptationPromises = logs.map(async (log) => {
           try {
             const validSets = (log.sets || []).filter(s => s.reps > 0);
             const completedSets = validSets.length;
@@ -194,6 +205,7 @@ export class WorkoutsService {
             if (!targetPlan) {
               // User works from a Program (no WorkoutPlan) — adapt the ProgramDayExercise targets
               if (session.programDayId) {
+                const pde = programDayExercisesMap.get(log.exerciseId);
                 await this.adaptationEngineService.adaptProgramExercise(
                   userId,
                   session.programDayId,
@@ -202,9 +214,11 @@ export class WorkoutsService {
                   sessionRpe,
                   completedReps,
                   completedSets,
+                  profile || undefined,
+                  pde,
                 );
               }
-              continue;
+              return;
             }
 
             const workoutExercise = targetPlan.workoutExercises.find(we => we.exerciseId === log.exerciseId);
@@ -233,12 +247,19 @@ export class WorkoutsService {
               date: dto.date || new Date().toISOString().split('T')[0],
             } as PerformanceLog;
 
-            await this.adaptationEngineService.adaptFromPerformance(userId, mockPerfLog);
+            await this.adaptationEngineService.adaptFromPerformance(
+              userId,
+              mockPerfLog,
+              profile || undefined,
+              workoutExercise || undefined,
+            );
           } catch (adaptErr) {
             // Never let adaptation failures abort the workout save
             this.logger.warn(`Adaptation engine failed for exercise ${log.exerciseId}: ${adaptErr.message}`);
           }
-        }
+        });
+
+        await Promise.all(adaptationPromises);
       }
     }
 

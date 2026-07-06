@@ -712,6 +712,17 @@ export const HomeScreen: React.FC = () => {
         const deltaSteps = result.steps - lastReportedSteps;
         if (deltaSteps > 0) {
           lastReportedSteps = result.steps;
+
+          // On Android, increment the last known boot steps to avoid double counting on next sync
+          if (Platform.OS === 'android') {
+            storage.getItem('last_steps_since_boot').then((lastBootStr) => {
+              if (lastBootStr) {
+                const lastBoot = Number(lastBootStr);
+                storage.setItem('last_steps_since_boot', String(lastBoot + deltaSteps));
+              }
+            }).catch(() => {});
+          }
+
           // Update local steps state immediately!
           setTodaySteps((prev) => {
             const currentVal = parseInt(prev.replace(/,/g, ''), 10) || 0;

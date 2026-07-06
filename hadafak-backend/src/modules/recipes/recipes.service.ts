@@ -30,13 +30,17 @@ export class RecipesService {
     let carbs = 0;
     let fat = 0;
 
+    const foodIds = dto.ingredients.map((ing) => ing.foodId).filter((id): id is string => !!id);
+    const foods = foodIds.length > 0 ? await this.nutritionService.getFoodsByIds(foodIds) : [];
+    const foodMap = new Map(foods.map((f) => [f.id, f]));
+
     const ingredientsToSave: RecipeIngredient[] = [];
 
     for (const ing of dto.ingredients) {
       let foodItem: Food | null = null;
       if (ing.foodId) {
-        try {
-          foodItem = await this.nutritionService.getFoodById(ing.foodId);
+        foodItem = foodMap.get(ing.foodId) || null;
+        if (foodItem) {
           // Amount is in grams; food macros are per servingSize (default 100g)
           const grams = Number(ing.amount) || 0;
           const servingSize = Number(foodItem.servingSize) || 100;
@@ -45,8 +49,6 @@ export class RecipesService {
           protein += (Number(foodItem.protein) || 0) * scale;
           carbs += (Number(foodItem.carbs) || 0) * scale;
           fat += (Number(foodItem.fat) || 0) * scale;
-        } catch (e) {
-          // ignore or handle if food not found
         }
       }
 
@@ -78,10 +80,8 @@ export class RecipesService {
 
     const savedRecipe = await this.recipeRepository.save(recipe);
 
-    for (const ing of ingredientsToSave) {
-      ing.recipeId = savedRecipe.id;
-      await this.recipeIngredientRepository.save(ing);
-    }
+    ingredientsToSave.forEach((ing) => ing.recipeId = savedRecipe.id);
+    await this.recipeIngredientRepository.save(ingredientsToSave);
 
     return this.getRecipeById(savedRecipe.id);
   }

@@ -1,6 +1,7 @@
 import { Pedometer } from 'expo-sensors';
 import { Platform, Linking, Alert } from 'react-native';
 import { storage } from './storage';
+import { getStepsSinceBootAndroid } from './nativeStepCounter';
 
 export const getLocalTodaySteps = async (): Promise<number> => {
   const todayStr = new Date().toISOString().split('T')[0];
@@ -30,6 +31,49 @@ export const saveLocalTodaySteps = async (steps: number): Promise<void> => {
   }
 };
 
+// Android helper to calculate step differences from cumulative hardware sensor
+export const updateAndroidStepsFromBootSensor = async (): Promise<number> => {
+  if (Platform.OS !== 'android') return 0;
+  
+  try {
+    const currentStepsSinceBoot = await getStepsSinceBootAndroid();
+    if (currentStepsSinceBoot === null || currentStepsSinceBoot === undefined) {
+      console.log('[Pedometer] Native Android boot sensor returned null/undefined');
+      return 0;
+    }
+    
+    const lastStepsSinceBootStr = await storage.getItem('last_steps_since_boot');
+    const lastStepsSinceBoot = lastStepsSinceBootStr ? Number(lastStepsSinceBootStr) : 0;
+    
+    const localSteps = await getLocalTodaySteps();
+    let delta = 0;
+    
+    if (lastStepsSinceBoot > 0) {
+      if (currentStepsSinceBoot >= lastStepsSinceBoot) {
+        delta = currentStepsSinceBoot - lastStepsSinceBoot;
+      } else {
+        // Reboot occurred, counter restarted from 0
+        delta = currentStepsSinceBoot;
+      }
+    }
+    
+    // Update local storage
+    if (delta > 0) {
+      const newTodaySteps = localSteps + delta;
+      await saveLocalTodaySteps(newTodaySteps);
+      console.log(`[Pedometer] Android delta steps: ${delta}. New today steps: ${newTodaySteps}`);
+    }
+    
+    // Save the new boot sensor reference
+    await storage.setItem('last_steps_since_boot', String(currentStepsSinceBoot));
+    
+    return delta;
+  } catch (err) {
+    console.warn('[Pedometer] Failed to update Android steps from boot sensor:', err);
+    return 0;
+  }
+};
+
 // Only show the "go to settings" alert once per app session
 let hasShownSettingsAlert = false;
 
@@ -39,9 +83,9 @@ const showGoToSettingsAlert = (showAlert?: (config: any) => void) => {
   if (showAlert) {
     showAlert({
       title: 'Enable Step Tracking',
-      message: 'Physical Activity permission was denied for Expo Go.',
+      message: 'Physical Activity permission was denied.',
       why: 'We need permission to access your device physical activity sensors to sync your daily steps automatically.',
-      actionGuide: 'Tap "Open Settings" to go to Settings → Apps → Expo Go → Permissions → Physical Activity and select "Allow".',
+      actionGuide: 'Tap "Open Settings" to go to Settings → Apps → Hadafak → Permissions → Physical Activity and select "Allow".',
       type: 'warning',
       buttons: [
         { text: 'Not Now', style: 'cancel' },
@@ -54,7 +98,7 @@ const showGoToSettingsAlert = (showAlert?: (config: any) => void) => {
   } else {
     Alert.alert(
       'Enable Step Tracking',
-      'Physical Activity permission was denied for Expo Go. To enable step tracking, go to Settings → Apps → Expo Go → Permissions → Physical Activity → Allow.',
+      'Physical Activity permission was denied. To enable step tracking, go to Settings → Apps → Hadafak → Permissions → Physical Activity → Allow.',
       [
         { text: 'Not Now', style: 'cancel' },
         {
@@ -101,6 +145,15 @@ export const pedometerService = {
 
   async syncSteps(apiInstance: any, showAlert?: (config: any) => void): Promise<boolean> {
     if (Platform.OS === 'web') return false;
+
+    // 1. If Android, sync from the hardware cumulative boot sensor first
+    if (Platform.OS === 'android') {
+      try {
+        await updateAndroidStepsFromBootSensor();
+      } catch (e) {
+        console.warn('[Pedometer] Failed to run updateAndroidStepsFromBootSensor during sync:', e);
+      }
+    }
 
     try {
       const { status, canAskAgain } = await Pedometer.getPermissionsAsync();
@@ -188,7 +241,7 @@ export const pedometerService = {
           }
         } catch (e) {
           console.log('[Pedometer] Daily fallback query not supported (Android). Using local storage steps.');
-          // Android compatibility: Use cached steps from local AsyncStorage
+          // Android compatibility: Use cached steps from local AsyncStorage/SecureStore
           const localSteps = await getLocalTodaySteps();
           if (localSteps > 0) {
             intervalsToSync.push({

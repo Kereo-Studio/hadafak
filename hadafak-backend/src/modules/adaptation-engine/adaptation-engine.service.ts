@@ -17,18 +17,33 @@ export class AdaptationEngineService {
     private readonly programDayExerciseRepository: Repository<ProgramDayExercise>,
   ) {}
 
-  async adaptFromPerformance(userId: string, log: PerformanceLog): Promise<void> {
+  async getProfile(userId: string): Promise<Profile | null> {
+    return this.profileRepository.findOne({ where: { userId } });
+  }
+
+  async getProgramDayExercises(programDayId: string): Promise<ProgramDayExercise[]> {
+    return this.programDayExerciseRepository.find({ where: { programDayId } });
+  }
+
+  async adaptFromPerformance(
+    userId: string,
+    log: PerformanceLog,
+    profileInput?: Profile,
+    workoutExerciseInput?: WorkoutExercise,
+  ): Promise<void> {
     // 1. Fetch the user's fitness profile to check level and experience
-    const profile = await this.profileRepository.findOne({ where: { userId } });
+    const profile = profileInput !== undefined ? profileInput : await this.profileRepository.findOne({ where: { userId } });
     const userLevel = profile?.fitnessLevel || FitnessLevel.BEGINNER;
 
     // 2. Find the WorkoutExercise record for this plan and exercise
-    const workoutExercise = await this.workoutExerciseRepository.findOne({
-      where: {
-        workoutPlanId: log.workoutId,
-        exerciseId: log.exerciseId,
-      },
-    });
+    const workoutExercise = workoutExerciseInput !== undefined
+      ? workoutExerciseInput
+      : await this.workoutExerciseRepository.findOne({
+          where: {
+            workoutPlanId: log.workoutId,
+            exerciseId: log.exerciseId,
+          },
+        });
 
     if (!workoutExercise) {
       // If it doesn't belong to a saved plan, skip updating targets
@@ -131,13 +146,17 @@ export class AdaptationEngineService {
     fatigueRating: number,
     completedReps: number,
     completedSets: number,
+    profileInput?: Profile,
+    programDayExerciseInput?: ProgramDayExercise,
   ): Promise<void> {
-    const profile = await this.profileRepository.findOne({ where: { userId } });
+    const profile = profileInput !== undefined ? profileInput : await this.profileRepository.findOne({ where: { userId } });
     const userLevel = profile?.fitnessLevel || FitnessLevel.BEGINNER;
 
-    const pde = await this.programDayExerciseRepository.findOne({
-      where: { programDayId, exerciseId },
-    });
+    const pde = programDayExerciseInput !== undefined
+      ? programDayExerciseInput
+      : await this.programDayExerciseRepository.findOne({
+          where: { programDayId, exerciseId },
+        });
 
     if (!pde) return;
 

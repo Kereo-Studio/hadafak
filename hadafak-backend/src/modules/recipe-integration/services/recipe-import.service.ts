@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { RecipeImportJob, ImportJobStatus } from '../entities/recipe-import-job.entity';
 import { RecipeExternalMapping } from '../entities/recipe-external-mapping.entity';
 import { Recipe, RecipeSource } from '../../recipes/entities/recipe.entity';
@@ -247,22 +247,17 @@ export class RecipeImportService {
 
       const ingredientsToSave: RecipeIngredient[] = [];
 
+      // Find all existing foods matching normalized ingredient names in bulk
+      const ingredientNames = normalized.ingredients.map((ing: any) => ing.name);
+      const existingFoods = ingredientNames.length > 0
+        ? await queryRunner.manager.find(Food, { where: { name: In(ingredientNames) } })
+        : [];
+      const foodMap = new Map(existingFoods.map((f) => [f.name, f]));
+
+      const foodsToCreate: Food[] = [];
       for (const ing of normalized.ingredients) {
-        // Find existing food matching normalized name
-        let food = await queryRunner.manager.findOne(Food, {
-          where: { name: ing.name },
-        });
-
-        // Fallback: search with ILike
-        if (!food) {
-          food = await queryRunner.manager.findOne(Food, {
-            where: { name: ing.name }, // exact match
-          });
-        }
-
-        if (!food) {
-          // Create a new Food record in the database with mock nutrition
-          food = queryRunner.manager.create(Food, {
+        if (!foodMap.has(ing.name)) {
+          const food = queryRunner.manager.create(Food, {
             name: ing.name,
             source: FoodSource.DATABASE,
             calories: 120, // Default baseline estimate
@@ -272,8 +267,17 @@ export class RecipeImportService {
             servingSize: 100,
             servingUnit: ing.unit || 'g',
           });
-          food = await queryRunner.manager.save(Food, food);
+          foodsToCreate.push(food);
         }
+      }
+
+      if (foodsToCreate.length > 0) {
+        const savedNewFoods = await queryRunner.manager.save(Food, foodsToCreate);
+        savedNewFoods.forEach((f) => foodMap.set(f.name, f));
+      }
+
+      for (const ing of normalized.ingredients) {
+        const food = foodMap.get(ing.name)!;
 
         // Convert the ingredient amount to an estimated gram equivalent
         const gramAmount = this.convertUnitToGrams(ing.amount, ing.unit, food.name);
@@ -332,11 +336,9 @@ export class RecipeImportService {
 
       recipe = await queryRunner.manager.save(Recipe, recipe);
 
-      // 4. Save RecipeIngredients
-      for (const recipeIng of ingredientsToSave) {
-        recipeIng.recipeId = recipe.id;
-        await queryRunner.manager.save(RecipeIngredient, recipeIng);
-      }
+      // 4. Save RecipeIngredients in a single bulk query
+      ingredientsToSave.forEach((ing) => ing.recipeId = recipe.id);
+      await queryRunner.manager.save(RecipeIngredient, ingredientsToSave);
 
       // 5. Save external source lookup mapping
       const mapping = queryRunner.manager.create(RecipeExternalMapping, {

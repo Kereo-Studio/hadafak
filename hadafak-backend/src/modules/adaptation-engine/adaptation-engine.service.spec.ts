@@ -5,10 +5,13 @@ import { WorkoutExercise } from '../workouts/entities/workout-exercise.entity';
 import { Profile, FitnessLevel } from '../profiles/entities/profile.entity';
 import { PerformanceLog, DifficultyFeedback } from '../performance-tracking/entities/performance-log.entity';
 
+import { ProgramDayExercise } from '../programs/entities/program-day-exercise.entity';
+
 describe('AdaptationEngineService', () => {
   let service: AdaptationEngineService;
   let profileRepo: any;
   let workoutExerciseRepo: any;
+  let programDayExerciseRepo: any;
 
   beforeEach(async () => {
     profileRepo = {
@@ -28,11 +31,21 @@ describe('AdaptationEngineService', () => {
       save: jest.fn().mockImplementation((x) => Promise.resolve(x)),
     };
 
+    programDayExerciseRepo = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'pde1',
+        targetSets: 3,
+        targetRepsRange: '8-12',
+      }),
+      save: jest.fn().mockImplementation((x) => Promise.resolve(x)),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdaptationEngineService,
         { provide: getRepositoryToken(Profile), useValue: profileRepo },
         { provide: getRepositoryToken(WorkoutExercise), useValue: workoutExerciseRepo },
+        { provide: getRepositoryToken(ProgramDayExercise), useValue: programDayExerciseRepo },
       ],
     }).compile();
 

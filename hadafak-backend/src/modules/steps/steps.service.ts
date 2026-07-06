@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, In } from 'typeorm';
 import { StepLog } from './entities/step-log.entity';
 import { StepInterval, StepSource } from './entities/step-interval.entity';
 import { SyncStepsDto } from './dto/sync-steps.dto';
@@ -18,7 +18,11 @@ export class StepsService {
   ) {}
 
   async syncIntervals(userId: string, dto: SyncStepsDto): Promise<void> {
+    if (!dto.intervals || dto.intervals.length === 0) return;
+
     const datesToUpdate = new Set<string>();
+    const startTimes: Date[] = [];
+    const entries: StepInterval[] = [];
 
     for (const interval of dto.intervals) {
       const start = new Date(interval.startTime);
@@ -26,28 +30,50 @@ export class StepsService {
       const dateStr = start.toISOString().split('T')[0];
       datesToUpdate.add(dateStr);
 
-      // Overlap Resolution: Delete any existing sensor interval starting at the same time to avoid double counting
-      await this.stepIntervalRepository.delete({
-        userId,
-        startTime: start,
-        source: StepSource.SENSOR,
-      });
+      if (interval.source === StepSource.SENSOR) {
+        startTimes.push(start);
+      }
 
-      // Insert new interval
-      const entry = this.stepIntervalRepository.create({
-        userId,
-        startTime: start,
-        endTime: end,
-        steps: interval.steps,
-        source: interval.source,
-        activityName: interval.activityName || null,
-      });
-      await this.stepIntervalRepository.save(entry);
+      entries.push(
+        this.stepIntervalRepository.create({
+          userId,
+          startTime: start,
+          endTime: end,
+          steps: interval.steps,
+          source: interval.source,
+          activityName: interval.activityName || null,
+        }),
+      );
     }
 
-    // Recalculate daily step log cache for each modified date
+    // 1. Bulk Delete overlapping sensor intervals in a single query
+    if (startTimes.length > 0) {
+      await this.stepIntervalRepository.delete({
+        userId,
+        startTime: In(startTimes),
+        source: StepSource.SENSOR,
+      });
+    }
+
+    // 2. Bulk Save new intervals in a single query
+    if (entries.length > 0) {
+      await this.stepIntervalRepository.save(entries);
+    }
+
+    // 3. Cache personalization profile targets once to avoid N+1 queries during loop
+    let targetSteps = 8000;
+    try {
+      const profile = await this.profilesService.findByUserId(userId);
+      if (profile && profile.dailySteps) {
+        targetSteps = profile.dailySteps;
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    // 4. Recalculate daily step log cache for each modified date
     for (const date of datesToUpdate) {
-      await this.updateDailyTotal(userId, date);
+      await this.updateDailyTotal(userId, date, targetSteps);
     }
   }
 
@@ -168,7 +194,7 @@ export class StepsService {
     };
   }
 
-  private async updateDailyTotal(userId: string, date: string): Promise<StepLog> {
+  private async updateDailyTotal(userId: string, date: string, targetStepsInput?: number): Promise<StepLog> {
     // Sum steps from all intervals for that specific day
     const startOfDay = new Date(date + 'T00:00:00.000Z');
     const endOfDay = new Date(date + 'T23:59:59.999Z');
@@ -183,13 +209,16 @@ export class StepsService {
     const totalSteps = intervals.reduce((sum, item) => sum + item.steps, 0);
 
     let log = await this.stepLogRepository.findOne({ where: { userId, date } });
-    let targetSteps = 8000;
+    let targetSteps = targetStepsInput;
 
-    try {
-      const profile = await this.profilesService.findByUserId(userId);
-      if (profile.dailySteps) targetSteps = profile.dailySteps;
-    } catch (e) {
-      // Fallback
+    if (targetSteps === undefined) {
+      targetSteps = 8000;
+      try {
+        const profile = await this.profilesService.findByUserId(userId);
+        if (profile && profile.dailySteps) targetSteps = profile.dailySteps;
+      } catch (e) {
+        // Fallback
+      }
     }
 
     if (!log) {

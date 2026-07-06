@@ -195,32 +195,38 @@ export class ProgramsService {
     });
     const savedProgram = await this.programRepository.save(program);
 
+    const programDaysToCreate = days.map((daySpec, di) =>
+      this.programDayRepository.create({
+        programId: savedProgram.id,
+        dayNumber: di + 1,
+        title: daySpec.title,
+      })
+    );
+    const savedProgramDays = await this.programDayRepository.save(programDaysToCreate);
+
+    const programDayExercisesToCreate: ProgramDayExercise[] = [];
     for (let di = 0; di < days.length; di++) {
       const daySpec = days[di];
-      const pDay = await this.programDayRepository.save(
-        this.programDayRepository.create({
-          programId: savedProgram.id,
-          dayNumber: di + 1,
-          title: daySpec.title,
-        }),
-      );
-
+      const pDay = savedProgramDays[di];
       let order = 1;
       for (const [extId, sets, reps, rest] of daySpec.exIds) {
         const exerciseId = ex(extId);
         if (exerciseId) {
-          await this.programDayExerciseRepository.save(
-            this.programDayExerciseRepository.create({
-              programDayId: pDay.id,
-              exerciseId,
-              order: order++,
-              targetSets: sets,
-              targetRepsRange: reps,
-              targetRestTime: rest,
-            }),
-          );
+          const pde = this.programDayExerciseRepository.create({
+            programDayId: pDay.id,
+            exerciseId,
+            order: order++,
+            targetSets: sets,
+            targetRepsRange: reps,
+            targetRestTime: rest,
+          });
+          programDayExercisesToCreate.push(pde);
         }
       }
+    }
+
+    if (programDayExercisesToCreate.length > 0) {
+      await this.programDayExerciseRepository.save(programDayExercisesToCreate);
     }
 
     await this.profilesService.assignProgram(userId, savedProgram.id);

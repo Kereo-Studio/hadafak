@@ -155,11 +155,16 @@ export class WorkoutGenerationService {
           weight: null,
           dayNumber: dayIdx + 1,
         });
-        workoutExercises.push(await this.workoutExerciseRepository.save(workoutEx));
+        workoutExercises.push(workoutEx);
       }
     }
 
-    savedPlan.workoutExercises = workoutExercises;
+    if (workoutExercises.length > 0) {
+      savedPlan.workoutExercises = await this.workoutExerciseRepository.save(workoutExercises);
+    } else {
+      savedPlan.workoutExercises = [];
+    }
+
     return savedPlan;
   }
 

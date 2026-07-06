@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, ILike } from 'typeorm';
+import { Repository, Between, ILike, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Food, FoodSource } from './entities/food.entity';
 import { NutritionLog } from './entities/nutrition-log.entity';
@@ -93,12 +93,12 @@ export class NutritionService {
     // If a search query is provided, query FatSecret to fetch additional branded items
     if (query) {
       const extItems = await this.fatSecretService.searchFoods(query);
-      for (const extItem of extItems) {
-        const existsInList = foods.some((f) => f.barcode === extItem.id || f.barcode === extItem.barcode);
-        if (!existsInList) {
-          const upserted = await this.upsertExternalFood(extItem);
-          foods.push(upserted);
-        }
+      const itemsToUpsert = extItems.filter(
+        (extItem) => !foods.some((f) => f.barcode === extItem.id || f.barcode === extItem.barcode)
+      );
+      if (itemsToUpsert.length > 0) {
+        const upserted = await this.upsertExternalFoods(itemsToUpsert);
+        foods.push(...upserted);
       }
     }
 
@@ -111,6 +111,53 @@ export class NutritionService {
       throw new NotFoundException(`Food with ID ${id} not found`);
     }
     return food;
+  }
+
+  async getFoodsByIds(ids: string[]): Promise<Food[]> {
+    if (ids.length === 0) return [];
+    return this.foodRepository.find({
+      where: { id: In(ids) },
+    });
+  }
+
+  async upsertExternalFoods(items: any[]): Promise<Food[]> {
+    if (items.length === 0) return [];
+
+    const barcodes = items.map((item) => item.barcode || item.id).filter((b) => !!b);
+    const existingFoods = barcodes.length > 0
+      ? await this.foodRepository.find({ where: { barcode: In(barcodes) } })
+      : [];
+
+    const foodMap = new Map(existingFoods.map((f) => [f.barcode, f]));
+    const foodsToCreate: Food[] = [];
+
+    for (const item of items) {
+      const barcodeKey = item.barcode || item.id;
+      if (!foodMap.has(barcodeKey)) {
+        const food = this.foodRepository.create({
+          name: item.name,
+          barcode: barcodeKey,
+          source: FoodSource.DATABASE,
+          calories: item.calories,
+          protein: item.protein,
+          carbs: item.carbs,
+          fat: item.fat,
+          servingSize: item.servingSize,
+          servingUnit: item.servingUnit,
+          imageUrl: item.imageUrl ?? null,
+        });
+        foodsToCreate.push(food);
+      }
+    }
+
+    if (foodsToCreate.length > 0) {
+      const savedFoods = await this.foodRepository.save(foodsToCreate);
+      savedFoods.forEach((f) => foodMap.set(f.barcode, f));
+    }
+
+    return items
+      .map((item) => foodMap.get(item.barcode || item.id))
+      .filter((f): f is Food => !!f);
   }
 
   async createFood(userId: string, dto: CreateFoodDto, source: FoodSource = FoodSource.USER): Promise<Food> {
