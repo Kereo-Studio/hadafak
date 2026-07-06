@@ -130,3 +130,9 @@ override.tf.json
 !*.tfvars.example
 !override.tf.example
 reactnative-should-have.md
+
+# ==============================================================================
+# Local Dataset & App Context
+# ==============================================================================
+exercises-dataset-main/
+application_context.md
