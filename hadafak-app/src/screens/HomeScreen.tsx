@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,6 @@ import {
   Image,
   Modal,
   RefreshControl,
-  ActivityIndicator,
-  Alert,
   Platform,
   AppState,
 } from 'react-native';
@@ -33,7 +31,6 @@ import {
   Trash2,
   Utensils,
   BookOpen,
-  Sparkles,
   Send,
   Bot,
   Minus,
@@ -54,11 +51,10 @@ import {
   HeartOutlineIcon,
   LightningIcon,
   TrophyIcon,
-  DumbbellIcon,
   ShoeIcon,
   ChartLineIcon,
 } from '../components/icons/fitness';
-import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import { api, API_BASE_URL } from '../services/api';
 import { StateFeedback } from '../components/StateFeedback';
 import { storage } from '../utils/storage';
@@ -161,7 +157,6 @@ export const HomeScreen: React.FC = () => {
   const [targetCalories, setTargetCalories] = useState(2000);
   const [eatenCalories, setEatenCalories] = useState(0);
   const [burnedCalories, setBurnedCalories] = useState(0);
-  const [netCalories, setNetCalories] = useState(2000);
 
   const [metrics, setMetrics] = useState({
     distance: '0 m',
@@ -184,9 +179,6 @@ export const HomeScreen: React.FC = () => {
     nextExercise: 'Lower Strength'
   });
 
-  // Workouts history logs
-  const [recentWorkouts, setRecentWorkouts] = useState<any[]>([]);
-
   // Duration Modal selector state
   const [isDurationModalVisible, setIsDurationModalVisible] = useState(false);
   const [selectedActivityType, setSelectedActivityType] = useState<string | null>(null);
@@ -208,8 +200,6 @@ export const HomeScreen: React.FC = () => {
 
   // Suggested Recipes state
   const [suggestedRecipes, setSuggestedRecipes] = useState<any[]>([]);
-  const [selectedRecipeDetail, setSelectedRecipeDetail] = useState<any | null>(null);
-  const [isRecipeDetailModalVisible, setIsRecipeDetailModalVisible] = useState(false);
   const [favoriteRecipeIds, setFavoriteRecipeIds] = useState<string[]>([]);
 
   const loadFavorites = async () => {
@@ -254,11 +244,11 @@ export const HomeScreen: React.FC = () => {
   };
 
   // Completed Workout Detail Modal State
-  const [selectedWorkoutSession, setSelectedWorkoutSession] = useState<any | null>(null);
+  const [selectedWorkoutSession, setSelectedWorkoutSession] = useState<any>(null);
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
 
   // AI Coach insight (card preview only — chat lives in CoachChatScreen)
-  const [coachInsight, setCoachInsight] = useState<any | null>(null);
+  const [coachInsight, setCoachInsight] = useState<any>(null);
 
   const handleDeleteSession = async (id: string) => {
     try {
@@ -298,7 +288,7 @@ export const HomeScreen: React.FC = () => {
         const profileRes = await api.get('/profiles/mine');
         profile = profileRes.data;
       } catch (err: any) {
-        if (err.response && err.response.status === 404) {
+        if (err.response?.status === 404) {
           // Onboard profile with defaults
           try {
             const newProfileRes = await api.post('/profiles', {
@@ -353,10 +343,10 @@ export const HomeScreen: React.FC = () => {
       }
 
       // 1. Map user greeting and avatar image
-      if (profile && profile.user) {
+      if (profile?.user) {
         if (profile.user.name) {
           setAthleteName(profile.user.name);
-        } else if (authRes.status === 'fulfilled' && authRes.value.data && authRes.value.data.name) {
+        } else if (authRes.status === 'fulfilled' && authRes.value.data?.name) {
           setAthleteName(authRes.value.data.name);
         } else if (authRes.status === 'fulfilled' && authRes.value.data) {
           const email = authRes.value.data.email || '';
@@ -387,10 +377,10 @@ export const HomeScreen: React.FC = () => {
           startOfToday.setHours(0, 0, 0, 0);
           const now = new Date();
           const localRes = await Pedometer.getStepCountAsync(startOfToday, now);
-          if (localRes && localRes.steps !== undefined) {
+          if (localRes?.steps !== undefined) {
             localStepsForToday = localRes.steps;
           }
-        } catch (e) {
+        } catch {
           // Fallback to AsyncStorage (Android compatibility)
           localStepsForToday = await getLocalTodaySteps();
         }
@@ -428,28 +418,23 @@ export const HomeScreen: React.FC = () => {
           currentDistance = `${Math.round(finalSteps * strideLengthKm * 1000)} m`;
           stepsBurned = Math.round(finalSteps * caloriesPerStep);
         }
-      } else {
-        // Fallback: Query Pedometer directly if server is offline (e.g. phone is unplugged) ONLY if selected date is real today
-        if (isSelectedDateRealToday) {
-          currentSteps = localStepsForToday;
-          setTodaySteps(localStepsForToday.toLocaleString());
-          saveLocalTodaySteps(localStepsForToday);
+      } else if (isSelectedDateRealToday) {
+        // Fallback: Query Pedometer directly if server is offline (e.g. phone is unplugged)
+        currentSteps = localStepsForToday;
+        setTodaySteps(localStepsForToday.toLocaleString());
+        saveLocalTodaySteps(localStepsForToday);
 
-          currentDistance = `${Math.round(localStepsForToday * strideLengthKm * 1000)} m`;
-          stepsBurned = Math.round(localStepsForToday * caloriesPerStep);
-        } else {
-          currentSteps = 0;
-          setTodaySteps('0');
-          currentDistance = '0 m';
-          stepsBurned = 0;
-        }
+        currentDistance = `${Math.round(localStepsForToday * strideLengthKm * 1000)} m`;
+        stepsBurned = Math.round(localStepsForToday * caloriesPerStep);
+      } else {
+        setTodaySteps('0');
       }
 
       // 3. Map calories burnt & consumed
       let consumedKcal = 0;
       if (nutritionRes.status === 'fulfilled' && nutritionRes.value.data) {
         const data = nutritionRes.value.data;
-        if (data.summary && data.summary.calories) {
+        if (data.summary?.calories) {
           const consumed = data.summary.calories.consumed || 0;
           setTodayCalories(consumed.toLocaleString());
           consumedKcal = consumed;
@@ -460,7 +445,6 @@ export const HomeScreen: React.FC = () => {
       let workoutLogs: any[] = [];
       if (workoutsRes.status === 'fulfilled' && workoutsRes.value.data) {
         workoutLogs = workoutsRes.value.data;
-        setRecentWorkouts(workoutLogs);
       }
 
       // Map suggested recipes
@@ -480,26 +464,24 @@ export const HomeScreen: React.FC = () => {
       setSuggestedRecipes(filtered);
 
 
-      if (profile && profile.currentProgram) {
+      if (profile?.currentProgram) {
         const totalDays = profile.currentProgram.days ? profile.currentProgram.days.length : 0;
         let activeDayIdx = 0;
         if (totalDays > 0) {
           if (workoutLogs.length > 0) {
             const latestSession = workoutLogs[0];
-            if (latestSession && latestSession.date === todayStr) {
+            if (latestSession?.date === todayStr) {
               activeDayIdx = Math.max(0, workoutLogs.length - 1) % totalDays;
             } else {
               activeDayIdx = workoutLogs.length % totalDays;
             }
-          } else {
-            activeDayIdx = 0;
           }
         }
         setMyPlan({
           title: profile.currentProgram.name,
           level: profile.currentProgram.level ? profile.currentProgram.level.toUpperCase() : 'INTERMEDIATE',
           daysCount: `${totalDays} Days Split`,
-          nextExercise: profile.currentProgram.days && profile.currentProgram.days[activeDayIdx]
+          nextExercise: profile.currentProgram.days?.[activeDayIdx]
             ? profile.currentProgram.days[activeDayIdx].title
             : 'Workout Day'
         });
@@ -509,7 +491,7 @@ export const HomeScreen: React.FC = () => {
       let runsBurned = 0;
       let runsDurationMinutes = 0;
       if (runsRes.status === 'fulfilled' && Array.isArray(runsRes.value.data)) {
-        const todayRuns = runsRes.value.data.filter((run: any) => run.startTime && run.startTime.startsWith(todayStr));
+        const todayRuns = runsRes.value.data.filter((run: any) => run.startTime?.startsWith(todayStr));
         runsBurned = todayRuns.reduce((sum: number, run: any) => sum + (run.caloriesBurned || 0), 0);
         runsDurationMinutes = todayRuns.reduce((sum: number, run: any) => sum + Math.round((run.durationSeconds || 0) / 60), 0);
       }
@@ -524,19 +506,18 @@ export const HomeScreen: React.FC = () => {
       }
 
       const totalBurned = Math.round(stepsBurned + runsBurned + workoutsBurned);
-      const target = profile && profile.dailyCalories ? profile.dailyCalories : 2000;
+      const target = profile?.dailyCalories ?? 2000;
 
       setTargetCalories(target);
       setEatenCalories(consumedKcal);
       setBurnedCalories(totalBurned);
-      setNetCalories(Math.max(0, target - consumedKcal + totalBurned));
       setTodayActiveTime(runsDurationMinutes + workoutsDurationMinutes);
 
       // Calculate weight change progress
-      let weightChangeText = '0.0 kg';
-      let weightChangeTitle = 'Weight Progress';
+      let weightChangeText: string;
+      let weightChangeTitle: string;
 
-      if (progressRes && progressRes.status === 'fulfilled' && progressRes.value.data && progressRes.value.data.hasData) {
+      if (progressRes?.status === 'fulfilled' && progressRes.value.data?.hasData) {
         const { startingWeight, currentWeight, totalWeightChange } = progressRes.value.data;
         const goal = profile?.goal || 'stay_active';
         
@@ -548,14 +529,12 @@ export const HomeScreen: React.FC = () => {
           weightChangeTitle = 'Mass Gained';
           const gained = currentWeight - startingWeight;
           weightChangeText = `${gained.toFixed(1)} kg`;
+        } else if (totalWeightChange < 0) {
+          weightChangeTitle = 'Mass Lost';
+          weightChangeText = `${Math.abs(totalWeightChange).toFixed(1)} kg`;
         } else {
-          if (totalWeightChange < 0) {
-            weightChangeTitle = 'Mass Lost';
-            weightChangeText = `${Math.abs(totalWeightChange).toFixed(1)} kg`;
-          } else {
-            weightChangeTitle = 'Mass Gained';
-            weightChangeText = `${totalWeightChange.toFixed(1)} kg`;
-          }
+          weightChangeTitle = 'Mass Gained';
+          weightChangeText = `${totalWeightChange.toFixed(1)} kg`;
         }
       } else {
         const goal = profile?.goal || 'stay_active';
@@ -633,7 +612,7 @@ export const HomeScreen: React.FC = () => {
         let runsBurnedVal = 0;
         if (runsRes.status === 'fulfilled' && Array.isArray(runsRes.value.data)) {
           runsBurnedVal = runsRes.value.data
-            .filter((run: any) => run.startTime && run.startTime.startsWith(logDate))
+            .filter((run: any) => run.startTime?.startsWith(logDate))
             .reduce((sum: number, run: any) => sum + (run.caloriesBurned || 0), 0);
         }
 
@@ -725,7 +704,7 @@ export const HomeScreen: React.FC = () => {
 
           // Update local steps state immediately!
           setTodaySteps((prev) => {
-            const currentVal = parseInt(prev.replace(/,/g, ''), 10) || 0;
+            const currentVal = Number.parseInt(prev.replaceAll(',', ''), 10) || 0;
             const newVal = currentVal + deltaSteps;
 
             // Trigger sync if steps changed significantly (e.g. 35 steps)
@@ -754,7 +733,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       let active = true;
 
       const performSyncAndFetch = async () => {
@@ -813,8 +792,7 @@ export const HomeScreen: React.FC = () => {
         else if (exercise.id === 'walking') speed = 5.0;
         else if (exercise.id === 'hiking') speed = 4.5;
 
-        // Parse selectedDateStr (YYYY-MM-DD) and combine it with local current time
-        const now = new Date();
+        // Construct the end time on the selected date using current hour/min/sec
         const [year, month, day] = selectedDateStr.split('-').map(Number);
         
         // Construct the end time on the selected date using current hour/min/sec
@@ -830,7 +808,7 @@ export const HomeScreen: React.FC = () => {
           startTime: startTimeObj.toISOString(),
           endTime: endTimeObj.toISOString(),
           durationSeconds: durationMinutes * 60,
-          distanceKm: parseFloat(((durationMinutes * speed) / 60).toFixed(2)),
+          distanceKm: Number.parseFloat(((durationMinutes * speed) / 60).toFixed(2)),
           routeCoordinates: [],
         });
       } else if (exercise.category === 'steps') {
@@ -983,7 +961,7 @@ export const HomeScreen: React.FC = () => {
 
                 return (
                   <TouchableOpacity
-                    key={idx}
+                    key={bar.dayStr || bar.day}
                     style={styles.barContainer}
                     onPress={() => setActiveBarIndex(activeBarIndex === idx ? null : idx)}
                     activeOpacity={0.8}
@@ -1366,8 +1344,8 @@ export const HomeScreen: React.FC = () => {
 
               {/* Weekdays Row at the top of the grid */}
               <View style={styles.dayLabelsRow}>
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((dayName, idx) => (
-                  <Text key={idx} style={styles.dayLabelText}>
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((dayName) => (
+                  <Text key={dayName} style={styles.dayLabelText}>
                     {dayName}
                   </Text>
                 ))}
@@ -1381,8 +1359,8 @@ export const HomeScreen: React.FC = () => {
                     const firstDayIndex = new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay();
                     return firstDayIndex === 0 ? 6 : firstDayIndex - 1;
                   })()
-                }).map((_, idx) => (
-                  <View key={`empty-${idx}`} style={styles.gridDayCellEmpty} />
+                }, (_, i) => i).map((spacerIndex) => (
+                  <View key={`empty-spacer-${spacerIndex}`} style={styles.gridDayCellEmpty} />
                 ))}
 
                 {/* Day cells */}
@@ -1601,8 +1579,8 @@ export const HomeScreen: React.FC = () => {
                         <View key={log.id || idx} style={styles.detailLogCard}>
                           <Text style={styles.detailExerciseName}>{log.exercise?.name}</Text>
                           <View style={styles.detailSetsGrid}>
-                            {log.sets && log.sets.map((set: any, sIdx: number) => (
-                              <View key={sIdx} style={styles.detailSetRow}>
+                            {log.sets?.map((set: any, sIdx: number) => (
+                              <View key={set.id || `set-${set.setNumber || 1}-${set.reps || 0}-${set.weight || 0}`} style={styles.detailSetRow}>
                                 <Text style={styles.detailSetNum}>Set {sIdx + 1}</Text>
                                 <Text style={styles.detailSetVal}>{set.reps} reps</Text>
                                 <Text style={styles.detailSetVal}>×</Text>
@@ -1618,130 +1596,6 @@ export const HomeScreen: React.FC = () => {
                   })()}
                 </ScrollView>
               ) : null}
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Recipe Detail Modal */}
-      <Modal
-        visible={isRecipeDetailModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsRecipeDetailModalVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.recipeDetailModalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsRecipeDetailModalVisible(false)}
-        >
-          <TouchableWithoutFeedback>
-            <View style={styles.recipeDetailModalContainer}>
-              {selectedRecipeDetail && (
-                <>
-                  {/* Header */}
-                  <View style={styles.recipeDetailModalHeader}>
-                    <View style={{ flex: 1, marginRight: 12 }}>
-                      <Text style={styles.recipeDetailModalTitle} numberOfLines={1}>
-                        {selectedRecipeDetail.title}
-                      </Text>
-                      <Text style={styles.recipeDetailModalSubtitle} numberOfLines={1}>
-                        {selectedRecipeDetail.description || 'Healthy Recipe'}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => setIsRecipeDetailModalVisible(false)}
-                      style={styles.recipeDetailModalClose}
-                    >
-                      <X size={20} color={COLORS.text} />
-                    </TouchableOpacity>
-                  </View>
-
-                  <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                    {/* Detailed macros strip */}
-                    <View style={styles.recipeDetailMacrosBar}>
-                      <View style={styles.recipeDetailMacroPill}>
-                        <Text style={styles.recipeDetailMacroLabel}>Calories</Text>
-                        <Text style={[styles.recipeDetailMacroValue, { color: COLORS.primary }]}>
-                          {Math.round(selectedRecipeDetail.calories)} kcal
-                        </Text>
-                      </View>
-                      <View style={styles.recipeDetailMacroPill}>
-                        <Text style={styles.recipeDetailMacroLabel}>Protein</Text>
-                        <Text style={styles.recipeDetailMacroValue}>
-                          {selectedRecipeDetail.protein}g
-                        </Text>
-                      </View>
-                      <View style={styles.recipeDetailMacroPill}>
-                        <Text style={styles.recipeDetailMacroLabel}>Carbs</Text>
-                        <Text style={styles.recipeDetailMacroValue}>
-                          {selectedRecipeDetail.carbs}g
-                        </Text>
-                      </View>
-                      <View style={styles.recipeDetailMacroPill}>
-                        <Text style={styles.recipeDetailMacroLabel}>Fat</Text>
-                        <Text style={styles.recipeDetailMacroValue}>
-                          {selectedRecipeDetail.fat}g
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.recipeDetailMetaRow}>
-                      <View style={styles.recipeDetailMetaTag}>
-                        <Clock size={14} color={COLORS.textMuted} />
-                        <Text style={styles.recipeDetailMetaTagText}>
-                          Prep: {selectedRecipeDetail.prepTime} mins
-                        </Text>
-                      </View>
-                      <View style={styles.recipeDetailMetaTag}>
-                        <Utensils size={14} color={COLORS.textMuted} />
-                        <Text style={styles.recipeDetailMetaTagText}>
-                          Cook: {selectedRecipeDetail.cookTime} mins
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Ingredients section */}
-                    <View style={{ marginTop: 18 }}>
-                      <Text style={styles.detailSectionTitle}>Ingredients</Text>
-                      {(!selectedRecipeDetail.ingredients || selectedRecipeDetail.ingredients.length === 0) ? (
-                        <Text style={styles.recipeDetailEmptyText}>No ingredients specified.</Text>
-                      ) : (
-                        selectedRecipeDetail.ingredients.map((ing: any, idx: number) => (
-                          <View key={ing.id || idx} style={styles.recipeDetailIngredientRow}>
-                            <Text style={styles.recipeDetailIngredientName}>
-                              {ing.customName || (ing.food ? ing.food.name : 'Unknown')}
-                            </Text>
-                            <Text style={styles.recipeDetailIngredientAmount}>
-                              {ing.amount} {ing.unit}
-                            </Text>
-                          </View>
-                        ))
-                      )}
-                    </View>
-
-                    {/* Cooking Steps walkthrough section */}
-                    <View style={{ marginTop: 18 }}>
-                      <Text style={styles.detailSectionTitle}>Cooking Steps</Text>
-                      {(!selectedRecipeDetail.instructions || selectedRecipeDetail.instructions.length === 0) ? (
-                        <Text style={styles.recipeDetailEmptyText}>No preparation steps specified.</Text>
-                      ) : (
-                        selectedRecipeDetail.instructions.map((step: string, index: number) => (
-                          <View key={index} style={styles.recipeDetailStepCard}>
-                            <View style={styles.recipeDetailStepNumberBg}>
-                              <Text style={styles.recipeDetailStepNumberText}>{index + 1}</Text>
-                            </View>
-                            <Text style={styles.recipeDetailStepDescText}>{step}</Text>
-                          </View>
-                        ))
-                      )}
-                    </View>
-
-                    {/* Spacer */}
-                    <View style={{ height: 30 }} />
-                  </ScrollView>
-                </>
-              )}
             </View>
           </TouchableWithoutFeedback>
         </TouchableOpacity>
@@ -2735,141 +2589,5 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  // Recipe detail modal
-  recipeDetailModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  recipeDetailModalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 34,
-    height: '85%',
-  },
-  recipeDetailModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  recipeDetailModalTitle: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: COLORS.text,
-  },
-  recipeDetailModalSubtitle: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  recipeDetailModalClose: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  recipeDetailMacrosBar: {
-    flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
-    padding: 12,
-    marginVertical: 12,
-  },
-  recipeDetailMacroPill: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  recipeDetailMacroLabel: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    fontWeight: '700',
-  },
-  recipeDetailMacroValue: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: COLORS.text,
-    marginTop: 2,
-  },
-  recipeDetailMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 8,
-    gap: 16,
-  },
-  recipeDetailMetaTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  recipeDetailMetaTagText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginLeft: 4,
-    fontWeight: '600',
-  },
-  recipeDetailIngredientRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 6,
-  },
-  recipeDetailIngredientName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  recipeDetailIngredientAmount: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textMuted,
-  },
-  recipeDetailStepCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 16,
-    padding: 12,
-    marginTop: 8,
-  },
-  recipeDetailStepNumberBg: {
-    backgroundColor: COLORS.primaryLight,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  recipeDetailStepNumberText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: COLORS.primary,
-  },
-  recipeDetailStepDescText: {
-    flex: 1,
-    fontSize: 13,
-    color: COLORS.text,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  recipeDetailEmptyText: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    fontStyle: 'italic',
-    paddingVertical: 8,
-  },
+
 });
