@@ -9,7 +9,7 @@ import { TrophyIcon } from '../components/icons/fitness';
 import { signInWithGoogle } from '../services/googleAuth';
 
 const { width } = Dimensions.get('window');
-const logoImg = require('../../assets/hadafaklogo-nobg.png');
+const logoImg = require('../../assets/hadafaklogo-nobg-2.png');
 
 interface WelcomeScreenProps {
   onNavigateToLogin: () => void;
