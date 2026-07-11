@@ -871,6 +871,7 @@ export const HomeScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         style={styles.container}
+        contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
@@ -1305,17 +1306,6 @@ export const HomeScreen: React.FC = () => {
               </View>
               <Text style={styles.miniValue}>{weightProgressValue}</Text>
               <Text style={styles.miniLabel}>Total change</Text>
-            </View>
-          </View>
-
-          {/* Bottom Referral Card */}
-          <View style={styles.referralCard}>
-            <View style={styles.referralIconWrapper}>
-              <TrophyIcon size={24} color={COLORS.primary} />
-            </View>
-            <View style={styles.referralContent}>
-              <Text style={styles.referralSub}>Invite your friends</Text>
-              <Text style={styles.referralTitle}>Invite your friends to get a free exercise right away</Text>
             </View>
           </View>
         </View>
@@ -2240,40 +2230,7 @@ const getStyles = (COLORS: ThemeColors) => StyleSheet.create({
   heartValueContainer: {
     marginTop: 8,
   },
-  referralCard: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.background,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 24,
-    padding: 18,
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  referralIconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  referralContent: {
-    flex: 1,
-  },
-  referralSub: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-  referralTitle: {
-    fontSize: 13,
-    color: COLORS.text,
-    fontWeight: '700',
-    lineHeight: 18,
-    marginTop: 2,
-  },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
