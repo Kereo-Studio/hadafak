@@ -7,9 +7,17 @@ export class HealthController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  async check() {
+  check() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Get('db')
+  @HttpCode(HttpStatus.OK)
+  async checkDb() {
     try {
-      // Check database connection by running a simple query
       await this.dataSource.query('SELECT 1');
       return {
         status: 'ok',
