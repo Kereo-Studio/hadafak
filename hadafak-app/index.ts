@@ -1,9 +1,18 @@
+import { I18nManager } from 'react-native';
 import { registerRootComponent } from 'expo';
 import * as BackgroundTask from 'expo-background-task';
 import './src/utils/backgroundTasks';
 import { BACKGROUND_STEP_TASK } from './src/utils/backgroundTasks';
 
 import App from './App';
+
+// Force Left-To-Right (LTR) layout regardless of device system language
+if (I18nManager.isRTL) {
+  I18nManager.allowRTL(false);
+  I18nManager.forceRTL(false);
+} else {
+  I18nManager.allowRTL(false);
+}
 
 async function registerBackgroundTasks() {
   try {
