@@ -19,10 +19,11 @@ import { DataSource } from 'typeorm';
 import { AppModule } from '../../app.module';
 import { seedExercises } from './seeders/exercises.seeder';
 import { seedFoods } from './seeders/foods.seeder';
+import { seedEgyptianFoods } from './seeders/egyptian-foods.seeder';
 import { seedRecipes } from './seeders/recipes.seeder';
 import { seedPrograms } from './seeders/programs.seeder';
 
-const ALL = ['exercises', 'foods', 'recipes', 'programs'] as const;
+const ALL = ['exercises', 'foods', 'egyptian-foods', 'recipes', 'programs'] as const;
 type SeederName = (typeof ALL)[number];
 
 async function main() {
@@ -55,6 +56,9 @@ async function main() {
           break;
         case 'foods':
           await seedFoods(dataSource);
+          break;
+        case 'egyptian-foods':
+          await seedEgyptianFoods(dataSource);
           break;
         case 'recipes':
           await seedRecipes(app);
