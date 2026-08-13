@@ -51,12 +51,5 @@ hadafak/
 
 ---
 
-## Getting Started
-
-### Prerequisites
-- **Node.js**: v18+ or v20+
-- **JDK**: Java 21 (from Android Studio or OpenJDK 21)
-- **Android Studio & SDK**: Android API Level 34+
-- **PostgreSQL Database**: Local instance or Neon Serverless PostgreSQL connection string
 
 ---
